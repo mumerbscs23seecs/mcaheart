@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import FontLinks from './FontLinks.astro';
 import { site } from '../data/site';
 
 interface Props {
@@ -19,13 +20,8 @@ const pageTitle = `${title} | ${site.name}`;
     <meta name="description" content={description} />
     <meta name="robots" content="noindex" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#f8fafc" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=Hanken+Grotesque:ital,wght@0,300..800;1,300..600&display=swap"
-    />
+    <meta name="theme-color" content="#ffffff" />
+    <FontLinks />
   </head>
 
   <body class="authbody">

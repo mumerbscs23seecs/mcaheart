@@ -1,51 +1,70 @@
 /* ==========================================================================
    MCA HEART — Design System
 
-   Academic medical institution: cool slate ground, navy and crimson accents,
-   Playfair Display over Inter, soft glass cards on a faint dot grid.
-   Palette and type carried over from the Google AI Studio build.
+   Academic medical institution, harvard.edu idiom: white ground, a single
+   Harvard-crimson accent, near-black charcoal for dark sections, editorial
+   Newsreader over Libre Franklin, thin neutral rules, minimal shadow.
    ========================================================================== */
 
 /* ---------- 1. Tokens ---------------------------------------------------- */
 
 :root {
   /* Ground */
-  --bg:          #f8fafc;   /* page */
-  --bg-tint:     #eef2f8;   /* recessed panels, image placeholders */
+  --bg:          #ffffff;   /* page */
+  --bg-tint:     #f4f2ee;   /* recessed panels, image placeholders — warm grey */
   --surface:     #ffffff;   /* cards, inputs */
-  --on-dark:     #f8fafc;   /* text on dark grounds */
+  --on-dark:     #f6f5f2;   /* warm off-white for text on charcoal */
 
   /* Text — all AA or better on --bg and --surface */
-  --text-strong: #1e293b;   /* headings */
-  --text:        #475569;   /* body */
-  --text-muted:  #64748b;   /* secondary */
-  --text-faint:  #94a3b8;   /* decorative only, never body copy */
-  --text-hint:   #64748b;   /* placeholders — 4.7:1 on white */
+  --text-strong: #1a1a1a;   /* headings */
+  --text:        #2e2e2e;   /* body */
+  --text-muted:  #595959;   /* secondary */
+  --text-faint:  #8a8a8a;   /* decorative only, never body copy */
+  --text-hint:   #6a6a6a;   /* placeholders */
 
-  /* Accents */
-  --blue:        #2b3990;
-  --blue-deep:   #1f2a6b;
-  --blue-light:  #4757bb;
-  --red:         #9e1b1e;
-  --red-deep:    #7a1417;
+  /* Accent — Harvard Crimson. Token names kept ('--blue*') to avoid touching
+     every consumer; the value is crimson everywhere now. */
+  --blue:        #a51c30;
+  --blue-deep:   #8a1728;
+  --blue-light:  #c0392e;
+  --accent-wash:        rgba(165, 28, 48, 0.08);   /* active-nav / eyebrow tints */
+  --accent-wash-strong: rgba(165, 28, 48, 0.14);   /* focus rings */
 
-  /* Dark ground */
-  --dark:        #16203a;
-  --dark-2:      #1e293b;
+  /* Alert red — kept distinct from the crimson accent for errors / destructive */
+  --red:         #b42318;
+  --red-deep:    #8a1b12;
+  --red-wash:    rgba(180, 35, 24, 0.07);
+  --red-border:  rgba(180, 35, 24, 0.35);
 
-  /* Lines */
-  --border:        rgba(43, 57, 144, 0.18);
-  --border-soft:   rgba(43, 57, 144, 0.10);
-  --border-strong: rgba(30, 41, 59, 0.42);
+  /* Dark ground — charcoal, not navy */
+  --dark:        #1b1b1b;
+  --dark-2:      #2a2a2a;
 
-  /* Type — Fraunces (an 'old-style' display serif with soft, wonky
-     letterforms) over Hanken Grotesque. Deliberately not the default
-     Playfair/Inter pairing. */
-  --font-serif: 'Fraunces', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
-  --font-sans:  'Hanken Grotesque', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  /* Baked-in Fraunces character: softened terminals + wonky alternates
-     (single-story g, angled leg on R/K). */
-  --serif-wonk: 'SOFT' 32, 'WONK' 1;
+  /* Text / lines on charcoal */
+  --on-dark-strong: #ffffff;
+  --on-dark-muted:  rgba(255, 255, 255, 0.74);
+  --on-dark-faint:  rgba(255, 255, 255, 0.52);
+  --on-dark-border: rgba(255, 255, 255, 0.16);
+  --on-dark-accent: #eaa7a0;   /* lightened crimson for links / big numerals on charcoal */
+
+  /* Status */
+  --ok:          #166534;
+  --ok-bg:       rgba(22, 101, 52, 0.10);
+  --ok-border:   rgba(22, 101, 52, 0.38);
+  --warn:        #92600e;
+  --warn-bg:     rgba(146, 96, 14, 0.12);
+  --warn-border: rgba(146, 96, 14, 0.42);
+
+  /* Lines — neutral warm grey */
+  --border:        rgba(0, 0, 0, 0.13);
+  --border-soft:   rgba(0, 0, 0, 0.07);
+  --border-strong: rgba(0, 0, 0, 0.30);
+
+  /* Type — Newsreader (editorial serif, optical-size axis) over Libre Franklin
+     (a Franklin-Gothic-style institutional grotesque). */
+  --font-serif: 'Newsreader', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  --font-sans:  'Libre Franklin', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:  ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
   /* Scale — fluid, clamped */
   --step--1: clamp(0.82rem, 0.79rem + 0.14vw, 0.9rem);
@@ -71,25 +90,16 @@
   --max-w: 1280px;
   --max-w-wide: 1560px;
 
-  /* Shape — soft, in the AI Studio idiom */
-  --radius:      12px;
-  --radius-lg:   20px;
+  /* Shape — near-square, editorial */
+  --radius:      3px;
+  --radius-lg:   6px;
   --radius-pill: 999px;
 
-  /* Two-layer: a tight contact shadow plus a wide ambient one. Tinted navy
-     so shadows sit in the palette instead of greying it. */
-  --shadow-sm:
-    0 1px 1px rgba(30, 41, 59, 0.04),
-    0 2px 6px -2px rgba(43, 57, 144, 0.06);
-  --shadow:
-    0 1px 2px rgba(30, 41, 59, 0.05),
-    0 12px 28px -14px rgba(43, 57, 144, 0.18);
-  --shadow-lg:
-    0 2px 4px rgba(30, 41, 59, 0.05),
-    0 28px 60px -28px rgba(43, 57, 144, 0.28);
-  --shadow-key:
-    0 2px 4px rgba(30, 41, 59, 0.06),
-    0 40px 80px -32px rgba(43, 57, 144, 0.34);
+  /* Flat, neutral — used sparingly */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow:    0 2px 10px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 34px rgba(0, 0, 0, 0.10);
+  --shadow-key: 0 14px 44px rgba(0, 0, 0, 0.14);
 
   --header-h: 84px;
 
@@ -113,12 +123,7 @@ body {
   font-size: var(--step-0);
   line-height: 1.65;
   color: var(--text);
-  /* Two faint accent washes over the slate ground. */
-  background:
-    radial-gradient(circle at 100% 0%, rgba(43, 57, 144, 0.05) 0%, transparent 40%),
-    radial-gradient(circle at 0% 100%, rgba(158, 27, 30, 0.04) 0%, transparent 50%),
-    var(--bg);
-  background-attachment: fixed;
+  background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -135,7 +140,7 @@ ul, ol { list-style: none; padding: 0; }
 
 a { color: inherit; text-decoration: none; }
 
-::selection { background: var(--red); color: #fff; }
+::selection { background: var(--blue); color: #fff; }
 
 :focus-visible {
   outline: 2px solid var(--blue);
@@ -158,8 +163,7 @@ h1, h2, h3, h4 {
   font-family: var(--font-serif);
   font-weight: 600;
   font-optical-sizing: auto;
-  font-variation-settings: var(--serif-wonk);
-  line-height: 1.14;
+  line-height: 1.16;
   letter-spacing: -0.005em;
   color: var(--text-strong);
   text-wrap: balance;
@@ -172,32 +176,34 @@ p { text-wrap: pretty; }
   font-family: var(--font-serif);
   font-weight: 600;
   font-optical-sizing: auto;
-  font-variation-settings: var(--serif-wonk);
-  line-height: 1.07;
+  line-height: 1.08;
   letter-spacing: -0.012em;
   color: var(--text-strong);
 }
-/* Italic serif accent, as used on "Excellence." in the source build. */
+/* Italic serif accent. */
 .display em {
   font-style: italic;
-  color: var(--red);
+  color: var(--blue);
 }
 
-/* Small pill badge above a heading. */
+/* Section label: letterspaced small-caps with a short crimson rule, no box. */
 .eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 0.55em;
+  gap: 0.7em;
   font-family: var(--font-sans);
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.16em;
   color: var(--blue);
-  background: rgba(43, 57, 144, 0.07);
-  border: 1px solid var(--border-soft);
-  padding: 0.5em 1.1em;
-  border-radius: var(--radius-pill);
+}
+.eyebrow::before {
+  content: '';
+  width: 1.6em;
+  height: 1px;
+  background: var(--blue);
+  flex: none;
 }
 .eyebrow--center { justify-content: center; }
 
@@ -235,10 +241,10 @@ p { text-wrap: pretty; }
   height: 1px;
   background: linear-gradient(90deg, var(--border), transparent);
 }
-.dark-ground .section-head__meta { color: rgba(248, 250, 252, 0.6); }
-.dark-ground .section-head__num { color: #8f9bd8; }
+.dark-ground .section-head__meta { color: var(--on-dark-muted); }
+.dark-ground .section-head__num { color: var(--on-dark-accent); }
 .dark-ground .section-head__meta::after {
-  background: linear-gradient(90deg, rgba(248, 250, 252, 0.28), transparent);
+  background: linear-gradient(90deg, var(--on-dark-border), transparent);
 }
 
 /* ---------- 4. Layout ---------------------------------------------------- */
@@ -264,34 +270,22 @@ p { text-wrap: pretty; }
 
 /* ---------- 5. Surfaces -------------------------------------------------- */
 
-/* Faint dot grid, the source build's `medical-grid`. */
-.grid-ground {
-  position: relative;
-  isolation: isolate;
-}
-.grid-ground::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background-image: radial-gradient(circle at 2px 2px, rgba(43, 57, 144, 0.07) 1px, transparent 0);
-  background-size: 40px 40px;
-  pointer-events: none;
-}
+/* Kept as a harmless no-op — pages still put it on hero sections. Harvard is
+   plain whitespace, no dot grid. */
+.grid-ground { position: relative; isolation: isolate; }
 
 .dark-ground {
   background-color: var(--dark);
-  color: rgba(248, 250, 252, 0.78);
+  color: var(--on-dark);
 }
 .dark-ground h1, .dark-ground h2, .dark-ground h3, .dark-ground .display {
-  color: #fff;
+  color: var(--on-dark-strong);
 }
-.dark-ground .lede, .dark-ground .prose { color: rgba(248, 250, 252, 0.75); }
+.dark-ground .lede, .dark-ground .prose { color: var(--on-dark-muted); }
 .dark-ground .eyebrow {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--on-dark-strong);
 }
+.dark-ground .eyebrow::before { background: var(--on-dark-accent); }
 
 .rule { height: 1px; background: var(--border); border: 0; }
 .rule--strong { background: var(--border-strong); }
@@ -305,47 +299,41 @@ p { text-wrap: pretty; }
   display: inline-flex;
   align-items: center;
   gap: 0.6em;
-  padding: 0.85em 1.8em;
+  padding: 0.8em 1.6em;
   background: var(--btn-bg);
   color: var(--btn-fg);
   border: 1px solid var(--btn-bd);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius);
   font-family: var(--font-sans);
   font-size: 0.86rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   line-height: 1.2;
-  box-shadow: 0 10px 24px -14px rgba(43, 57, 144, 0.85);
-  transition: background 0.3s var(--ease), color 0.3s var(--ease),
-              transform 0.3s var(--ease), box-shadow 0.3s var(--ease),
-              border-color 0.3s var(--ease);
+  transition: background 0.25s var(--ease), color 0.25s var(--ease),
+              border-color 0.25s var(--ease);
 }
-.btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 34px -16px rgba(43, 57, 144, 0.9);
-}
-.btn:active { transform: translateY(0) scale(0.985); }
+.btn:hover { --btn-bg: var(--blue-deep); --btn-bd: var(--blue-deep); }
+.btn:active { transform: translateY(1px); }
 
 .btn__arrow { transition: transform 0.35s var(--ease-out); }
 .btn:hover .btn__arrow { transform: translateX(4px); }
 
 .btn--ghost {
-  --btn-bg: var(--surface);
+  --btn-bg: transparent;
   --btn-fg: var(--blue);
-  --btn-bd: var(--border);
-  box-shadow: var(--shadow-sm);
+  --btn-bd: var(--blue);
 }
-.btn--ghost:hover { --btn-bd: var(--blue); }
+.btn--ghost:hover { --btn-bg: var(--accent-wash); --btn-fg: var(--blue-deep); --btn-bd: var(--blue-deep); }
 
 .btn--red { --btn-bg: var(--red); --btn-bd: var(--red); }
-.btn--red:hover { box-shadow: 0 16px 34px -16px rgba(158, 27, 30, 0.9); }
+.btn--red:hover { --btn-bg: var(--red-deep); --btn-bd: var(--red-deep); }
 
 .btn--light {
   --btn-bg: #fff;
   --btn-fg: var(--blue);
   --btn-bd: #fff;
 }
-.btn--light:hover { --btn-bg: rgba(255, 255, 255, 0.92); }
+.btn--light:hover { --btn-bg: rgba(255, 255, 255, 0.9); }
 
 .link-underline {
   position: relative;
@@ -366,34 +354,28 @@ p { text-wrap: pretty; }
 
 /* ---------- 7. Cards ----------------------------------------------------- */
 
-/* Frosted panel — the source build's `glass-card`. */
+/* Flat editorial card — white, hairline border, a crimson top rule on hover. */
 .card {
   position: relative;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.82);
-  backdrop-filter: blur(10px);
+  background: var(--surface);
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
-  transition: transform 0.4s var(--ease), box-shadow 0.4s var(--ease),
-              border-color 0.4s var(--ease);
+  transition: border-color 0.3s var(--ease), box-shadow 0.3s var(--ease);
 }
 .card::after {
-  /* Hairline accent along the top edge, drawn in from the left on hover. */
   content: '';
   position: absolute;
   inset: 0 0 auto;
   height: 2px;
-  background: linear-gradient(90deg, var(--blue), var(--red));
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  background: var(--blue);
   transform: scaleX(0);
   transform-origin: left;
-  transition: transform 0.55s var(--ease-out);
+  transition: transform 0.5s var(--ease-out);
 }
 .card:hover {
-  transform: translateY(-4px);
-  border-color: var(--border);
-  box-shadow: var(--shadow-lg);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow);
 }
 .card:hover::after { transform: scaleX(1); }
 

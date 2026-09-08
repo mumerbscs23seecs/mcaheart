@@ -1,6 +1,7 @@
 ---
 import '../../styles/global.css';
 import '../../styles/pipeline.css';
+import FontLinks from '../../components/FontLinks.astro';
 import { requestMagicLink } from '../../lib/pipeline-auth';
 
 export const prerender = false;
@@ -26,12 +27,7 @@ if (Astro.request.method === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Sign in · MCA Research Pipeline</title>
     <meta name="robots" content="noindex" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=Hanken+Grotesque:ital,wght@0,300..800;1,300..600&display=swap"
-    />
+    <FontLinks />
   </head>
   <body class="pl-authbody">
     <main class="pl-authwrap">
