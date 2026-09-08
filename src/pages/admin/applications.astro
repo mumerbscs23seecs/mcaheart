@@ -1,0 +1,261 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import '../../styles/admin.css';
+import { currentUser } from '../../lib/auth';
+import { listApplications, getApplication, decideApplication } from '../../lib/applications';
+import { deliverApplicationDecision, renderApplicationDecisionEmail } from '../../lib/recruitment-mailer';
+
+export const prerender = false;
+
+const me = currentUser(Astro.cookies);
+if (!me) return Astro.redirect('/login', 302);
+if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+type Flash = { tone: 'ok' | 'error'; text: string };
+type Preview = {
+  appId: string;
+  decision: 'accepted' | 'declined';
+  note: string;
+  to: string;
+  subject: string;
+  html: string;
+};
+let flash: Flash | null = null;
+let preview: Preview | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  const appId = String(form.get('appId') ?? '');
+  const note = String(form.get('note') ?? '');
+  const decision: 'accepted' | 'declined' =
+    String(form.get('decision') ?? (action.includes('accept') ? 'accepted' : 'declined')) === 'accepted'
+      ? 'accepted'
+      : 'declined';
+
+  if (action === 'preview-accept' || action === 'preview-decline') {
+    const app = getApplication(appId);
+    if (!app) flash = { tone: 'error', text: 'Application not found.' };
+    else if (app.status !== 'pending') flash = { tone: 'error', text: `That application was already ${app.status}.` };
+    else {
+      const { subject, html } = renderApplicationDecisionEmail({
+        to: app.email,
+        name: app.name,
+        decision,
+        note: note.trim() || null,
+      });
+      preview = { appId, decision, note, to: app.email, subject, html };
+    }
+  }
+
+  if (action === 'confirm') {
+    const result = decideApplication(appId, decision, me.name, note);
+    if (!result.ok || !result.application) {
+      flash = { tone: 'error', text: result.error ?? 'Could not record that decision.' };
+    } else {
+      const app = result.application;
+      let emailed = true;
+      try {
+        await deliverApplicationDecision({ to: app.email, name: app.name, decision, note: app.decisionNote });
+      } catch (err) {
+        emailed = false;
+        console.error('[applications] decision email failed:', err);
+      }
+      const verb = decision === 'accepted' ? 'Accepted' : 'Declined';
+      flash = emailed
+        ? { tone: 'ok', text: `${verb} — email sent to ${app.email}.` }
+        : { tone: 'error', text: `${verb} and recorded, but the email to ${app.email} could not be sent.` };
+    }
+  }
+}
+
+const apps = listApplications();
+const pending = apps.filter((a) => a.status === 'pending').length;
+
+const fmtDate = (t: number | null) =>
+  t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+const ago = (t: number) => {
+  const d = Math.floor((Date.now() - t) / 86_400_000);
+  return d === 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`;
+};
+
+const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
+  ['Email', a.email],
+  ['WhatsApp', a.whatsapp],
+  ['Graduated medical school', a.gradYear],
+  ['Current status', a.jobStatus],
+  ['Cardiology fellowship plan', a.fellowshipPlan],
+  ['Main research expertise', a.expertise],
+  ['Profile link', a.profileLink],
+  ['Research experience', a.researchExperience],
+  ['Letter of interest', a.letterOfInterest],
+  ['Current job / academic status', a.currentStatus || '—'],
+  ['Professional goals', a.professionalGoals || '—'],
+  ['Internal reference / prior collaboration', a.internalRef || '—'],
+  ['How they heard about MCA', a.referralSource],
+];
+---
+
+<AppLayout title="Applicants" heading="Lab applicants" user={me} active="applicants">
+  <div class="adm">
+    {flash && (
+      <div class:list={['adm-flash', `adm-flash--${flash.tone}`]} role="status">
+        <p>{flash.text}</p>
+      </div>
+    )}
+
+    {preview ? (
+      <div class="mailprev">
+        <h2 class="mailprev__title">
+          Preview — {preview.decision === 'accepted' ? 'acceptance' : 'decline'} email
+        </h2>
+        <dl class="mailprev__head">
+          <div><dt>To</dt><dd>{preview.to}</dd></div>
+          <div><dt>Subject</dt><dd>{preview.subject}</dd></div>
+        </dl>
+
+        <iframe class="mailprev__frame" srcdoc={preview.html} title="Email preview" sandbox=""></iframe>
+
+        <form method="post" class="mailprev__form">
+          <input type="hidden" name="appId" value={preview.appId} />
+          <input type="hidden" name="decision" value={preview.decision} />
+          <label class="idea__notelabel" for="prev-note">Comments to the applicant</label>
+          <textarea class="idea__note" id="prev-note" name="note" rows="3"
+            placeholder="Add or edit comments, then refresh the preview.">{preview.note}</textarea>
+          <div class="mailprev__actions">
+            <button class="adm-btn" type="submit"
+              name="action" value={preview.decision === 'accepted' ? 'preview-accept' : 'preview-decline'}>
+              Refresh preview
+            </button>
+            <button class:list={['btn', preview.decision === 'accepted' ? 'idea__accept' : 'btn--red']}
+              type="submit" name="action" value="confirm">
+              Send email &amp; {preview.decision === 'accepted' ? 'accept' : 'decline'}
+            </button>
+            <a class="mailprev__cancel" href="/admin/applications">Cancel</a>
+          </div>
+        </form>
+      </div>
+    ) : (
+      <>
+    <p class="ideas__count"><strong>{pending}</strong> awaiting review · {apps.length} total</p>
+
+    {apps.length === 0 && <p class="adm-hint">No applications yet.</p>}
+
+    <div class="ideas__list">
+      {apps.map((a) => (
+        <details class="idea">
+          <summary class="idea__summary">
+            <span class:list={['idea__pill', `idea__pill--${a.status}`]}>{a.status}</span>
+            <span class="idea__title">{a.name}</span>
+            <span class="idea__meta">{a.jobStatus} · {a.expertise} · {ago(a.submittedAt)}</span>
+            <span class="idea__chev" aria-hidden="true">▾</span>
+          </summary>
+
+          <div class="idea__body">
+            <dl class="idea__dl">
+              {detailRows(a).map(([k, v]) => (
+                <div class="idea__pair"><dt>{k}</dt><dd>{v}</dd></div>
+              ))}
+              <div class="idea__pair">
+                <dt>Documents</dt>
+                <dd class="idea__files">
+                  {a.cv
+                    ? <a href={`/admin/applications/${a.id}/cv`} target="_blank" rel="noopener">CV — {a.cv.filename} ({Math.round(a.cv.size / 1024)} KB)</a>
+                    : <span class="adm-tag">no CV on file</span>}
+                  {a.headshot
+                    ? <a href={`/admin/applications/${a.id}/headshot`} target="_blank" rel="noopener">Headshot — {a.headshot.filename} ({Math.round(a.headshot.size / 1024)} KB)</a>
+                    : <span class="adm-tag">no headshot on file</span>}
+                </dd>
+              </div>
+            </dl>
+
+            {a.status === 'pending' ? (
+              <form method="post" class="idea__decide">
+                <input type="hidden" name="appId" value={a.id} />
+                <label class="idea__notelabel" for={`note-${a.id}`}>Comments to the applicant (optional)</label>
+                <textarea class="idea__note" id={`note-${a.id}`} name="note" rows="2"
+                  placeholder="You'll see the full email before it sends."></textarea>
+                <div class="idea__actions">
+                  <button class="btn idea__accept" name="action" value="preview-accept" type="submit">Accept…</button>
+                  <button class="btn btn--red" name="action" value="preview-decline" type="submit">Decline…</button>
+                </div>
+                <p class="idea__hint-inline">Next step shows the email to review before it's sent.</p>
+              </form>
+            ) : (
+              <div class:list={['idea__decision', `idea__decision--${a.status}`]}>
+                <p><strong>{a.status === 'accepted' ? 'Accepted' : 'Declined'}</strong> by {a.reviewedBy} · {fmtDate(a.reviewedAt)}</p>
+                {a.decisionNote && <p class="idea__decision-note">“{a.decisionNote}”</p>}
+              </div>
+            )}
+          </div>
+        </details>
+      ))}
+    </div>
+      </>
+    )}
+  </div>
+</AppLayout>
+
+<style>
+  .ideas__count { font-size: 0.86rem; color: var(--text-muted); }
+  .ideas__count strong { color: var(--text-strong); }
+  .ideas__list { display: grid; gap: 0.6rem; }
+
+  .idea { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius-lg); overflow: hidden; }
+  .idea[open] { border-color: var(--border); }
+  .idea__summary {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: 'pill title chev' 'pill meta chev';
+    gap: 0.15rem 0.75rem;
+    align-items: center;
+    padding: 0.9rem 1.1rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  .idea__summary::-webkit-details-marker { display: none; }
+  .idea__summary:hover { background: var(--bg-tint); }
+  .idea__pill {
+    grid-area: pill; align-self: start; margin-top: 0.1rem;
+    font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+    padding: 0.2rem 0.5rem; border-radius: 999px;
+  }
+  .idea__pill--pending { color: #92600e; background: rgba(146, 96, 14, 0.15); }
+  .idea__pill--accepted { color: #166534; background: rgba(22, 101, 52, 0.14); }
+  .idea__pill--declined { color: var(--red); background: rgba(158, 27, 30, 0.1); }
+  .idea__title { grid-area: title; font-weight: 600; color: var(--text-strong); font-size: 0.95rem; line-height: 1.35; }
+  .idea__meta { grid-area: meta; font-size: 0.78rem; color: var(--text-muted); }
+  .idea__chev { grid-area: chev; color: var(--text-muted); transition: transform 0.2s var(--ease); }
+  .idea[open] .idea__chev { transform: rotate(180deg); }
+
+  .idea__body { padding: 0.4rem 1.1rem 1.2rem; border-top: 1px solid var(--border-soft); }
+  .idea__dl { display: grid; gap: 0; margin: 0.6rem 0 0; }
+  .idea__pair {
+    display: grid; grid-template-columns: 210px 1fr; gap: 0.75rem;
+    padding: 0.55rem 0; border-bottom: 1px solid var(--border-soft);
+  }
+  .idea__pair dt { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
+  .idea__pair dd { margin: 0; font-size: 0.88rem; line-height: 1.6; color: var(--text); white-space: pre-wrap; }
+  @media (max-width: 640px) { .idea__pair { grid-template-columns: 1fr; gap: 0.15rem; } }
+
+  .idea__files { display: grid; gap: 0.35rem; }
+  .idea__files a { color: var(--blue); font-weight: 600; }
+  .idea__files a:hover { text-decoration: underline; }
+
+  .idea__decide { margin-top: var(--space-m); display: grid; gap: 0.5rem; }
+  .idea__notelabel { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text); }
+  .idea__note {
+    width: 100%; padding: 0.65rem 0.85rem; background: var(--bg);
+    border: 1px solid var(--border-soft); border-radius: var(--radius);
+    font-size: 0.9rem; line-height: 1.55; resize: vertical;
+  }
+  .idea__note:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(43, 57, 144, 0.13); }
+  .idea__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.2rem; }
+  .idea__accept { --btn-bg: #166534; --btn-bd: #166534; }
+  .idea__accept:hover { box-shadow: 0 16px 34px -16px rgba(22, 101, 52, 0.85); }
+
+  .idea__decision { margin-top: var(--space-m); padding: 0.8rem 1rem; border-radius: var(--radius); font-size: 0.85rem; line-height: 1.5; }
+  .idea__decision--accepted { background: rgba(22, 101, 52, 0.09); border: 1px solid rgba(22, 101, 52, 0.3); color: #166534; }
+  .idea__decision--declined { background: rgba(158, 27, 30, 0.06); border: 1px solid rgba(158, 27, 30, 0.3); color: var(--red); }
+  .idea__decision-note { margin-top: 0.3rem; font-style: italic; color: var(--text); }
+</style>

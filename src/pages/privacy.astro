@@ -1,0 +1,83 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+const updated = 'August 2026';
+---
+
+<BaseLayout title="Privacy Policy" description="How MCA Heart collects, uses and protects the information you share with us.">
+  <PageHero eyebrow="Legal" title="Privacy Policy" />
+
+  <section class="section">
+    <div class="shell shell--narrow legal">
+      <p class="legal__meta">Last updated: {updated}</p>
+
+      <div class="legal__note">
+        <strong>Template notice.</strong> This page is a working draft written for
+        the site rebuild. Have it reviewed by counsel before publishing, and
+        confirm it reflects your actual data practices.
+      </div>
+
+      <h2>What we collect</h2>
+      <p>
+        When you submit the enquiry form we collect the name, email address and any
+        phone number, location, designation and message you choose to provide. We
+        collect this only because you sent it to us.
+      </p>
+
+      <h2>How we use it</h2>
+      <p>
+        We use your details to reply to your enquiry and, where relevant, to discuss
+        research or collaboration opportunities with the MCA Research Group. We do
+        not sell your information, and we do not add you to marketing lists without
+        asking first.
+      </p>
+
+      <h2>Third-party services</h2>
+      <p>
+        Video content is embedded from YouTube. Nothing loads from YouTube until you
+        press play on a video; once you do, YouTube may set cookies and process data
+        under its own privacy policy. Enquiry emails are delivered through our email
+        provider.
+      </p>
+
+      <h2>Retention</h2>
+      <p>
+        Enquiry correspondence is retained for as long as needed to handle your
+        request and to maintain a record of collaboration discussions.
+      </p>
+
+      <h2>Your rights</h2>
+      <p>
+        You can ask us what information we hold about you, request corrections, or
+        ask us to delete it. Contact us through the
+        <a class="link-underline" href="/contact">enquiry form</a> and we will respond.
+      </p>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .legal { color: var(--text); }
+  .legal__meta {
+    font-size: var(--step--1);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--text-faint);
+  }
+  .legal__note {
+    margin-top: var(--space-m);
+    padding: var(--space-s);
+    background: rgba(43, 57, 144, 0.06);
+    border-left: 2px solid var(--blue);
+    font-size: var(--step--1);
+    line-height: 1.7;
+  }
+  .legal h2 {
+    margin-top: var(--space-l);
+    font-size: var(--step-2);
+    color: var(--text-strong);
+  }
+  .legal p { margin-top: var(--space-s); line-height: 1.75; }
+  .legal a { color: var(--blue); }
+</style>

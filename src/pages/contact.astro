@@ -1,0 +1,144 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ContactForm from '../components/ContactForm.astro';
+import { contactIntents } from '../data/site';
+---
+
+<BaseLayout
+  title="Contact"
+  description="Join a community of experts shaping the future of cardiology. Publish, present and lead the way in cardiovascular research."
+>
+  {/* ------------------------------------------------------------------ Hero */}
+  <section class="chero grid-ground">
+    <div class="shell shell--wide chero__inner">
+      <p class="eyebrow">Contact</p>
+      <h1 class="display chero__title">
+        Your next big<br /><em>opportunity</em><br />starts here
+      </h1>
+      <p class="lede chero__sub">
+        Join a community of experts shaping the future of cardiology. Publish,
+        present, and lead the way in cardiovascular research.
+      </p>
+    </div>
+
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee__track">
+        {Array.from({ length: 4 }).map(() => (
+          <span class="marquee__item">Your next big opportunity starts here</span>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  {/* --------------------------------------------------------------- Intents */}
+  <section class="section--tight intents">
+    <div class="shell shell--wide intents__grid">
+      {contactIntents.map((c, i) => (
+        <article class="intent" data-reveal style={`--reveal-delay:${i * 110}ms`}>
+          <span class="intent__icon" aria-hidden="true">{c.icon}</span>
+          <h2 class="intent__title">{c.title}</h2>
+          <p class="intent__body">{c.body}</p>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  {/* ------------------------------------------------------------------ Form */}
+  <section class="section form-section" id="enquiry">
+    <div class="shell shell--narrow">
+      <header class="form-section__head" data-reveal>
+        <p class="eyebrow eyebrow--center">Let&rsquo;s connect</p>
+        <h2 class="display form-section__title">Send us a note</h2>
+        <p class="prose center form-section__note">
+          Enquiries for collaboration with Dr Chadi Alraies can be sent directly here.
+        </p>
+      </header>
+
+      <div data-reveal style="--reveal-delay:100ms">
+        <ContactForm />
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  /* ------------------------------------------------------------------ Hero */
+  .chero {
+    padding-block: calc(var(--header-h) + var(--space-l)) 0;
+    overflow: hidden;
+  }
+  .chero__inner { padding-bottom: var(--space-xl); }
+  .chero__title {
+    margin-top: var(--space-s);
+    font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem);
+  }
+  .chero__title em { font-style: normal; color: var(--blue); }
+  .chero__sub { margin-top: var(--space-m); }
+
+  /* Scrolling strip, echoing the original site's repeated headline */
+  .marquee {
+    border: 1px solid var(--border-soft);
+    background: var(--surface);
+    padding-block: var(--space-s);
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    margin-inline: var(--gutter);
+  }
+  .marquee__track {
+    display: flex;
+    width: max-content;
+    gap: 2.5rem;
+    animation: slide 36s linear infinite;
+  }
+  .marquee__item {
+    font-family: var(--font-serif);
+    font-size: var(--step-2);
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+  .marquee__item::after {
+    content: '\2022';
+    margin-left: 2.5rem;
+    color: var(--blue);
+  }
+  @keyframes slide {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .marquee__track { animation: none; }
+  }
+
+  /* --------------------------------------------------------------- Intents */
+  .intents__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+    gap: var(--space-m);
+  }
+  .intent {
+    padding: var(--space-m);
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-top: 2px solid var(--blue);
+    border-radius: var(--radius);
+  }
+  .intent__icon { font-size: 1.9rem; line-height: 1; }
+  .intent__title {
+    margin-top: var(--space-s);
+    font-size: var(--step-2);
+  }
+  .intent__body {
+    margin-top: var(--space-xs);
+    font-size: var(--step--1);
+    line-height: 1.7;
+    color: var(--text-muted);
+  }
+
+  /* ------------------------------------------------------------------ Form */
+  .form-section__head { text-align: center; margin-bottom: var(--space-l); }
+  .form-section__title { font-size: var(--step-3); margin-top: var(--space-s); }
+  .form-section__note { margin-top: var(--space-s); margin-inline: auto; }
+</style>

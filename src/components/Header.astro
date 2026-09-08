@@ -1,0 +1,374 @@
+---
+import { nav } from '../data/site';
+
+interface Props { transparent?: boolean }
+const { transparent = false } = Astro.props;
+
+const path = Astro.url.pathname.replace(/\/$/, '') || '/';
+const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+---
+
+<header class:list={['masthead', transparent && 'masthead--transparent']} data-header>
+  <div class="shell shell--wide masthead__inner">
+    <a class="wordmark" href="/" aria-label="MCA Heart — home">
+      <span class="wordmark__badge" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+          <path d="M12 21s-8-5.2-8-10.6A4.4 4.4 0 0 1 12 7.6a4.4 4.4 0 0 1 8 2.8C20 15.8 12 21 12 21Z"/>
+        </svg>
+      </span>
+      <span class="wordmark__text"><span class="wordmark__mca">MCA</span> <span class="wordmark__heart">HEART</span></span>
+    </a>
+
+    <nav class="nav" aria-label="Primary">
+      <ul class="nav__list">
+        {nav.map((item) => (
+          <li>
+            <a
+              class:list={['nav__link', isCurrent(item.href) && 'is-current']}
+              href={item.href}
+              aria-current={isCurrent(item.href) ? 'page' : undefined}
+            >
+              {item.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+
+      {/* Members-only. Rendered for everyone, revealed by the mca_hint cookie;
+          the /submissions and /admin routes enforce access server-side. */}
+      <div class="authbar" data-auth>
+        <a class="btn btn--ghost authbar__login" href="/login" data-auth-guest>Log in</a>
+        <span class="authbar__account" data-auth-member hidden>
+          {/* One link into the app. JS swaps it to "Admin" → /admin for admins. */}
+          <a
+            class:list={['nav__link', (isCurrent('/pipeline') || isCurrent('/admin')) && 'is-current']}
+            href="/pipeline" data-auth-home
+          >Pipeline</a>
+          <form method="post" action="/logout" class="authbar__logout">
+            <button class="btn btn--light" type="submit">Log out</button>
+          </form>
+        </span>
+      </div>
+    </nav>
+
+    <button class="burger" type="button" aria-expanded="false" aria-controls="mobile-nav" data-burger>
+      <span class="burger__label">Menu</span>
+      <span class="burger__bars" aria-hidden="true"><i></i><i></i></span>
+    </button>
+  </div>
+
+  <div class="drawer" id="mobile-nav" data-drawer hidden>
+    <ul class="drawer__list">
+      {nav.map((item, i) => (
+        <li style={`--i:${i}`}>
+          <a
+            class:list={['drawer__link', isCurrent(item.href) && 'is-current']}
+            href={item.href}
+          >
+            <span class="drawer__num">{String(i + 1).padStart(2, '0')}</span>
+            {item.label}
+          </a>
+        </li>
+      ))}
+    </ul>
+
+    <div class="drawer__auth" data-auth>
+      <a class="drawer__link" href="/login" data-auth-guest>Log in</a>
+      <span class="drawer__member" data-auth-member hidden>
+        <a
+          class:list={['drawer__link', (isCurrent('/pipeline') || isCurrent('/admin')) && 'is-current']}
+          href="/pipeline" data-auth-home
+        >Pipeline</a>
+        <form method="post" action="/logout">
+          <button class="drawer__link drawer__logout" type="submit">Log out</button>
+        </form>
+      </span>
+    </div>
+  </div>
+</header>
+
+<style>
+  .masthead {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--on-dark);
+    border-bottom: 1px solid var(--border-soft);
+    transition: background 0.4s var(--ease), border-color 0.4s var(--ease);
+  }
+
+  /* Transparent variant sits over a hero until the page scrolls. */
+  .masthead--transparent:not(.is-stuck) {
+    background: transparent;
+    border-bottom-color: transparent;
+  }
+
+  .masthead__inner {
+    height: var(--header-h);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-m);
+  }
+
+  /* --- Wordmark --- */
+  .wordmark {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6em;
+    font-family: var(--font-serif);
+    font-weight: 700;
+    font-size: clamp(1.1rem, 0.95rem + 0.7vw, 1.5rem);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .wordmark__badge {
+    display: grid;
+    place-items: center;
+    width: 2.1em; height: 2.1em;
+    flex-shrink: 0;
+    color: #fff;
+    background: linear-gradient(140deg, var(--blue), var(--red));
+    border-radius: 0.55em;
+    font-size: 0.66em;
+    transition: transform 0.35s var(--ease);
+  }
+  .wordmark:hover .wordmark__badge { transform: scale(1.08); }
+  .wordmark__text { display: inline-flex; gap: 0.32em; align-items: baseline; }
+  .wordmark__mca { color: var(--blue); }
+  .wordmark__heart { color: var(--text-strong); }
+
+  /* --- Desktop nav --- */
+  .nav__list {
+    display: flex;
+    align-items: center;
+    gap: clamp(1rem, 0.2rem + 1.9vw, 2.6rem);
+  }
+  .nav__link {
+    position: relative;
+    font-size: 0.9rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    color: var(--text);
+    padding-block: 0.5rem;
+    transition: color 0.3s var(--ease);
+    white-space: nowrap;
+  }
+  .nav__link::after {
+    content: '';
+    position: absolute;
+    left: 0; bottom: 0;
+    width: 100%; height: 1.5px;
+    background: var(--blue);
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 0.4s var(--ease-out);
+  }
+  .nav__link:hover { color: var(--text-strong); }
+  .nav__link:hover::after { transform: scaleX(1); transform-origin: left; }
+  .nav__link.is-current { color: var(--blue); }
+  .nav__link.is-current::after { transform: scaleX(1); }
+
+  /* --- Burger --- */
+  .burger {
+    display: none;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.86rem;
+    font-weight: 600;
+    color: var(--text-strong);
+  }
+  .burger__bars {
+    display: grid;
+    gap: 5px;
+    width: 24px;
+  }
+  .burger__bars i {
+    display: block;
+    height: 1.5px;
+    background: currentColor;
+    transition: transform 0.35s var(--ease), opacity 0.25s var(--ease);
+  }
+  .burger[aria-expanded='true'] .burger__bars i:first-child { transform: translateY(3.25px) rotate(45deg); }
+  .burger[aria-expanded='true'] .burger__bars i:last-child { transform: translateY(-3.25px) rotate(-45deg); }
+
+  /* --- Mobile drawer --- */
+  .drawer {
+    position: fixed;
+    inset: var(--header-h) 0 0;
+    background: var(--on-dark);
+    padding: var(--space-l) var(--gutter);
+    overflow-y: auto;
+  }
+  .drawer[hidden] { display: none; }
+  .drawer__list { display: grid; gap: 0.25rem; }
+  .drawer__link {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    padding-block: var(--space-s);
+    border-bottom: 1px solid var(--border-soft);
+    font-family: var(--font-serif);
+    font-size: var(--step-2);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    opacity: 0;
+    transform: translateY(12px);
+    animation: drawer-in 0.5s var(--ease-out) forwards;
+    animation-delay: calc(var(--i) * 60ms + 80ms);
+  }
+  .drawer__link.is-current { color: var(--blue); }
+  .drawer__num {
+    font-family: var(--font-sans);
+    font-size: var(--step--1);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: var(--blue);
+  }
+
+  @keyframes drawer-in { to { opacity: 1; transform: none; } }
+
+  /* --- Auth bar (desktop) --- */
+  /* Class-based display rules outrank the UA [hidden] rule, so restore it. */
+  [data-auth] [hidden] { display: none !important; }
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: clamp(0.9rem, 0.1rem + 1.4vw, 1.9rem);
+    min-width: 0;
+  }
+  .nav__list { gap: clamp(0.85rem, 0.1rem + 1.4vw, 1.9rem); }
+  .authbar {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+  }
+  .authbar__login { padding-block: 0.4rem; padding-inline: 0.9rem; font-size: 0.8rem; }
+
+  /* Members zone: a blue pill so the app nav reads as a distinct area from the
+     public site nav. */
+  .authbar__account {
+    display: flex;
+    align-items: center;
+    gap: clamp(0.9rem, 0.4rem + 0.8vw, 1.5rem);
+    padding: 0.3rem 0.3rem 0.3rem 1.15rem;
+    background: var(--blue);
+    border-radius: var(--radius-pill);
+  }
+  .authbar__account .nav__link { color: rgba(255, 255, 255, 0.82); }
+  .authbar__account .nav__link:hover { color: #fff; }
+  .authbar__account .nav__link::after { background: #fff; }
+  .authbar__account .nav__link.is-current { color: #fff; }
+  .authbar__account .nav__link { white-space: nowrap; }
+  .authbar__logout { display: flex; margin: 0; }
+  .authbar__logout button {
+    cursor: pointer;
+    font-family: inherit;
+    padding-block: 0.42rem;
+    padding-inline: 1rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  /* --- Auth block (mobile drawer) --- */
+  .drawer__auth { margin-top: var(--space-m); display: grid; gap: 0.25rem; }
+  /* Members zone gets the same blue treatment as the desktop pill. */
+  .drawer__member {
+    display: grid;
+    gap: 0.15rem;
+    margin-top: var(--space-xs);
+    padding: 0.4rem var(--space-s) var(--space-xs);
+    background: var(--blue);
+    border-radius: var(--radius);
+  }
+  .drawer__member .drawer__link { color: #fff; border-bottom-color: rgba(255, 255, 255, 0.16); }
+  .drawer__member .drawer__link.is-current { color: #fff; }
+  .drawer__member .drawer__num { color: rgba(255, 255, 255, 0.7); }
+  .drawer__logout {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: 0;
+    border-bottom: 0;
+    cursor: pointer;
+    font: inherit;
+    padding-block: var(--space-s);
+  }
+
+  /* Breaks to the drawer earlier than the marketing-only nav did, to leave
+     room for the members items (Submissions / Admin / Log out). */
+  @media (max-width: 1280px) {
+    .nav { display: none; }
+    .burger { display: inline-flex; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .drawer__link { opacity: 1; transform: none; animation: none; }
+  }
+</style>
+
+<script>
+  // Reveal the members-only nav from the (non-sensitive) mca_hint cookie.
+  // This is a display hint only — /submissions and /admin check the real
+  // session server-side.
+  {
+    const match = document.cookie.match(/(?:^|;\s*)mca_hint=([^;]+)/);
+    let info: { name?: string; role?: string } | null = null;
+    if (match) {
+      try { info = JSON.parse(decodeURIComponent(match[1]!)); } catch { info = null; }
+    }
+    for (const bar of document.querySelectorAll<HTMLElement>('[data-auth]')) {
+      const guest = bar.querySelector<HTMLElement>('[data-auth-guest]');
+      const member = bar.querySelector<HTMLElement>('[data-auth-member]');
+      if (info?.name && member) {
+        if (guest) guest.hidden = true;
+        member.hidden = false;
+        if (info.role === 'admin') {
+          bar.querySelectorAll<HTMLAnchorElement>('[data-auth-home]').forEach((el) => {
+            el.textContent = 'Admin';
+            el.setAttribute('href', '/admin');
+          });
+        }
+      }
+    }
+  }
+
+  const header = document.querySelector<HTMLElement>('[data-header]');
+  const burger = document.querySelector<HTMLButtonElement>('[data-burger]');
+  const drawer = document.querySelector<HTMLElement>('[data-drawer]');
+
+  // Swap the transparent masthead to solid once the hero is behind it.
+  if (header?.classList.contains('masthead--transparent')) {
+    const sentinel = document.createElement('div');
+    sentinel.style.cssText = 'position:absolute;top:0;height:1px;width:1px;';
+    document.body.prepend(sentinel);
+    new IntersectionObserver(
+      ([e]) => header.classList.toggle('is-stuck', !e.isIntersecting),
+      { threshold: 0 },
+    ).observe(sentinel);
+  }
+
+  if (burger && drawer) {
+    const setOpen = (open: boolean) => {
+      burger.setAttribute('aria-expanded', String(open));
+      drawer.hidden = !open;
+      document.body.style.overflow = open ? 'hidden' : '';
+      burger.querySelector('.burger__label')!.textContent = open ? 'Close' : 'Menu';
+    };
+
+    burger.addEventListener('click', () => setOpen(drawer.hidden));
+    drawer.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('a')) setOpen(false);
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !drawer.hidden) { setOpen(false); burger.focus(); }
+    });
+    // Reset when resizing up to the desktop nav.
+    matchMedia('(min-width: 1281px)').addEventListener('change', (e) => {
+      if (e.matches && !drawer.hidden) setOpen(false);
+    });
+  }
+</script>

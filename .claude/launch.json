@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mca-heart",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "4321"],
+      "port": 4321
+    },
+    {
+      "name": "mca-research",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "mca-heart-research", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}

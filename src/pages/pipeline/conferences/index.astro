@@ -1,0 +1,112 @@
+---
+import PipelineLayout from '../../../layouts/PipelineLayout.astro';
+import { scopeProjects } from '../../../lib/pipeline-scope';
+
+export const prerender = false;
+const { supabase, person } = Astro.locals;
+const isAdmin = person.role === 'admin';
+
+const SERIES = ['ACC', 'SCAI', 'TCT'] as const;
+const active = (Astro.url.searchParams.get('series') ?? '').toUpperCase();
+const activeSeries = SERIES.includes(active as any) ? active : null;
+
+const fmtDate = (d: string | null) =>
+  d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
+// ---- Members: their own conference-phase papers, same card UI as the other tabs.
+let mine: any[] = [];
+if (!isAdmin) {
+  let q = supabase
+    .from('project_list')
+    .select('id,ref,title,stage_label,lead_name,analyst_name,current_conference,days_in_stage')
+    .eq('phase', 'conference')
+    .is('archived_at', null)
+    .order('days_in_stage', { ascending: false });
+  q = scopeProjects(q, person);
+  const { data } = await q;
+  mine = data ?? [];
+}
+
+// ---- Admins: the conference scorecard list.
+let rows: any[] = [];
+if (isAdmin) {
+  const [{ data: conferences }, { data: scorecard }] = await Promise.all([
+    supabase.from('conferences').select('id,name,abstract_deadline').order('abstract_deadline', { ascending: false }),
+    supabase.from('conference_scorecard').select('*'),
+  ]);
+  const score = new Map((scorecard ?? []).map((s: any) => [s.name, s]));
+  rows = (conferences ?? [])
+    .filter((c: any) => !activeSeries || c.name.startsWith(activeSeries))
+    .map((c: any) => ({ ...c, ...(score.get(c.name) ?? { submitted: 0, accepted: 0, rejected: 0, accept_pct: null, recycled_in: 0 }) }));
+}
+---
+
+<PipelineLayout title="Conferences" active="conferences">
+  <h1 class="pl-h1">Conferences</h1>
+
+  {isAdmin ? (
+    <>
+      <p class="pl-sub">Every abstract submission, permanent once the meeting is over.</p>
+
+      <div class="pl-filter">
+        <a class:list={['pl-chip', !activeSeries && 'is-active']} href="/pipeline/conferences">All</a>
+        {SERIES.map((s) => (
+          <a class:list={['pl-chip', activeSeries === s && 'is-active']} href={`/pipeline/conferences?series=${s}`}>{s}</a>
+        ))}
+      </div>
+
+      {rows.length === 0 && <p class="pl-muted" style="margin-top:20px">No conferences match.</p>}
+
+      <ul class="pl-list">
+        {rows.map((c) => (
+          <li class="pl-card">
+            <p class="pl-card__title"><a href={`/pipeline/conferences/${c.id}`}>{c.name}</a></p>
+            <p class="pl-card__meta">Abstract deadline {fmtDate(c.abstract_deadline)}</p>
+            <p class="pl-card__ref">
+              {c.submitted} submitted{c.recycled_in > 0 && <> · {c.recycled_in} recycled in</>}
+            </p>
+            <div class="pl-card__status">
+              {c.submitted > 0 ? (
+                <>
+                  <b>{c.accepted} accepted</b>
+                  <span class="pl-when">{c.rejected} rejected{c.accept_pct != null && <> · {c.accept_pct}%</>}</span>
+                </>
+              ) : (
+                <span class="pl-when">no outcomes recorded</span>
+              )}
+            </div>
+            <p class="pl-card__link"><a href={`/pipeline/conferences/${c.id}`}>View conference →</a></p>
+          </li>
+        ))}
+      </ul>
+
+      <p class="pl-count">Deadlines are approximate placeholders from the import — verify before relying on them.</p>
+    </>
+  ) : (
+    <>
+      <p class="pl-sub">Your papers at the abstract stage — being written, submitted, or awaiting a decision.</p>
+
+      {mine.length === 0 && <p class="pl-muted" style="margin-top:20px">Nothing here.</p>}
+
+      <ul class="pl-list">
+        {mine.map((p) => (
+          <li class:list={['pl-card', (p.days_in_stage ?? 0) >= 21 && 'pl-card--warn']}>
+            <p class="pl-card__title"><a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a></p>
+            <p class="pl-card__meta">
+              {p.current_conference ?? 'no conference yet'}
+              {p.analyst_name && <> · analyst {p.analyst_name}</>}
+            </p>
+            <p class="pl-card__ref">{p.ref}</p>
+            <div class="pl-card__status">
+              <b>{p.stage_label}</b>
+              <span class="pl-when">{p.days_in_stage ?? 0} days in stage</span>
+            </div>
+            <p class="pl-card__link"><a href={`/pipeline/projects/${p.id}`}>Open details →</a></p>
+          </li>
+        ))}
+      </ul>
+
+      {mine.length > 0 && <p class="pl-count">{mine.length} {mine.length === 1 ? 'paper' : 'papers'}</p>}
+    </>
+  )}
+</PipelineLayout>

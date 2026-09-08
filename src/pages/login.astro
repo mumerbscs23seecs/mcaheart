@@ -1,0 +1,64 @@
+---
+import AuthShell from '../components/AuthShell.astro';
+import { verifyLogin, startSession, currentUser, DEMO_CREDENTIALS } from '../lib/auth';
+
+export const prerender = false;
+
+const rawNext = Astro.url.searchParams.get('next') ?? '';
+const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '';
+
+/** Admins land on the dashboard; members go straight to their pipeline. */
+const homeFor = (role: string) => next || (role === 'admin' ? '/admin' : '/pipeline');
+
+const existing = currentUser(Astro.cookies);
+if (existing) return Astro.redirect(homeFor(existing.role), 302);
+
+let error: string | null = null;
+let email = '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  email = String(form.get('email') ?? '').trim();
+  const password = String(form.get('password') ?? '');
+  const result = verifyLogin(email, password);
+  if (result.ok && result.user) {
+    startSession(Astro.cookies, result.user);
+    return Astro.redirect(homeFor(result.user.role), 303);
+  }
+  error = result.error ?? 'Email or password is incorrect.';
+}
+---
+
+<AuthShell title="Log in" description="Sign in to the MCA Research Group members area.">
+  <form class="auth-card" method="post" novalidate>
+    <h1 class="auth-card__title">Sign in</h1>
+    <p class="auth-card__sub">MCA Research Group members area</p>
+
+    {error && <p class="auth-alert" role="alert">{error}</p>}
+
+    <div class="auth-field">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" autocomplete="email" required value={email} />
+    </div>
+
+    <div class="auth-field">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required />
+    </div>
+
+    <button class="btn" type="submit">Sign in</button>
+
+    <a class="auth-card__link" href="/forgot-password">Forgot your password?</a>
+  </form>
+
+  <p class="authpage__note">Access is invite-only — ask the site admin to add you.</p>
+
+  <details class="authpage__demo">
+    <summary>Demo accounts</summary>
+    <table>
+      {DEMO_CREDENTIALS.map((c) => (
+        <tr><td>{c.role}</td><td>{c.email}</td><td>{c.password}</td></tr>
+      ))}
+    </table>
+  </details>
+</AuthShell>

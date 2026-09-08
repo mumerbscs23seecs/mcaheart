@@ -1,0 +1,307 @@
+---
+import { INTENT_LABELS } from '../lib/contact-schema';
+---
+
+<form class="cform" action="/api/contact" method="post" novalidate data-contact-form>
+  <div class="cform__row">
+    <div class="field">
+      <label class="field__label" for="fullName">Full name <span aria-hidden="true">*</span></label>
+      <input class="field__input" id="fullName" name="fullName" type="text"
+             autocomplete="name" required maxlength="120" />
+      <p class="field__error" data-error-for="fullName" hidden></p>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="email">Email <span aria-hidden="true">*</span></label>
+      <input class="field__input" id="email" name="email" type="email"
+             autocomplete="email" required maxlength="200" />
+      <p class="field__error" data-error-for="email" hidden></p>
+    </div>
+  </div>
+
+  <div class="cform__row">
+    <div class="field">
+      <label class="field__label" for="phone">Phone</label>
+      <input class="field__input" id="phone" name="phone" type="tel"
+             autocomplete="tel" maxlength="40" />
+      <p class="field__error" data-error-for="phone" hidden></p>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="location">Location</label>
+      <input class="field__input" id="location" name="location" type="text"
+             autocomplete="address-level2" maxlength="160" />
+      <p class="field__error" data-error-for="location" hidden></p>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="field__label" for="designation">Designation</label>
+    <input class="field__input" id="designation" name="designation" type="text"
+           autocomplete="organization-title" maxlength="160"
+           placeholder="e.g. IM Resident, Interventional Fellow, Medical Student" />
+    <p class="field__error" data-error-for="designation" hidden></p>
+  </div>
+
+  <fieldset class="field choices">
+    <legend class="field__label">Why are you getting in touch? <span aria-hidden="true">*</span></legend>
+    {Object.entries(INTENT_LABELS).map(([value, label], i) => (
+      <label class="choice">
+        <input type="radio" name="intent" value={value} required checked={i === 0} />
+        <span class="choice__mark" aria-hidden="true"></span>
+        <span class="choice__text">{label}</span>
+      </label>
+    ))}
+    <p class="field__error" data-error-for="intent" hidden></p>
+  </fieldset>
+
+  <div class="field">
+    <label class="field__label" for="message">How can we help? <span aria-hidden="true">*</span></label>
+    <textarea class="field__input field__input--area" id="message" name="message"
+              rows="6" required minlength="10" maxlength="4000"
+              placeholder="Example: I am a PGY-2 IM resident interested in joining the MCA Research Group."></textarea>
+    <p class="field__error" data-error-for="message" hidden></p>
+  </div>
+
+  {/* Honeypot — hidden from people, tempting to bots. */}
+  <div class="hp" aria-hidden="true">
+    <label for="company">Company</label>
+    <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
+  </div>
+
+  <div class="cform__foot">
+    <button class="btn cform__submit" type="submit" data-submit>
+      <span data-submit-label>Submit enquiry</span>
+      <span class="btn__arrow" aria-hidden="true">&rarr;</span>
+    </button>
+    <p class="cform__small">We reply to most enquiries within a few working days.</p>
+  </div>
+
+  <p class="cform__status" role="status" aria-live="polite" data-status hidden></p>
+</form>
+
+<style>
+  .cform {
+    display: grid;
+    gap: var(--space-m);
+    padding: clamp(1.4rem, 1rem + 2vw, 2.6rem);
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+  }
+
+  .cform__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-m);
+  }
+  @media (max-width: 620px) { .cform__row { grid-template-columns: 1fr; } }
+
+  .field { display: grid; gap: 0.5rem; border: 0; padding: 0; margin: 0; min-width: 0; }
+
+  .field__label {
+    font-size: var(--step--1);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--text);
+    padding: 0;
+  }
+  .field__label span { color: var(--blue); }
+
+  .field__input {
+    width: 100%;
+    padding: 0.9rem 1rem;
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    font-size: var(--step-0);
+    color: var(--text-strong);
+    transition: border-color 0.3s var(--ease), background 0.3s var(--ease),
+                box-shadow 0.3s var(--ease);
+  }
+  .field__input::placeholder { color: var(--text-hint); opacity: 1; }
+  .field__input:focus {
+    outline: none;
+    background: var(--surface);
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(43, 57, 144, 0.13);
+  }
+  .field__input--area { resize: vertical; min-height: 8rem; line-height: 1.6; }
+
+  .field__input[aria-invalid='true'] {
+    border-color: var(--red);
+    background: rgba(158, 27, 30, 0.04);
+  }
+
+  .field__error {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--red);
+  }
+
+  /* --- Radio choices --- */
+  .choices { display: grid; gap: 0.6rem; }
+  .choice {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    padding: 0.85rem 0.95rem;
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: border-color 0.3s var(--ease), background 0.3s var(--ease);
+  }
+  .choice:hover { border-color: var(--border); }
+  .choice input {
+    position: absolute;
+    opacity: 0;
+    width: 1px; height: 1px;
+  }
+  .choice__mark {
+    flex-shrink: 0;
+    width: 17px; height: 17px;
+    margin-top: 0.22rem;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    transition: border-color 0.25s var(--ease);
+  }
+  .choice__mark::after {
+    content: '';
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--blue);
+    transform: scale(0);
+    transition: transform 0.25s var(--ease-out);
+  }
+  .choice input:checked ~ .choice__mark { border-color: var(--blue); }
+  .choice input:checked ~ .choice__mark::after { transform: scale(1); }
+  .choice:has(input:checked) { border-color: var(--blue); background: var(--surface); }
+  .choice input:focus-visible ~ .choice__mark {
+    outline: 2px solid var(--blue);
+    outline-offset: 3px;
+  }
+  .choice__text { font-size: var(--step--1); line-height: 1.5; }
+
+  /* --- Honeypot --- */
+  .hp {
+    position: absolute;
+    left: -9999px;
+    width: 1px; height: 1px;
+    overflow: hidden;
+  }
+
+  /* --- Footer --- */
+  .cform__foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-s) var(--space-m);
+    padding-top: var(--space-xs);
+  }
+  .cform__submit[disabled] { opacity: 0.6; cursor: progress; }
+  .cform__small { font-size: 0.8rem; color: var(--text-muted); }
+
+  .cform__status {
+    padding: 0.95rem 1.1rem;
+    border-radius: var(--radius);
+    font-size: var(--step--1);
+    font-weight: 600;
+    border: 1px solid;
+  }
+  .cform__status[data-tone='ok'] {
+    color: #166534;
+    background: rgba(22, 101, 52, 0.1);
+    border-color: rgba(22, 101, 52, 0.4);
+  }
+  .cform__status[data-tone='error'] {
+    color: var(--red);
+    background: rgba(158, 27, 30, 0.06);
+    border-color: rgba(158, 27, 30, 0.35);
+  }
+</style>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-contact-form]');
+
+  if (form) {
+    const status = form.querySelector<HTMLElement>('[data-status]')!;
+    const submit = form.querySelector<HTMLButtonElement>('[data-submit]')!;
+    const label = form.querySelector<HTMLElement>('[data-submit-label]')!;
+    const original = label.textContent;
+
+    const clearErrors = () => {
+      form.querySelectorAll<HTMLElement>('[data-error-for]').forEach((el) => {
+        el.hidden = true;
+        el.textContent = '';
+      });
+      form.querySelectorAll('[aria-invalid]').forEach((el) =>
+        el.removeAttribute('aria-invalid'),
+      );
+    };
+
+    const showErrors = (fieldErrors: Record<string, string>) => {
+      let first: HTMLElement | null = null;
+      for (const [name, message] of Object.entries(fieldErrors)) {
+        const slot = form.querySelector<HTMLElement>(`[data-error-for="${name}"]`);
+        if (slot) {
+          slot.textContent = message;
+          slot.hidden = false;
+        }
+        const input = form.querySelector<HTMLElement>(`[name="${name}"]`);
+        if (input) {
+          input.setAttribute('aria-invalid', 'true');
+          first ??= input;
+        }
+      }
+      first?.focus();
+      first?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+
+    const setStatus = (message: string, tone: 'ok' | 'error') => {
+      status.textContent = message;
+      status.dataset.tone = tone;
+      status.hidden = false;
+    };
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearErrors();
+      status.hidden = true;
+
+      submit.disabled = true;
+      label.textContent = 'Sending…';
+
+      const payload = Object.fromEntries(new FormData(form));
+
+      try {
+        const res = await fetch(form.action, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+
+        if (res.ok && data.ok) {
+          form.reset();
+          setStatus(data.message ?? 'Thank you — your enquiry has been received.', 'ok');
+          status.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        } else {
+          setStatus(data.error ?? 'Something went wrong. Please try again.', 'error');
+          if (data.fieldErrors) showErrors(data.fieldErrors);
+        }
+      } catch {
+        setStatus(
+          'We could not reach the server. Please check your connection and try again.',
+          'error',
+        );
+      } finally {
+        submit.disabled = false;
+        label.textContent = original;
+      }
+    });
+  }
+</script>

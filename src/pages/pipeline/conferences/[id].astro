@@ -1,0 +1,72 @@
+---
+import PipelineLayout from '../../../layouts/PipelineLayout.astro';
+
+export const prerender = false;
+const { supabase, person } = Astro.locals;
+const { id } = Astro.params;
+
+// The per-conference scorecard is aggregate data — coordinators only.
+if (person.role !== 'admin') return Astro.redirect('/pipeline/conferences', 302);
+
+const { data: conf } = await supabase.from('conferences').select('*').eq('id', id).maybeSingle();
+if (!conf) return Astro.redirect('/pipeline/conferences', 302);
+
+const { data: score } = await supabase
+  .from('conference_scorecard')
+  .select('*')
+  .eq('name', conf.name)
+  .maybeSingle();
+
+// Every attempt at this conference — including papers that have since moved on.
+const { data: attempts } = await supabase
+  .from('conference_attempts')
+  .select(
+    'id, outcome, decided_on, recycled_from, project:projects(id,ref,title,phase,stage), presenter:people!conference_attempts_presenter_id_fkey(full_name)',
+  )
+  .eq('conference_id', id)
+  .order('outcome', { ascending: true });
+
+const fmtDate = (d: string | null) =>
+  d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+const s = score ?? { submitted: 0, accepted: 0, rejected: 0, accept_pct: null };
+const phaseLabel = (p: string) =>
+  ({ idea: 'now: idea', conference: 'now: conference', manuscript: 'now: manuscript', journal: 'now: journal', archived: 'archived' })[p] ?? p;
+---
+
+<PipelineLayout title={conf.name} active="conferences">
+  <p class="pl-crumb"><a class="pl-link" href="/pipeline/conferences">← Conferences</a></p>
+  <h1 class="pl-h1">{conf.name}</h1>
+  <p class="pl-sub">Abstract deadline {fmtDate(conf.abstract_deadline)}. This page never changes after the meeting.</p>
+
+  <div class="pl-score">
+    <div><b>{s.submitted}</b><span>Submitted</span></div>
+    <div><b>{s.accepted}</b><span>Accepted</span></div>
+    <div><b>{s.rejected}</b><span>Rejected</span></div>
+    <div><b>{s.accept_pct != null ? `${s.accept_pct}%` : '—'}</b><span>Acceptance</span></div>
+  </div>
+
+  {(!attempts || attempts.length === 0) && (
+    <p class="pl-muted" style="margin-top:20px">No abstract outcomes recorded for this conference.</p>
+  )}
+
+  <ul class="pl-list" style="margin-top:16px">
+    {(attempts ?? []).map((a: any) => (
+      <li class="pl-card">
+        <p class="pl-card__title">
+          <a href={`/pipeline/projects/${a.project?.id}`} data-panel={a.project?.id}>{a.project?.title ?? '(project removed)'}</a>
+        </p>
+        <p class="pl-card__meta">
+          {a.presenter?.full_name ? <>Presenter: {a.presenter.full_name} · </> : null}
+          <em>{phaseLabel(a.project?.phase ?? '')}</em>
+          {a.recycled_from && <> · recycled from an earlier attempt</>}
+        </p>
+        <p class="pl-card__ref">{a.project?.ref}</p>
+        <div class="pl-card__status">
+          <b>{a.outcome ? a.outcome[0].toUpperCase() + a.outcome.slice(1) : 'Pending'}</b>
+          <span class="pl-when">{fmtDate(a.decided_on)}</span>
+        </div>
+        <p class="pl-card__link"><a href={`/pipeline/projects/${a.project?.id}`}>View project details →</a></p>
+      </li>
+    ))}
+  </ul>
+</PipelineLayout>

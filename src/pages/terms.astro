@@ -1,0 +1,90 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+const updated = 'August 2026';
+---
+
+<BaseLayout title="Terms & Conditions" description="The terms that govern use of the MCA Heart website and its content.">
+  <PageHero eyebrow="Legal" title="Terms & Conditions" />
+
+  <section class="section">
+    <div class="shell shell--narrow legal">
+      <p class="legal__meta">Last updated: {updated}</p>
+
+      <div class="legal__note">
+        <strong>Template notice.</strong> This page is a working draft written for
+        the site rebuild. Have it reviewed by counsel before publishing.
+      </div>
+
+      <h2>Use of this site</h2>
+      <p>
+        This website is provided by MCA Heart for informational and educational
+        purposes. By using it you agree to these terms.
+      </p>
+
+      <h2>Not medical advice</h2>
+      <p>
+        Content published here — including video interviews, journal reviews and
+        webinar recordings — is intended for healthcare professionals and
+        researchers. It is educational commentary on published literature and is
+        <strong>not</strong> medical advice, nor a substitute for independent
+        clinical judgement or the care of a qualified physician. Never disregard
+        professional medical advice because of something you read or watched here.
+      </p>
+
+      <h2>Intellectual property</h2>
+      <p>
+        Original text, graphics and video produced by MCA Heart remain our property.
+        Society logos, journal marks and third-party material remain the property of
+        their respective owners and appear here for identification purposes.
+      </p>
+
+      <h2>External links and embeds</h2>
+      <p>
+        We link to and embed third-party content, including YouTube. We are not
+        responsible for the content, accuracy or practices of external sites.
+      </p>
+
+      <h2>Enquiries and submissions</h2>
+      <p>
+        Sending an enquiry does not create a research collaboration, employment
+        relationship or membership in the MCA Research Group. Any such arrangement
+        is confirmed separately in writing.
+      </p>
+
+      <h2>Changes</h2>
+      <p>
+        We may update these terms. The revision date above shows when they last
+        changed. Questions can be sent through the
+        <a class="link-underline" href="/contact">enquiry form</a>.
+      </p>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .legal { color: var(--text); }
+  .legal__meta {
+    font-size: var(--step--1);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--text-faint);
+  }
+  .legal__note {
+    margin-top: var(--space-m);
+    padding: var(--space-s);
+    background: rgba(43, 57, 144, 0.06);
+    border-left: 2px solid var(--blue);
+    font-size: var(--step--1);
+    line-height: 1.7;
+  }
+  .legal h2 {
+    margin-top: var(--space-l);
+    font-size: var(--step-2);
+    color: var(--text-strong);
+  }
+  .legal p { margin-top: var(--space-s); line-height: 1.75; }
+  .legal a { color: var(--blue); }
+  .legal strong { color: var(--text-strong); }
+</style>

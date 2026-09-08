@@ -1,0 +1,294 @@
+---
+import '../styles/form.css';
+import {
+  RESEARCH_TYPES,
+  DATABASES,
+  CONFERENCES,
+  CONFERENCE_LABELS,
+  COMMITMENTS,
+  COMMITMENT_LABELS,
+  UPLOAD,
+} from '../lib/idea-schema';
+---
+
+<form class="iform" action="/api/idea-submission" method="post" enctype="multipart/form-data" novalidate data-idea-form>
+  {/* ---------------------------------------------------------- Investigator */}
+  <fieldset class="iform__group">
+    <legend class="iform__legend"><span>1</span> Lead investigator</legend>
+
+    <div class="ifrow">
+      <div class="ifield">
+        <label class="ifield__label" for="leadName">Full name <b>*</b></label>
+        <input class="ifield__input" id="leadName" name="leadName" type="text" autocomplete="name" required maxlength="120" />
+        <p class="ifield__err" data-err-for="leadName" hidden></p>
+      </div>
+      <div class="ifield">
+        <label class="ifield__label" for="leadEmail">Primary email <b>*</b></label>
+        <input class="ifield__input" id="leadEmail" name="leadEmail" type="email" autocomplete="email" required maxlength="200" />
+        <p class="ifield__err" data-err-for="leadEmail" hidden></p>
+      </div>
+    </div>
+
+    <div class="ifield ifield--half">
+      <label class="ifield__label" for="contactNumber">Contact number <b>*</b></label>
+      <input class="ifield__input" id="contactNumber" name="contactNumber" type="tel" autocomplete="tel" required maxlength="40" />
+      <p class="ifield__err" data-err-for="contactNumber" hidden></p>
+    </div>
+  </fieldset>
+
+  {/* ------------------------------------------------------------- The idea */}
+  <fieldset class="iform__group">
+    <legend class="iform__legend"><span>2</span> The research idea</legend>
+
+    <div class="ifield">
+      <label class="ifield__label" for="title">Title of research idea <b>*</b></label>
+      <input class="ifield__input" id="title" name="title" type="text" required maxlength="250" />
+      <p class="ifield__err" data-err-for="title" hidden></p>
+    </div>
+
+    <div class="ifield">
+      <span class="ifield__label">Type of research <b>*</b></span>
+      <p class="ifield__help">This changes which questions the form asks below.</p>
+      <div class="ichoices">
+        {RESEARCH_TYPES.map((t, i) => (
+          <label class="ichoice">
+            <input type="radio" name="researchType" value={t} required checked={i === 0} data-research-type />
+            <span class="ichoice__mark ichoice__mark--radio" aria-hidden="true"></span>
+            <span>{t}</span>
+          </label>
+        ))}
+      </div>
+      <p class="ifield__err" data-err-for="researchType" hidden></p>
+    </div>
+
+    {/* Database only */}
+    <div class="ifield" data-when="Database">
+      <span class="ifield__label">Proposed database(s) <b>*</b></span>
+      <p class="ifield__help">
+        If unsure, choose <em>Not sure</em> — we'll assess which database best fits the idea.
+        The <strong>DMC PCI Database</strong> is only open to people with a WSU IRB; propose it only if that applies to you.
+      </p>
+      <div class="ichoices">
+        {DATABASES.map((d) => (
+          <label class="ichoice">
+            <input type="checkbox" name="databases" value={d} />
+            <span class="ichoice__mark" aria-hidden="true"></span>
+            <span>{d}{d === 'DMC PCI Database' && <em class="ichoice__tag"> (requires WSU IRB)</em>}</span>
+          </label>
+        ))}
+      </div>
+      <p class="ifield__err" data-err-for="databases" hidden></p>
+    </div>
+  </fieldset>
+
+  {/* ---------------------------------------------------------------- PICO */}
+  <fieldset class="iform__group">
+    <legend class="iform__legend"><span>3</span> PICO &amp; rationale</legend>
+
+    {[
+      ['population', 'Population (P)', 'Describe the patient population of interest. Be detailed.'],
+      ['intervention', 'Intervention / exposure (I)', 'The specific intervention, exposure, or prognostic factor being investigated.'],
+      ['comparison', 'Control / comparison (C)', 'The comparison group or control condition.'],
+      ['outcomes', 'Outcomes (O)', 'Primary and key secondary outcomes.'],
+    ].map(([name, label, help]) => (
+      <div class="ifield">
+        <label class="ifield__label" for={name}>{label} <b>*</b></label>
+        <p class="ifield__help">{help}</p>
+        <textarea class="ifield__input ifield__area" id={name} name={name} rows="3" required maxlength="3000"></textarea>
+        <p class="ifield__err" data-err-for={name} hidden></p>
+      </div>
+    ))}
+
+    <div class="ifield">
+      <label class="ifield__label" for="rationale">Rationale <b>*</b></label>
+      <p class="ifield__help">Clinical significance and the gap this addresses. Be brief — two lines is fine.</p>
+      <textarea class="ifield__input ifield__area" id="rationale" name="rationale" rows="2" required maxlength="600"></textarea>
+      <p class="ifield__err" data-err-for="rationale" hidden></p>
+    </div>
+  </fieldset>
+
+  {/* ------------------------------------------------- Method & evidence */}
+  <fieldset class="iform__group">
+    <legend class="iform__legend"><span>4</span> Method &amp; evidence</legend>
+
+    {/* Database branch */}
+    <div class="ifield" data-when="Database">
+      <label class="ifield__label" for="studyDesign">Proposed study design / plan <b>*</b></label>
+      <p class="ifield__help">e.g. retrospective cohort, prognostic model.</p>
+      <input class="ifield__input" id="studyDesign" name="studyDesign" type="text" maxlength="600" />
+      <p class="ifield__err" data-err-for="studyDesign" hidden></p>
+    </div>
+    <div class="ifield" data-when="Database">
+      <label class="ifield__label" for="priorStudies">Similar studies previously published on this exact topic? <b>*</b></label>
+      <p class="ifield__help">
+        Key citations or titles. The publication value of the idea can hinge on this — please do a proper literature review.
+      </p>
+      <textarea class="ifield__input ifield__area" id="priorStudies" name="priorStudies" rows="3" maxlength="3000"></textarea>
+      <p class="ifield__err" data-err-for="priorStudies" hidden></p>
+    </div>
+    <div class="ifield" data-when="Database">
+      <label class="ifield__label" for="latestStudy">Latest study published on this topic <b>*</b></label>
+      <p class="ifield__help">Include DOI, year, author, journal name.</p>
+      <input class="ifield__input" id="latestStudy" name="latestStudy" type="text" maxlength="600" />
+      <p class="ifield__err" data-err-for="latestStudy" hidden></p>
+    </div>
+
+    {/* Meta-analysis branch */}
+    <div class="ifield" data-when="Meta-analysis">
+      <label class="ifield__label" for="previousMetaDate">When was the previous meta-analysis conducted? <b>*</b></label>
+      <p class="ifield__help">Year, or "none exists" if this is the first.</p>
+      <input class="ifield__input" id="previousMetaDate" name="previousMetaDate" type="text" maxlength="300" />
+      <p class="ifield__err" data-err-for="previousMetaDate" hidden></p>
+    </div>
+    <div class="ifield" data-when="Meta-analysis">
+      <label class="ifield__label" for="newStudies">Number of NEW studies planned for inclusion <b>*</b></label>
+      <p class="ifield__help">RCTs and/or cohort studies, with the corresponding study links / DOIs.</p>
+      <textarea class="ifield__input ifield__area" id="newStudies" name="newStudies" rows="3" maxlength="3000"></textarea>
+      <p class="ifield__err" data-err-for="newStudies" hidden></p>
+    </div>
+    <div class="ifield" data-when="Meta-analysis">
+      <label class="ifield__label" for="sampleSizeIncrease">Approx. % increase in sample size vs previous meta-analyses <b>*</b></label>
+      <p class="ifield__help">A rough estimate is fine, e.g. "≈ 40%".</p>
+      <input class="ifield__input ifield--half" id="sampleSizeIncrease" name="sampleSizeIncrease" type="text" maxlength="120" />
+      <p class="ifield__err" data-err-for="sampleSizeIncrease" hidden></p>
+    </div>
+  </fieldset>
+
+  {/* --------------------------------------------------- Conference & commitment */}
+  <fieldset class="iform__group">
+    <legend class="iform__legend"><span>5</span> Conference &amp; commitment</legend>
+
+    <div class="ifield">
+      <span class="ifield__label">Are you targeting a conference? <b>*</b></span>
+      <div class="ichoices">
+        {CONFERENCES.map((c, i) => (
+          <label class="ichoice">
+            <input type="radio" name="conference" value={c} required checked={i === 0} />
+            <span class="ichoice__mark ichoice__mark--radio" aria-hidden="true"></span>
+            <span>{CONFERENCE_LABELS[c]}</span>
+          </label>
+        ))}
+      </div>
+      <p class="ifield__err" data-err-for="conference" hidden></p>
+    </div>
+
+    <div class="ifield">
+      <label class="ifield__label" for="supportingDoc">Supporting document</label>
+      <p class="ifield__help">Optional — protocol draft, feasibility checks, etc. One file, max 10 MB ({UPLOAD.extensions.join(', ')}).</p>
+      <input class="ifield__file" id="supportingDoc" name="supportingDoc" type="file" accept={UPLOAD.extensions.join(',')} />
+      <p class="ifield__err" data-err-for="supportingDoc" hidden></p>
+    </div>
+
+    <div class="ifield">
+      <span class="ifield__label">Manuscript commitment <b>*</b></span>
+      {RESEARCH_TYPES.map((rt) => (
+        <div class="ichoices" data-when={rt}>
+          {COMMITMENTS.map((c) => (
+            <label class="ichoice ichoice--block">
+              <input type="radio" name="commitment" value={c} />
+              <span class="ichoice__mark ichoice__mark--radio" aria-hidden="true"></span>
+              <span>{COMMITMENT_LABELS[rt][c]}</span>
+            </label>
+          ))}
+        </div>
+      ))}
+      <p class="ifield__err" data-err-for="commitment" hidden></p>
+    </div>
+  </fieldset>
+
+  {/* Honeypot */}
+  <div class="ihp" aria-hidden="true">
+    <label for="company">Company</label>
+    <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
+  </div>
+
+  <div class="iform__foot">
+    <button class="btn iform__submit" type="submit" data-submit>
+      <span data-submit-label>Submit idea</span>
+      <span class="btn__arrow" aria-hidden="true">&rarr;</span>
+    </button>
+    <p class="iform__small">Fields marked <b>*</b> are required.</p>
+  </div>
+
+  <p class="iform__status" role="status" aria-live="polite" data-status hidden></p>
+</form>
+
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-idea-form]');
+  if (form) {
+    const status = form.querySelector<HTMLElement>('[data-status]')!;
+    const submit = form.querySelector<HTMLButtonElement>('[data-submit]')!;
+    const label = form.querySelector<HTMLElement>('[data-submit-label]')!;
+    const original = label.textContent;
+
+    /* --- Conditional fields by research type --- */
+    const applyType = () => {
+      const val = form.querySelector<HTMLInputElement>('input[name="researchType"]:checked')?.value;
+      for (const el of form.querySelectorAll<HTMLElement>('[data-when]')) {
+        const on = el.dataset.when === val;
+        el.hidden = !on;
+        el.querySelectorAll<HTMLInputElement>('input, select, textarea').forEach((f) => {
+          f.disabled = !on;
+        });
+      }
+    };
+    form.querySelectorAll('[data-research-type]').forEach((r) => r.addEventListener('change', applyType));
+    applyType();
+
+    const clearErrors = () => {
+      form.querySelectorAll<HTMLElement>('[data-err-for]').forEach((el) => { el.hidden = true; el.textContent = ''; });
+      form.querySelectorAll('[aria-invalid]').forEach((el) => el.removeAttribute('aria-invalid'));
+    };
+
+    const showErrors = (fieldErrors: Record<string, string>) => {
+      let first: HTMLElement | null = null;
+      for (const [name, message] of Object.entries(fieldErrors)) {
+        const slot = form.querySelector<HTMLElement>(`[data-err-for="${name}"]`);
+        if (slot) { slot.textContent = message; slot.hidden = false; }
+        const input = form.querySelector<HTMLElement>(`[name="${name}"]:not([disabled])`);
+        if (input) { input.setAttribute('aria-invalid', 'true'); }
+        first ??= (slot ?? input);
+      }
+      first?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+
+    const setStatus = (message: string, tone: 'ok' | 'error') => {
+      status.textContent = message;
+      status.dataset.tone = tone;
+      status.hidden = false;
+      status.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearErrors();
+      status.hidden = true;
+      submit.disabled = true;
+      label.textContent = 'Submitting…';
+
+      try {
+        const res = await fetch(form.action, {
+          method: 'POST',
+          headers: { Accept: 'application/json' },
+          body: new FormData(form),
+        });
+        const data = await res.json();
+
+        if (res.ok && data.ok) {
+          form.reset();
+          applyType();
+          setStatus(data.message ?? 'Thank you — your research idea has been submitted.', 'ok');
+        } else {
+          setStatus(data.error ?? 'Something went wrong. Please try again.', 'error');
+          if (data.fieldErrors) showErrors(data.fieldErrors);
+        }
+      } catch {
+        setStatus('We could not reach the server. Check your connection and try again.', 'error');
+      } finally {
+        submit.disabled = false;
+        label.textContent = original;
+      }
+    });
+  }
+</script>

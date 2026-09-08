@@ -1,0 +1,105 @@
+---
+interface Props {
+  eyebrow?: string;
+  title: string;
+  /** Second line, rendered smaller/lighter under the main title. */
+  subtitle?: string;
+  image?: string;
+  align?: 'left' | 'center';
+  /** Slim band for utility pages (login, dashboards) — no tall empty hero. */
+  compact?: boolean;
+}
+const { eyebrow, title, subtitle, image, align = 'left', compact = false } = Astro.props;
+---
+
+<section class:list={['phero', align === 'center' && 'phero--center', compact && 'phero--compact']}>
+  {image && (
+    <div class="phero__bg" aria-hidden="true">
+      <img src={image} alt="" fetchpriority="high" decoding="async" />
+    </div>
+  )}
+
+  <div class="shell shell--wide phero__inner">
+    {eyebrow && <p class:list={['eyebrow', align === 'center' && 'eyebrow--center']}>{eyebrow}</p>}
+    <h1 class="display phero__title">{title}</h1>
+    {subtitle && <p class="lede phero__sub">{subtitle}</p>}
+    <slot />
+  </div>
+</section>
+
+<style>
+  .phero {
+    position: relative;
+    isolation: isolate;
+    display: flex;
+    align-items: flex-end;
+    min-height: clamp(46vh, 30vh + 22vw, 68vh);
+    padding-block: calc(var(--header-h) + var(--space-l)) var(--space-xl);
+    background: var(--bg);
+    border-bottom: 1px solid var(--border-soft);
+    overflow: hidden;
+  }
+
+  /* Image-free variant: dot grid over a soft accent wash. Used where a
+     photograph would put one person forward as the face of a whole group. */
+  .phero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    background-image:
+      radial-gradient(circle at 2px 2px, rgba(43, 57, 144, 0.08) 1px, transparent 0),
+      radial-gradient(ellipse 70% 90% at 88% 8%, rgba(43, 57, 144, 0.13), transparent 70%),
+      radial-gradient(ellipse 60% 80% at 4% 96%, rgba(158, 27, 30, 0.09), transparent 70%);
+    background-size: 40px 40px, 100% 100%, 100% 100%;
+    pointer-events: none;
+  }
+
+  /* A hairline that fades out, echoing the section headers. */
+  .phero::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 1px;
+    background: linear-gradient(90deg, var(--border), transparent 60%);
+  }
+  .phero__bg { position: absolute; inset: 0; z-index: -1; }
+  .phero__bg img { width: 100%; height: 100%; object-fit: cover; }
+  .phero__bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      rgba(248, 250, 252, 0.96) 0%,
+      rgba(248, 250, 252, 0.72) 38%,
+      rgba(248, 250, 252, 0.42) 100%
+    );
+  }
+
+  .phero__inner { width: 100%; }
+  .phero--center .phero__inner { text-align: center; }
+  .phero--center .phero__sub { margin-inline: auto; }
+
+  .phero__title {
+    margin-top: var(--space-s);
+    font-size: var(--step-5);
+    color: var(--text-strong);
+    max-width: 18ch;
+  }
+  .phero--center .phero__title { max-width: 22ch; margin-inline: auto; }
+
+  .phero__sub { margin-top: var(--space-m); }
+
+  /* --- Compact variant --- */
+  .phero--compact {
+    min-height: 0;
+    padding-block: calc(var(--header-h) + var(--space-m)) var(--space-m);
+  }
+  .phero--compact .phero__title {
+    margin-top: 0.35rem;
+    font-size: var(--step-3);
+    max-width: none;
+  }
+  .phero--compact .phero__sub { margin-top: var(--space-xs); }
+</style>

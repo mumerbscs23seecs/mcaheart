@@ -1,0 +1,58 @@
+---
+interface Props {
+  eyebrow?: string;
+  title: string;
+  body?: string;
+  ctaLabel: string;
+  ctaHref: string;
+  image?: string;
+}
+const { eyebrow, title, body, ctaLabel, ctaHref, image } = Astro.props;
+---
+
+<section class="cta dark-ground">
+  {image && (
+    <div class="cta__bg" aria-hidden="true">
+      <img src={image} alt="" loading="lazy" decoding="async" />
+    </div>
+  )}
+
+  <div class="shell cta__inner" data-reveal>
+    {eyebrow && <p class="eyebrow eyebrow--center">{eyebrow}</p>}
+    <h2 class="display cta__title">{title}</h2>
+    {body && <p class="lede cta__body">{body}</p>}
+    <a class="btn btn--light cta__btn" href={ctaHref}>
+      {ctaLabel}
+      <span class="btn__arrow" aria-hidden="true">&rarr;</span>
+    </a>
+  </div>
+</section>
+
+<style>
+  .cta {
+    position: relative;
+    isolation: isolate;
+    padding-block: var(--space-2xl);
+    text-align: center;
+    overflow: hidden;
+  }
+  .cta__bg { position: absolute; inset: 0; z-index: -1; }
+  .cta__bg img { width: 100%; height: 100%; object-fit: cover; }
+  .cta__bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg, rgba(22, 32, 58, 0.86), rgba(22, 32, 58, 0.94)),
+      radial-gradient(ellipse at 50% 50%, rgba(43, 57, 144, 0.35), transparent 70%);
+  }
+
+  .cta__title {
+    margin-top: var(--space-s);
+    font-size: var(--step-4);
+    max-width: 20ch;
+    margin-inline: auto;
+  }
+  .cta__body { margin-top: var(--space-m); margin-inline: auto; }
+  .cta__btn { margin-top: var(--space-l); }
+</style>

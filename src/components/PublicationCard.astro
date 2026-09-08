@@ -1,0 +1,167 @@
+---
+import type { Publication } from '../data/publications';
+import { authorString, pubmedUrl, doiUrl } from '../lib/pubmed';
+
+interface Props { pub: Publication }
+const { pub } = Astro.props;
+
+// Highlight the PI so his authorship is scannable in long author lists.
+const authors = authorString(pub.authors);
+const parts = authors.split(/(Alraies\s+M?C?)/i);
+---
+
+<article
+  class="pub"
+  data-pub
+  data-category={pub.category}
+  data-year={pub.year}
+  data-search={`${pub.title} ${pub.journal} ${pub.authors.join(' ')} ${pub.pmid} ${pub.doi}`.toLowerCase()}
+>
+  <header class="pub__head">
+    <span class="pub__cat">{pub.category}</span>
+    <span class="pub__date">{pub.pubDate}</span>
+  </header>
+
+  <h3 class="pub__title">
+    <a href={pubmedUrl(pub.pmid)} target="_blank" rel="noopener noreferrer">{pub.title}</a>
+  </h3>
+
+  <p class="pub__journal">
+    <em>{pub.journal}</em>{pub.volume && <span> &middot; Vol. {pub.volume}</span>}
+  </p>
+
+  <p class="pub__authors">
+    {parts.map((part, i) =>
+      i % 2 === 1 ? <strong>{part}</strong> : part
+    )}
+  </p>
+
+  <footer class="pub__foot">
+    <span class="pub__ids">
+      <span>PMID <a href={pubmedUrl(pub.pmid)} target="_blank" rel="noopener noreferrer">{pub.pmid}</a></span>
+      {pub.doi && <span class="pub__doi">DOI {pub.doi}</span>}
+    </span>
+
+    <span class="pub__actions">
+      {pub.doi && (
+        <a class="pub__btn" href={doiUrl(pub)} target="_blank" rel="noopener noreferrer">Full text</a>
+      )}
+      <button class="pub__btn" type="button" data-abstract={pub.pmid}>Abstract</button>
+      <button class="pub__btn" type="button" data-cite={pub.pmid}>Cite</button>
+    </span>
+  </footer>
+
+  <div class="pub__abstract" data-abstract-for={pub.pmid} hidden></div>
+</article>
+
+<style>
+  .pub {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: var(--space-m);
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-left: 2px solid var(--border);
+    border-radius: var(--radius);
+    transition: border-left-color 0.35s var(--ease), box-shadow 0.35s var(--ease);
+  }
+  .pub:hover {
+    border-left-color: var(--blue);
+    box-shadow: 0 18px 40px -32px rgba(30, 41, 59, 0.6);
+  }
+  .pub[hidden] { display: none; }
+
+  .pub__head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem var(--space-s);
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .pub__cat {
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: var(--blue);
+    background: rgba(43, 57, 144, 0.08);
+    padding: 0.3em 0.7em;
+    border-radius: 999px;
+  }
+  .pub__date {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-faint);
+    white-space: nowrap;
+  }
+
+  .pub__title {
+    font-size: var(--step-1);
+    line-height: 1.28;
+    letter-spacing: -0.005em;
+  }
+  .pub__title a:hover { color: var(--blue); }
+
+  .pub__journal { font-size: var(--step--1); color: var(--text); }
+  .pub__journal em { font-style: italic; }
+
+  .pub__authors {
+    font-size: 0.8rem;
+    line-height: 1.55;
+    color: var(--text-muted);
+  }
+  .pub__authors strong { color: var(--blue); font-weight: 700; }
+
+  .pub__foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.35rem;
+    padding-top: var(--space-xs);
+    border-top: 1px solid var(--border-soft);
+  }
+  .pub__ids {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    font-size: 0.72rem;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+  }
+  .pub__ids a { text-decoration: underline; text-underline-offset: 2px; }
+  .pub__ids a:hover { color: var(--blue); }
+  .pub__doi { overflow-wrap: anywhere; }
+
+  .pub__actions { display: flex; gap: 0.4rem; }
+  .pub__btn {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 0.5em 0.9em;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    background: transparent;
+    transition: background 0.25s var(--ease), color 0.25s var(--ease),
+                border-color 0.25s var(--ease);
+    white-space: nowrap;
+  }
+  .pub__btn:hover { background: var(--blue); color: var(--surface); border-color: var(--blue); }
+
+  .pub__abstract {
+    margin-top: 0.35rem;
+    padding: var(--space-s);
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    font-size: 0.84rem;
+    line-height: 1.7;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+  .pub__abstract[hidden] { display: none; }
+</style>

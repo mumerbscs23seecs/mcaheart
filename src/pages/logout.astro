@@ -1,0 +1,8 @@
+---
+import { endSession } from '../lib/auth';
+
+export const prerender = false;
+
+endSession(Astro.cookies);
+return Astro.redirect('/', 303);
+---

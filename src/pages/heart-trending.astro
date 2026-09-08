@@ -1,0 +1,107 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import VideoCard from '../components/VideoCard.astro';
+import VideoLightbox from '../components/VideoLightbox.astro';
+import { videos, site } from '../data/site';
+---
+
+<BaseLayout
+  title="Heart Trending"
+  description="Heart Trending is the video arm of MCA Heart — interviews with renowned cardiologists, journal reviews, congress wrap-ups and webinars."
+  transparentHeader
+>
+  <PageHero
+    eyebrow="Video series"
+    title="Heart Trending"
+    subtitle="Your gateway to the social media presence of MCA Heart — a curated collection of interviews with renowned cardiologists, discussions of groundbreaking research, journal reviews, webinars and more."
+    image="/assets/trending/hero-bg.jpg"
+  >
+    <a class="btn phero__cta" href={site.youtube} target="_blank" rel="noopener noreferrer">
+      Subscribe on YouTube <span class="btn__arrow" aria-hidden="true">&rarr;</span>
+    </a>
+  </PageHero>
+
+  {/* --------------------------------------------------------------- Library */}
+  <section class="section library">
+    <div class="shell shell--wide">
+      <header class="library__head" data-reveal>
+        <p class="eyebrow">The library</p>
+        <h2 class="display library__title">Watch the latest</h2>
+        <p class="prose library__note">
+          Every episode plays here without leaving the page. Nothing loads from
+          YouTube until you press play.
+        </p>
+      </header>
+
+      <div class="library__grid">
+        {videos.map((v, i) => <VideoCard video={v} index={i} />)}
+      </div>
+    </div>
+  </section>
+
+  {/* ------------------------------------------------------------ Collaborate */}
+  <section class="section collab dark-ground">
+    <div class="shell shell--wide collab__grid">
+      <div class="collab__copy" data-reveal>
+        <p class="eyebrow">Let&rsquo;s collab</p>
+        <h2 class="display collab__title">Have a story to share?</h2>
+        <div class="prose collab__body">
+          <p>
+            MCA Heart invites you to be part of our video series. Whether it is an
+            expert interview, a research discussion, or a webinar idea, we are
+            excited to collaborate and amplify your voice.
+          </p>
+          <p>Contact us today to explore how we can create impactful content together.</p>
+        </div>
+        <a class="btn btn--light collab__cta" href="/contact">
+          Collaborate with us <span class="btn__arrow" aria-hidden="true">&rarr;</span>
+        </a>
+      </div>
+
+      <figure class="collab__art" data-reveal style="--reveal-delay:120ms">
+        <img src="/assets/trending/collab.png" alt="" loading="lazy" decoding="async" />
+      </figure>
+    </div>
+  </section>
+
+  <VideoLightbox />
+</BaseLayout>
+
+<style>
+  .phero__cta { margin-top: var(--space-l); }
+
+  .library__title { font-size: var(--step-3); margin-top: var(--space-s); }
+  .library__note { margin-top: var(--space-s); }
+
+  .library__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr));
+    gap: var(--space-m);
+    margin-top: var(--space-l);
+  }
+
+  .collab { overflow: hidden; }
+  .collab__grid {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: clamp(2rem, 1rem + 4vw, 5rem);
+    align-items: center;
+  }
+  .collab__title { font-size: var(--step-3); margin-top: var(--space-s); }
+  .collab__body { margin-top: var(--space-m); }
+  .collab__cta { margin-top: var(--space-l); }
+
+  /* Line art drawn in black — inverted so it reads on the ink ground. */
+  .collab__art img {
+    width: 100%;
+    height: auto;
+    filter: invert(1);
+    opacity: 0.9;
+  }
+
+  @media (max-width: 860px) {
+    .collab__grid { grid-template-columns: 1fr; }
+    .collab__art { order: -1; max-width: 460px; }
+  }
+</style>

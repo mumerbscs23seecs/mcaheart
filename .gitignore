@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.astro/
+.env
+.env.production
+.DS_Store
+Thumbs.db
+npm-debug.log*
+# Scraped reference copies of the original Wix site (analysis only)
+reference/
+
+# Separate AI Studio React build, kept for evaluation
+mca-heart-research/
+mca-heart-research.zip

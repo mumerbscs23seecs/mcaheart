@@ -1,0 +1,444 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import PublicationCard from '../components/PublicationCard.astro';
+import CTABanner from '../components/CTABanner.astro';
+import { PUBLICATIONS, PUBMED_SEARCH_URL } from '../data/publications';
+import { CATEGORIES } from '../lib/pubmed';
+import { director } from '../data/site';
+
+// Facet counts from the prerendered set.
+const counts = CATEGORIES.map((c) => ({
+  name: c,
+  n: PUBLICATIONS.filter((p) => p.category === c).length,
+})).filter((c) => c.n > 0);
+
+const years = [...new Set(PUBLICATIONS.map((p) => p.year).filter(Boolean))].sort((a, b) => b - a);
+const newest = PUBLICATIONS[0];
+---
+
+<BaseLayout
+  title="Publications"
+  description="Peer-reviewed cardiology publications authored by Dr Chadi Alraies and the MCA Research Group, listed from PubMed."
+  transparentHeader
+>
+  <PageHero
+    eyebrow="PubMed indexed"
+    title="Publications"
+    subtitle={`Peer-reviewed articles, clinical investigations, multi-centre trials and scientific reviews authored by ${director.name} and the MCA Research Group.`}
+  >
+    <div class="phero__meta">
+      <a class="btn" href={PUBMED_SEARCH_URL} target="_blank" rel="noopener noreferrer">
+        View on PubMed <span class="btn__arrow" aria-hidden="true">&rarr;</span>
+      </a>
+      <p class="phero__note">
+        Most recent: <em>{newest.title}</em> &middot; {newest.journal}, {newest.pubDate}
+      </p>
+    </div>
+  </PageHero>
+
+  <section class="section pubs">
+    <div class="shell shell--wide">
+      {/* ------------------------------------------------------------ Controls */}
+      <div class="controls" data-controls>
+        <div class="controls__row">
+          <label class="search">
+            <span class="visually-hidden">Search publications</span>
+            <svg class="search__icon" viewBox="0 0 24 24" width="17" height="17" fill="none"
+                 stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" stroke-linecap="round" />
+            </svg>
+            <input
+              class="search__input"
+              type="search"
+              placeholder="Filter by title, journal, author, PMID or DOI…"
+              data-search
+              autocomplete="off"
+            />
+          </label>
+
+          <label class="select">
+            <span class="visually-hidden">Filter by year</span>
+            <select data-year>
+              <option value="">All years</option>
+              {years.map((y) => <option value={y}>{y}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <div class="chips" role="group" aria-label="Filter by research area">
+          <button class="chip is-active" type="button" data-cat="">
+            All <span class="chip__n">{PUBLICATIONS.length}</span>
+          </button>
+          {counts.map((c) => (
+            <button class="chip" type="button" data-cat={c.name}>
+              {c.name} <span class="chip__n">{c.n}</span>
+            </button>
+          ))}
+        </div>
+
+        <p class="status" data-status>
+          Showing <strong data-shown>{PUBLICATIONS.length}</strong> publications.
+        </p>
+      </div>
+
+      {/* ------------------------------------------------------------ Results */}
+      <div class="pubs__grid" data-results>
+        {PUBLICATIONS.map((p) => <PublicationCard pub={p} />)}
+      </div>
+
+      <p class="empty" data-empty hidden>
+        No publications match that filter.
+        <button class="link-underline" type="button" data-reset>Clear filters</button>
+      </p>
+
+      <p class="pubs__foot">
+        This listing is drawn from PubMed and shows the {PUBLICATIONS.length} most recent entries.
+        It is a bibliography rather than a complete record of the group's output.
+        <a class="link-underline" href={PUBMED_SEARCH_URL} target="_blank" rel="noopener noreferrer">
+        Search the full bibliography on PubMed &rarr;</a>
+      </p>
+    </div>
+  </section>
+
+  {/* --------------------------------------------------------- Cite dialog */}
+  <dialog class="cite" data-cite-dialog aria-label="Citation">
+    <div class="cite__head">
+      <h2 class="cite__title">Cite this article</h2>
+      <button class="cite__close" type="button" data-cite-close aria-label="Close">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7">
+          <path d="M6 6l12 12M18 6L6 18" stroke-linecap="round" />
+        </svg>
+      </button>
+    </div>
+    <div class="cite__tabs" role="tablist">
+      <button class="cite__tab is-active" type="button" data-format="AMA" role="tab">AMA</button>
+      <button class="cite__tab" type="button" data-format="APA" role="tab">APA</button>
+      <button class="cite__tab" type="button" data-format="BibTeX" role="tab">BibTeX</button>
+    </div>
+    <pre class="cite__out" data-cite-out></pre>
+    <button class="btn cite__copy" type="button" data-cite-copy>Copy citation</button>
+  </dialog>
+
+  <CTABanner
+    eyebrow="Join the group"
+    title="Publish with us"
+    body="Research fellows in the group publish 40+ manuscripts a year. Tell us where you are in your training."
+    ctaLabel="Get in touch"
+    ctaHref="/contact"
+    image="/assets/home/group-photo.jpg"
+  />
+</BaseLayout>
+
+<style>
+  .phero__meta { margin-top: var(--space-l); }
+  .phero__note {
+    margin-top: var(--space-s);
+    font-size: var(--step--1);
+    color: var(--text-muted);
+    max-width: 62ch;
+  }
+  .phero__note em { font-style: italic; color: var(--text); }
+
+  /* ------------------------------------------------------------- Controls */
+  /* Solid band, bled to the viewport edges, so cards pass cleanly underneath
+     instead of showing through a gradient. */
+  .controls {
+    position: sticky;
+    top: var(--header-h);
+    z-index: 20;
+    display: grid;
+    gap: var(--space-s);
+    padding: var(--space-s) 0;
+    background: var(--bg);
+    box-shadow:
+      0 0 0 100vmax var(--bg),
+      0 12px 20px -18px rgba(30, 41, 59, 0.5);
+    clip-path: inset(0 -100vmax);
+    border-bottom: 1px solid var(--border-soft);
+    margin-bottom: var(--space-m);
+  }
+
+  .controls__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+  }
+
+  .search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1 1 320px;
+  }
+  .search__icon {
+    position: absolute;
+    left: 0.9rem;
+    color: var(--text-faint);
+    pointer-events: none;
+  }
+  .search__input {
+    width: 100%;
+    padding: 0.8rem 0.95rem 0.8rem 2.6rem;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    font-size: var(--step--1);
+  }
+  .search__input::placeholder { color: var(--text-hint); opacity: 1; }
+  .search__input:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(43, 57, 144, 0.13);
+  }
+
+  .select select {
+    padding: 0.8rem 0.95rem;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    font-size: var(--step--1);
+    cursor: pointer;
+  }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.5em 0.95em;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text);
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 999px;
+    transition: background 0.25s var(--ease), color 0.25s var(--ease),
+                border-color 0.25s var(--ease);
+  }
+  .chip:hover { border-color: var(--border); }
+  .chip.is-active { background: var(--blue); color: var(--surface); border-color: var(--blue); }
+  .chip__n {
+    font-size: 0.68rem;
+    opacity: 0.7;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .status { font-size: var(--step--1); color: var(--text-muted); }
+  .status strong { color: var(--text-strong); }
+
+  /* -------------------------------------------------------------- Results */
+  .pubs__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
+    gap: var(--space-s);
+  }
+
+  .empty {
+    padding: var(--space-xl) 0;
+    text-align: center;
+    color: var(--text-muted);
+  }
+  .empty[hidden] { display: none; }
+  .empty button { color: var(--blue); margin-left: 0.4rem; }
+
+  .pubs__foot {
+    margin-top: var(--space-l);
+    padding-top: var(--space-m);
+    border-top: 1px solid var(--border-soft);
+    font-size: var(--step--1);
+    color: var(--text-muted);
+  }
+  .pubs__foot a { color: var(--blue); }
+
+  /* ---------------------------------------------------------- Cite dialog */
+  .cite {
+    width: min(720px, 92vw);
+    padding: var(--space-m);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text-strong);
+  }
+  .cite::backdrop { background: rgba(22, 32, 58, 0.62); }
+
+  .cite__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-s);
+  }
+  .cite__title { font-size: var(--step-2); }
+  .cite__close {
+    display: grid;
+    place-items: center;
+    width: 2.1rem; height: 2.1rem;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    transition: background 0.25s var(--ease), color 0.25s var(--ease);
+  }
+  .cite__close:hover { background: var(--blue); color: var(--surface); }
+
+  .cite__tabs { display: flex; gap: 0.4rem; margin-top: var(--space-s); }
+  .cite__tab {
+    padding: 0.5em 1em;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    color: var(--text);
+  }
+  .cite__tab.is-active { background: var(--text-strong); color: var(--on-dark); border-color: var(--text-strong); }
+
+  .cite__out {
+    margin-top: var(--space-s);
+    padding: var(--space-s);
+    max-height: 44vh;
+    overflow: auto;
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.78rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .cite__copy { margin-top: var(--space-s); }
+
+  @media (max-width: 720px) {
+    .controls { position: static; }
+  }
+</style>
+
+<script>
+  import { PUBLICATIONS } from '../data/publications';
+  import { formatCitation, fetchAbstract } from '../lib/pubmed';
+  import type { CitationFormat } from '../lib/pubmed';
+
+  const byPmid = new Map(PUBLICATIONS.map((p) => [p.pmid, p]));
+
+  const results = document.querySelector<HTMLElement>('[data-results]')!;
+  const searchInput = document.querySelector<HTMLInputElement>('[data-search]')!;
+  const yearSelect = document.querySelector<HTMLSelectElement>('[data-year]')!;
+  const chips = [...document.querySelectorAll<HTMLButtonElement>('[data-cat]')];
+  const shown = document.querySelector<HTMLElement>('[data-shown]')!;
+  const empty = document.querySelector<HTMLElement>('[data-empty]')!;
+
+  let category = '';
+
+  /* ---------------------------------------------------------- Filtering */
+
+  function apply() {
+    const q = searchInput.value.trim().toLowerCase();
+    const year = yearSelect.value;
+    let visible = 0;
+
+    for (const el of results.querySelectorAll<HTMLElement>('[data-pub]')) {
+      const okCat = !category || el.dataset.category === category;
+      const okYear = !year || el.dataset.year === year;
+      const okText = !q || (el.dataset.search ?? '').includes(q);
+      const ok = okCat && okYear && okText;
+      el.hidden = !ok;
+      if (ok) visible++;
+    }
+
+    shown.textContent = String(visible);
+    empty.hidden = visible !== 0;
+  }
+
+  const debounce = <T extends unknown[]>(fn: (...a: T) => void, ms: number) => {
+    let t: ReturnType<typeof setTimeout>;
+    return (...a: T) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+  };
+
+  searchInput.addEventListener('input', debounce(apply, 140));
+  yearSelect.addEventListener('change', apply);
+
+  chips.forEach((chip) => {
+    chip.addEventListener('click', () => {
+      category = chip.dataset.cat ?? '';
+      chips.forEach((c) => c.classList.toggle('is-active', c === chip));
+      apply();
+    });
+  });
+
+  document.querySelector('[data-reset]')?.addEventListener('click', () => {
+    searchInput.value = '';
+    yearSelect.value = '';
+    category = '';
+    chips.forEach((c, i) => c.classList.toggle('is-active', i === 0));
+    apply();
+  });
+
+  /* ---------------------------------------------------------- Abstracts */
+
+  results.addEventListener('click', async (event) => {
+    const btn = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-abstract]');
+    if (!btn) return;
+
+    const pmid = btn.dataset.abstract!;
+    const panel = document.querySelector<HTMLElement>(`[data-abstract-for="${pmid}"]`)!;
+
+    if (!panel.hidden) { panel.hidden = true; btn.textContent = 'Abstract'; return; }
+
+    if (!panel.dataset.loaded) {
+      btn.textContent = 'Loading…';
+      const text = await fetchAbstract(pmid);
+      panel.textContent =
+        text ?? 'No abstract is available from PubMed for this citation. Use the PubMed link for full publisher details.';
+      panel.dataset.loaded = 'true';
+    }
+
+    panel.hidden = false;
+    btn.textContent = 'Hide';
+  });
+
+  /* -------------------------------------------------------------- Citing */
+
+  const dialog = document.querySelector<HTMLDialogElement>('[data-cite-dialog]')!;
+  const out = document.querySelector<HTMLElement>('[data-cite-out]')!;
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-format]')];
+  let citing: string | null = null;
+  let format: CitationFormat = 'AMA';
+
+  function renderCitation() {
+    const pub = citing ? byPmid.get(citing) : null;
+    out.textContent = pub ? formatCitation(pub, format) : '';
+  }
+
+  results.addEventListener('click', (event) => {
+    const btn = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-cite]');
+    if (!btn) return;
+    citing = btn.dataset.cite!;
+    renderCitation();
+    dialog.showModal();
+  });
+
+  tabs.forEach((tab) => {
+    tab.addEventListener('click', () => {
+      format = tab.dataset.format as CitationFormat;
+      tabs.forEach((t) => t.classList.toggle('is-active', t === tab));
+      renderCitation();
+    });
+  });
+
+  document.querySelector('[data-cite-close]')?.addEventListener('click', () => dialog.close());
+  dialog.addEventListener('click', (e) => { if (e.target === dialog) dialog.close(); });
+
+  document.querySelector('[data-cite-copy]')?.addEventListener('click', async (event) => {
+    const btn = event.currentTarget as HTMLButtonElement;
+    try {
+      await navigator.clipboard.writeText(out.textContent ?? '');
+      btn.textContent = 'Copied';
+      setTimeout(() => { btn.textContent = 'Copy citation'; }, 1600);
+    } catch {
+      btn.textContent = 'Press Ctrl+C to copy';
+    }
+  });
+
+</script>

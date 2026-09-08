@@ -1,0 +1,202 @@
+---
+import AppLayout from '../layouts/AppLayout.astro';
+import '../styles/admin.css';
+import { currentUser } from '../lib/auth';
+import {
+  listSubmissions,
+  getStats,
+  setReviewed,
+  isStagnant,
+  isTerminalStatus,
+  submissionsDueForReminder,
+} from '../lib/submissions';
+import { runReminderSweep, type SweepResult } from '../lib/reminders';
+
+export const prerender = false;
+
+const me = currentUser(Astro.cookies);
+if (!me) return Astro.redirect('/login', 302);
+if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+type Flash = { tone: 'ok' | 'error'; text: string };
+let flash: Flash | null = null;
+let sweepResult: SweepResult | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+
+  if (action === 'review' || action === 'unreview') {
+    const ok = setReviewed(String(form.get('submissionId') ?? ''), action === 'review', me.name);
+    flash = ok
+      ? { tone: 'ok', text: action === 'review' ? 'Marked as reviewed.' : 'Review re-opened.' }
+      : { tone: 'error', text: 'Submission not found.' };
+  } else if (action === 'sweep' || action === 'sweep-dry') {
+    sweepResult = await runReminderSweep({ actor: me.name, dryRun: action === 'sweep-dry' });
+    flash = {
+      tone: 'ok',
+      text:
+        sweepResult.dueCount === 0
+          ? 'Sweep ran — nothing is due for a reminder.'
+          : `Sweep ran — ${sweepResult.dueCount} item(s), digest ${sweepResult.emailStatus}.`,
+    };
+  }
+}
+
+const subs = listSubmissions();
+const stats = getStats(7);
+const due = submissionsDueForReminder({ stagnantDays: 7, cooldownDays: 7 });
+
+const fmt = (t: number | null) =>
+  t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+
+function ago(t: number): string {
+  const d = Math.floor((Date.now() - t) / 1000);
+  if (d < 60) return 'just now';
+  if (d < 3600) return `${Math.floor(d / 60)} min ago`;
+  if (d < 86400) return `${Math.floor(d / 3600)} h ago`;
+  const days = Math.floor(d / 86400);
+  return days === 1 ? 'yesterday' : `${days} days ago`;
+}
+---
+
+<AppLayout title="Dashboard" heading="Dashboard" user={me} active="dashboard">
+  <div class="adm">
+    {flash && (
+      <div class:list={['adm-flash', `adm-flash--${flash.tone}`]} role="status">
+        <p>{flash.text}</p>
+      </div>
+    )}
+
+    <div class="adm-stats">
+      <div class="stat"><span class="stat__n">{stats.total}</span><span class="stat__l">Total submissions</span></div>
+      <div class="stat"><span class="stat__n">{stats.active}</span><span class="stat__l">Active in pipeline</span></div>
+      <div class:list={['stat', stats.awaitingReview > 0 && 'stat--warn']}>
+        <span class="stat__n">{stats.awaitingReview}</span><span class="stat__l">Awaiting coordinator review</span>
+      </div>
+      <div class:list={['stat', stats.stagnant > 0 && 'stat--warn']}>
+        <span class="stat__n">{stats.stagnant}</span><span class="stat__l">No update in 7+ days</span>
+      </div>
+      <div class="stat"><span class="stat__n">{stats.published}</span><span class="stat__l">Published</span></div>
+    </div>
+
+    <div class="adm-bars">
+      {stats.byStatus.map((r) => (
+        <div class="bar">
+          <span class="bar__label">{r.status}</span>
+          <span class="bar__track"><span class="bar__fill" style={`width:${(r.n / stats.total) * 100}%`}></span></span>
+          <span class="bar__n">{r.n}</span>
+        </div>
+      ))}
+    </div>
+
+    {/* ------------------------------------------------------- Reminders */}
+    <div class="adm-panel">
+      <div class="adm-reminders__head">
+        <h2 class="adm-panel__title">Stagnation reminders</h2>
+        <div class="adm-reminders__actions">
+          <form method="post" class="adm-inline">
+            <button class="adm-btn" name="action" value="sweep-dry" type="submit">Preview</button>
+          </form>
+          <form method="post" class="adm-inline">
+            <button class="btn" name="action" value="sweep" type="submit">Run sweep now</button>
+          </form>
+        </div>
+      </div>
+
+      {sweepResult ? (
+        <div class="adm-sweep">
+          <p>
+            <strong>{sweepResult.dryRun ? 'Preview' : 'Sweep complete'}.</strong>{' '}
+            {sweepResult.dueCount} due · recipients: <span class="adm-mono">{sweepResult.recipients.join(', ')}</span> ·
+            email: <span class="adm-mono">{sweepResult.emailStatus}</span>
+          </p>
+          {sweepResult.items.length > 0 && (
+            <ul class="adm-sweep__list">
+              {sweepResult.items.map((it) => (
+                <li>{it.title} — <span class="adm-mono">{it.lead}, {it.daysIdle}d idle</span></li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : due.length === 0 ? (
+        <p class="adm-hint">Nothing is currently due — every stagnant item was reminded within the last 7 days.</p>
+      ) : (
+        <p class="adm-hint">
+          <strong>{due.length}</strong> stagnant item(s) would be included in the next digest to the
+          coordinators. Runs automatically once a day via <span class="adm-mono">/api/cron/reminders</span>;
+          “Run sweep now” fires it immediately. Each item is skipped for 7 days after it’s reminded, so
+          the digest never repeats the same line daily.
+        </p>
+      )}
+    </div>
+
+    {/* ----------------------------------------------------- Submissions */}
+    <div class="adm-panel">
+      <h2 class="adm-panel__title">All submissions</h2>
+      <div class="adm-scroll">
+        <table class="adm-table">
+          <thead>
+            <tr>
+              <th>Title</th><th>Lead</th><th>Target</th><th>Status</th>
+              <th>Reviewed</th><th>Last activity</th><th>Updates</th>
+            </tr>
+          </thead>
+          <tbody>
+            {subs.map((s) => (
+              <tr class:list={[isTerminalStatus(s.status) && 'is-off']}>
+                <td class="adm-title">
+                  {s.title}
+                  {isStagnant(s) && <span class="adm-pill adm-pill--wait">stagnant</span>}
+                </td>
+                <td>{s.lead}</td>
+                <td class="adm-mono">{s.target}</td>
+                <td><span class="adm-status">{s.status}</span></td>
+                <td>
+                  {isTerminalStatus(s.status) ? (
+                    s.reviewed ? <span class="adm-pill adm-pill--on">yes</span> : <span class="adm-tag">n/a</span>
+                  ) : (
+                    <form method="post" class="adm-inline">
+                      <input type="hidden" name="submissionId" value={s.id} />
+                      {s.reviewed ? (
+                        <button class="adm-btn adm-btn--on" name="action" value="unreview" type="submit">✓ reviewed</button>
+                      ) : (
+                        <button class="adm-btn" name="action" value="review" type="submit">mark reviewed</button>
+                      )}
+                    </form>
+                  )}
+                </td>
+                <td>
+                  <span class="adm-mono" title={fmt(s.updatedAt)}>{ago(s.updatedAt)}</span>
+                  <span class="adm-last">{s.activity[0]?.note}</span>
+                </td>
+                <td class="adm-count">{s.activity.length}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="adm-hint">
+        “Reviewed” is the internal coordinator sign-off — separate from the journal’s peer review.
+        Status is a single field; the record does not move between lists.
+      </p>
+    </div>
+
+    {/* -------------------------------------------------------- Activity */}
+    <div class="adm-panel">
+      <h2 class="adm-panel__title">Recent activity</h2>
+      <ul class="adm-feed">
+        {subs
+          .flatMap((s) => s.activity.map((a) => ({ ...a, title: s.title })))
+          .sort((a, b) => b.at - a.at)
+          .slice(0, 12)
+          .map((a) => (
+            <li>
+              <time title={fmt(a.at)}>{ago(a.at)}</time>
+              <span><strong>{a.who}</strong> · {a.note}<span class="adm-feed__ctx">{a.title}</span></span>
+            </li>
+          ))}
+      </ul>
+    </div>
+  </div>
+</AppLayout>

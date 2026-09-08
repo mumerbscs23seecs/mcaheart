@@ -1,0 +1,285 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import VideoLightbox from '../components/VideoLightbox.astro';
+import CTABanner from '../components/CTABanner.astro';
+import { education, videos } from '../data/site';
+
+const { series, webinar } = education;
+// The monthly webinar episode from the Heart Trending library.
+const webinarVideo = videos.find((v) => v.title === 'Monthly Webinar')!;
+---
+
+<BaseLayout
+  title="Education"
+  description="Learn with MCA Heart — in-depth reviews of cardiology research through Heart of the Matter and the monthly webinar series."
+  transparentHeader
+>
+  <PageHero
+    eyebrow="Empowering knowledge through research"
+    title="Learn with MCA Heart"
+    subtitle="Explore in-depth reviews of groundbreaking cardiology research articles."
+    image="/assets/education/hero-bg.jpg"
+  >
+    <a class="btn phero__cta" href="#series">
+      Explore the series <span class="btn__arrow" aria-hidden="true">&rarr;</span>
+    </a>
+  </PageHero>
+
+  {/* ------------------------------------------------------ Heart of the Matter */}
+  <section class="section series" id="series">
+    <div class="shell shell--wide series__grid">
+      <div class="series__copy" data-reveal>
+        {/* The mark is cream artwork drawn for dark backgrounds, so it gets
+            its own ink plate rather than sitting on parchment. */}
+        <span class="series__plate">
+          <img
+            class="series__logo"
+            src={series.logo}
+            alt={`${series.name} logo`}
+            loading="lazy"
+            decoding="async"
+            width="567"
+            height="399"
+          />
+        </span>
+        <p class="eyebrow">Flagship series</p>
+        <h2 class="display series__title">{series.name}</h2>
+        <blockquote class="series__quote">{series.quote}</blockquote>
+        <p class="prose series__body">{series.body}</p>
+        <p class="series__cadence">{series.cadence}</p>
+      </div>
+
+      <div class="series__player" data-reveal style="--reveal-delay:120ms">
+        <button
+          class="thumb"
+          type="button"
+          data-video-id={videos[0].youtubeId}
+          data-video-title={series.name}
+          aria-label={`Play the ${series.name} series`}
+        >
+          <span class="media thumb__media">
+            <img src={series.thumb} alt="" loading="lazy" decoding="async" width="900" height="506" />
+            <span class="thumb__play" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="30" height="30">
+                <path d="M8 5v14l11-7L8 5Z" />
+              </svg>
+            </span>
+          </span>
+        </button>
+        <p class="thumb__cap">Watch the series</p>
+      </div>
+    </div>
+  </section>
+
+  {/* ---------------------------------------------------------- Monthly webinar */}
+  <section class="section--tall webinar dark-ground">
+    <div class="shell shell--wide webinar__grid">
+      <div class="webinar__media" data-reveal>
+        <button
+          class="thumb"
+          type="button"
+          data-video-id={webinarVideo.youtubeId}
+          data-video-title={webinar.name}
+          aria-label={`Play the ${webinar.name}`}
+        >
+          <span class="media thumb__media">
+            <img src={webinar.image} alt="" loading="lazy" decoding="async" width="900" height="600" />
+            <span class="thumb__play" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="30" height="30">
+                <path d="M8 5v14l11-7L8 5Z" />
+              </svg>
+            </span>
+          </span>
+        </button>
+      </div>
+
+      <div class="webinar__copy" data-reveal style="--reveal-delay:120ms">
+        <p class="eyebrow">Monthly</p>
+        <h2 class="display webinar__title">{webinar.name}</h2>
+        <p class="prose webinar__body">{webinar.body}</p>
+        <p class="webinar__partner">
+          <span class="webinar__partner-mark">{webinar.partner}</span>
+          <span class="webinar__partner-note">{webinar.partnerNote}</span>
+        </p>
+      </div>
+    </div>
+  </section>
+
+  {/* ------------------------------------------------------------ Coming soon */}
+  <section class="section soon">
+    <div class="shell shell--narrow center" data-reveal>
+      <p class="eyebrow eyebrow--center">More content coming up</p>
+      <h2 class="display soon__title">Stay connected</h2>
+      <p class="lede soon__body">
+        New episodes, webinars and journal reviews are added regularly. Follow the
+        channel so you do not miss them.
+      </p>
+      <div class="soon__dots" aria-hidden="true"><i></i><i></i><i></i></div>
+    </div>
+  </section>
+
+  <CTABanner
+    eyebrow="Get involved"
+    title="Bring your research to the series"
+    body="Suggest a paper, propose a webinar, or join a review panel."
+    ctaLabel="Contact the team"
+    ctaHref="/contact"
+    image="/assets/education/wallpaper.jpg"
+  />
+
+  <VideoLightbox />
+</BaseLayout>
+
+<style>
+  .phero__cta { margin-top: var(--space-l); }
+
+  /* ---------------------------------------------------- Shared play thumbnail */
+  .thumb { display: block; width: 100%; padding: 0; }
+  .thumb__media {
+    display: block;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    transition: box-shadow 0.4s var(--ease), transform 0.4s var(--ease);
+  }
+  .thumb:hover .thumb__media {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-lg);
+  }
+  .thumb__media img { width: 100%; height: 100%; object-fit: cover; }
+  .thumb:hover .thumb__media img { transform: scale(1.04); }
+  .thumb__play {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--surface);
+    background: rgba(22, 32, 58, 0.2);
+    transition: background 0.4s var(--ease);
+  }
+  .thumb__play svg {
+    padding: 1rem;
+    box-sizing: content-box;
+    background: var(--blue);
+    border-radius: 50%;
+    box-shadow: 0 10px 30px -8px rgba(22, 32, 58, 0.7);
+    transition: transform 0.45s var(--ease-out), background 0.35s var(--ease);
+  }
+  .thumb:hover .thumb__play { background: rgba(22, 32, 58, 0.34); }
+  .thumb:hover .thumb__play svg { transform: scale(1.1); background: var(--red); }
+  .thumb__cap {
+    margin-top: var(--space-xs);
+    font-size: var(--step--1);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--blue);
+  }
+
+  /* ------------------------------------------------------ Heart of the Matter */
+  .series__grid {
+    display: grid;
+    grid-template-columns: 1fr 1.05fr;
+    gap: clamp(2rem, 1rem + 4vw, 5rem);
+    align-items: center;
+  }
+  .series__plate {
+    display: inline-block;
+    padding: 1rem 1.5rem;
+    margin-bottom: var(--space-m);
+    background: var(--dark);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+  }
+  .series__logo {
+    width: clamp(150px, 120px + 6vw, 230px);
+    height: auto;
+  }
+  .series__title { font-size: var(--step-3); margin-top: var(--space-s); }
+  .series__quote {
+    margin-top: var(--space-m);
+    padding: var(--space-s) var(--space-m);
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-left: 3px solid var(--blue);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    font-size: var(--step-1);
+    line-height: 1.55;
+    font-style: italic;
+    color: var(--text);
+  }
+  .series__body { margin-top: var(--space-m); }
+  .series__cadence {
+    margin-top: var(--space-m);
+    font-size: var(--step--1);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--blue);
+  }
+
+  @media (max-width: 880px) { .series__grid { grid-template-columns: 1fr; } }
+
+  /* ---------------------------------------------------------------- Webinar */
+  .webinar__grid {
+    display: grid;
+    grid-template-columns: 1.05fr 1fr;
+    gap: clamp(2rem, 1rem + 4vw, 5rem);
+    align-items: center;
+  }
+  .webinar__title { font-size: var(--step-3); margin-top: var(--space-s); }
+  .webinar__body { margin-top: var(--space-m); }
+  .webinar__partner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    margin-top: var(--space-l);
+    padding-top: var(--space-s);
+    border-top: 1px solid rgba(248, 250, 252, 0.2);
+  }
+  .webinar__partner-mark {
+    font-family: var(--font-serif);
+    font-size: var(--step-2);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    color: #8f9bd8;
+  }
+  .webinar__partner-note {
+    font-size: var(--step--1);
+    color: rgba(248, 250, 252, 0.6);
+  }
+  .webinar .thumb__media { border-color: rgba(248, 250, 252, 0.18); }
+
+  @media (max-width: 880px) {
+    .webinar__grid { grid-template-columns: 1fr; }
+    .webinar__media { order: -1; }
+  }
+
+  /* ------------------------------------------------------------ Coming soon */
+  .soon__title { font-size: var(--step-3); margin-top: var(--space-s); }
+  .soon__body { margin-top: var(--space-m); }
+  .soon__dots {
+    display: flex;
+    justify-content: center;
+    gap: 0.6rem;
+    margin-top: var(--space-l);
+  }
+  .soon__dots i {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--blue);
+    opacity: 0.35;
+    animation: pulse 1.7s var(--ease) infinite;
+  }
+  .soon__dots i:nth-child(2) { animation-delay: 0.22s; }
+  .soon__dots i:nth-child(3) { animation-delay: 0.44s; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.25; transform: scale(1); }
+    50%      { opacity: 1;    transform: scale(1.35); }
+  }
+</style>

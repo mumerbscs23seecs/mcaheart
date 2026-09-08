@@ -1,0 +1,68 @@
+---
+import PipelineLayout from '../../layouts/PipelineLayout.astro';
+import { scopeProjects } from '../../lib/pipeline-scope';
+
+export const prerender = false;
+const { supabase, person } = Astro.locals;
+const isAdmin = person.role === 'admin';
+
+const showParked = Astro.url.searchParams.get('parked') === '1';
+const q = (Astro.url.searchParams.get('q') ?? '').trim();
+
+let query = supabase
+  .from('project_list')
+  .select('id,ref,title,stage_label,lead_name,analyst_name,current_conference,days_in_stage,days_overdue,parked,ms_version')
+  .eq('phase', 'manuscript')
+  .is('archived_at', null)
+  .order('days_in_stage', { ascending: false });
+if (!showParked) query = query.eq('parked', false);
+if (q) query = query.ilike('title', `%${q}%`);
+if (!isAdmin) query = scopeProjects(query, person);
+
+const { data: rows, error } = await query;
+const stale = (d: number | null) => d != null && d >= 21;
+---
+
+<PipelineLayout title="Ongoing" active="ongoing">
+  <h1 class="pl-h1">Ongoing</h1>
+  <p class="pl-sub">
+    {isAdmin
+      ? 'Manuscript-phase projects — accepted abstracts now being written up.'
+      : 'Your papers being written up after an accepted abstract.'}
+  </p>
+
+  <form class="pl-filter" method="get">
+    <input type="search" name="q" placeholder="Filter by title" value={q} />
+    <label class="pl-small"><input type="checkbox" name="parked" value="1" checked={showParked} onchange="this.form.submit()" /> show parked</label>
+    <button class="pl-btn pl-btn--ghost" type="submit">Filter</button>
+  </form>
+
+  {error && <p class="pl-flash pl-flash--err">{error.message}</p>}
+  {rows && rows.length === 0 && <p class="pl-muted" style="margin-top:20px">Nothing here.</p>}
+
+  <ul class="pl-list">
+    {(rows ?? []).map((p) => (
+      <li class:list={['pl-card', stale(p.days_in_stage) && 'pl-card--warn']}>
+        <p class="pl-card__title"><a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a></p>
+        <p class="pl-card__meta">
+          {p.lead_name ?? '(no lead)'}
+          {p.analyst_name && <> · analyst {p.analyst_name}</>}
+          {p.current_conference && <> · <em>{p.current_conference}</em></>}
+          {p.parked && <> · parked</>}
+        </p>
+        <p class="pl-card__ref">{p.ref} | {p.ms_version ?? 'v1.0'}</p>
+        <div class="pl-card__status">
+          <b>{p.stage_label}</b>
+          <span class="pl-when">
+            {stale(p.days_in_stage)
+              ? <span class="pl-warn">{p.days_in_stage} days in stage</span>
+              : <>{p.days_in_stage ?? 0} days in stage</>}
+          </span>
+        </div>
+        <p class="pl-card__link"><a href={`/pipeline/projects/${p.id}`}>View project details →</a></p>
+      </li>
+    ))}
+  </ul>
+
+  <p class="pl-count">{(rows ?? []).length} projects</p>
+</PipelineLayout>

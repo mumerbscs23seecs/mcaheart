@@ -1,0 +1,66 @@
+---
+import '../../styles/global.css';
+import '../../styles/pipeline.css';
+import { requestMagicLink } from '../../lib/pipeline-auth';
+
+export const prerender = false;
+
+let sent = false;
+let email = '';
+const next = Astro.url.searchParams.get('next') ?? '/pipeline';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  email = String(form.get('email') ?? '').trim();
+  if (email) {
+    await requestMagicLink(email, Astro.url.origin);
+    sent = true;
+  }
+}
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sign in · MCA Research Pipeline</title>
+    <meta name="robots" content="noindex" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=Hanken+Grotesque:ital,wght@0,300..800;1,300..600&display=swap"
+    />
+  </head>
+  <body class="pl-authbody">
+    <main class="pl-authwrap">
+      <div class="pl-authcard">
+        <p class="pl-kicker">MCA Research Pipeline</p>
+        {sent ? (
+          <>
+            <h1>Check your email</h1>
+            <p class="pl-muted">
+              If <strong>{email}</strong> has access, a sign-in link is on its way. It expires in about an hour.
+            </p>
+            <p><a class="pl-link" href="/pipeline/login">Use a different email</a></p>
+          </>
+        ) : (
+          <>
+            <h1>Sign in</h1>
+            <p class="pl-muted">Enter your email and we’ll send you a one-time sign-in link.</p>
+            <form method="post">
+              <input type="hidden" name="next" value={next} />
+              <label class="pl-field">
+                <span>Email</span>
+                <input type="email" name="email" required autocomplete="email" autofocus />
+              </label>
+              <button class="pl-btn" type="submit">Send link</button>
+            </form>
+            <p class="pl-muted pl-small">Access is by invitation. There is no public sign-up.</p>
+          </>
+        )}
+      </div>
+    </main>
+  </body>
+</html>

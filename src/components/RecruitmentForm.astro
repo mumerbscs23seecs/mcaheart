@@ -1,0 +1,230 @@
+---
+import '../styles/form.css';
+import { JOB_STATUSES, EXPERTISE, UPLOADS } from '../lib/recruitment-schema';
+
+const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
+---
+
+<form class="iform" action="/api/recruitment" method="post" enctype="multipart/form-data" novalidate data-recruit-form>
+  {/* ---------------------------------------------------------------- About */}
+  <fieldset class="iform__group">
+    <legend class="iform__legend"><span>1</span> About you</legend>
+
+    <div class="ifrow">
+      <div class="ifield">
+        <label class="ifield__label" for="name">Full name <b>*</b></label>
+        <input class="ifield__input" id="name" name="name" type="text" autocomplete="name" required maxlength="120" />
+        <p class="ifield__err" data-err-for="name" hidden></p>
+      </div>
+      <div class="ifield">
+        <label class="ifield__label" for="email">Email <b>*</b></label>
+        <input class="ifield__input" id="email" name="email" type="email" autocomplete="email" required maxlength="200" />
+        <p class="ifield__err" data-err-for="email" hidden></p>
+      </div>
+    </div>
+
+    <div class="ifrow">
+      <div class="ifield">
+        <label class="ifield__label" for="whatsapp">WhatsApp number <b>*</b></label>
+        <p class="ifield__help">Include country code, e.g. +1 for the USA. Used only if you're shortlisted.</p>
+        <input class="ifield__input" id="whatsapp" name="whatsapp" type="tel" required maxlength="40" />
+        <p class="ifield__err" data-err-for="whatsapp" hidden></p>
+      </div>
+      <div class="ifield">
+        <label class="ifield__label" for="gradYear">Year you graduated medical school <b>*</b></label>
+        <p class="ifield__help">Or your expected year, e.g. "2027 (expected)".</p>
+        <input class="ifield__input" id="gradYear" name="gradYear" type="text" required maxlength="40" />
+        <p class="ifield__err" data-err-for="gradYear" hidden></p>
+      </div>
+    </div>
+
+    <div class="ifield">
+      <span class="ifield__label">Current status <b>*</b></span>
+      <div class="ichoices">
+        {JOB_STATUSES.map((s, i) => (
+          <label class="ichoice">
+            <input type="radio" name="jobStatus" value={s} required checked={i === 0} />
+            <span class="ichoice__mark ichoice__mark--radio" aria-hidden="true"></span>
+            <span>{s}</span>
+          </label>
+        ))}
+      </div>
+      <p class="ifield__err" data-err-for="jobStatus" hidden></p>
+    </div>
+
+    <div class="ifield">
+      <label class="ifield__label" for="fellowshipPlan">When do you plan to apply for cardiology fellowship? <b>*</b></label>
+      <p class="ifield__help">Write "N/A" if this doesn't apply to you.</p>
+      <input class="ifield__input" id="fellowshipPlan" name="fellowshipPlan" type="text" required maxlength="300" />
+      <p class="ifield__err" data-err-for="fellowshipPlan" hidden></p>
+    </div>
+  </fieldset>
+
+  {/* ------------------------------------------------------------- Research */}
+  <fieldset class="iform__group">
+    <legend class="iform__legend"><span>2</span> Research background</legend>
+
+    <div class="ifield">
+      <label class="ifield__label" for="researchExperience">Previous research experience <b>*</b></label>
+      <p class="ifield__help">Briefly outline any publications and in-person research roles.</p>
+      <textarea class="ifield__input ifield__area" id="researchExperience" name="researchExperience" rows="4" required maxlength="4000"></textarea>
+      <p class="ifield__err" data-err-for="researchExperience" hidden></p>
+    </div>
+
+    <div class="ifield">
+      <span class="ifield__label">Main research expertise <b>*</b></span>
+      <div class="ichoices">
+        {EXPERTISE.map((e, i) => (
+          <label class="ichoice">
+            <input type="radio" name="expertise" value={e} required checked={i === 0} />
+            <span class="ichoice__mark ichoice__mark--radio" aria-hidden="true"></span>
+            <span>{e}</span>
+          </label>
+        ))}
+      </div>
+      <p class="ifield__err" data-err-for="expertise" hidden></p>
+    </div>
+
+    <div class="ifield">
+      <label class="ifield__label" for="profileLink">ResearchGate / Google Scholar / PubMed profile <b>*</b></label>
+      <p class="ifield__help">A link to any one is fine.</p>
+      <input class="ifield__input" id="profileLink" name="profileLink" type="url" required maxlength="500"
+             placeholder="https://scholar.google.com/citations?user=…" />
+      <p class="ifield__err" data-err-for="profileLink" hidden></p>
+    </div>
+  </fieldset>
+
+  {/* -------------------------------------------------------- Motivation */}
+  <fieldset class="iform__group">
+    <legend class="iform__legend"><span>3</span> Motivation &amp; fit</legend>
+
+    <div class="ifield">
+      <label class="ifield__label" for="letterOfInterest">Letter of interest <b>*</b></label>
+      <p class="ifield__help">A short letter outlining your motivation to join the MCA Research Lab.</p>
+      <textarea class="ifield__input ifield__area" id="letterOfInterest" name="letterOfInterest" rows="6" required maxlength="4000"></textarea>
+      <p class="ifield__err" data-err-for="letterOfInterest" hidden></p>
+    </div>
+
+    <div class="ifield">
+      <label class="ifield__label" for="referralSource">How did you hear about the MCA Research Group? <b>*</b></label>
+      <p class="ifield__help">If a current member recommended the group, tell us about your interactions.</p>
+      <textarea class="ifield__input ifield__area" id="referralSource" name="referralSource" rows="3" required maxlength="4000"></textarea>
+      <p class="ifield__err" data-err-for="referralSource" hidden></p>
+    </div>
+
+    <div class="ifield">
+      <label class="ifield__label" for="internalRef">Internal recommendation or prior collaboration</label>
+      <p class="ifield__help">
+        Optional. Do you have a recommendation from the MCA team, or have you worked with a current
+        member we could reach out to for a reference?
+      </p>
+      <textarea class="ifield__input ifield__area" id="internalRef" name="internalRef" rows="2" maxlength="1000"></textarea>
+      <p class="ifield__err" data-err-for="internalRef" hidden></p>
+    </div>
+  </fieldset>
+
+  {/* ---------------------------------------------------- Status & uploads */}
+  <fieldset class="iform__group">
+    <legend class="iform__legend"><span>4</span> Current status &amp; documents</legend>
+
+    <div class="ifield">
+      <label class="ifield__label" for="currentStatus">Current job / academic status</label>
+      <p class="ifield__help">Optional. Where you currently work or study, and until when you'll be there.</p>
+      <textarea class="ifield__input ifield__area" id="currentStatus" name="currentStatus" rows="3" maxlength="2000"></textarea>
+      <p class="ifield__err" data-err-for="currentStatus" hidden></p>
+    </div>
+
+    <div class="ifield">
+      <label class="ifield__label" for="professionalGoals">Professional goals</label>
+      <p class="ifield__help">Optional. e.g. residency, fellowship, sub-specialty.</p>
+      <textarea class="ifield__input ifield__area" id="professionalGoals" name="professionalGoals" rows="2" maxlength="1000"></textarea>
+      <p class="ifield__err" data-err-for="professionalGoals" hidden></p>
+    </div>
+
+    <div class="ifield">
+      <label class="ifield__label" for="cv">Updated CV <b>*</b></label>
+      <p class="ifield__help">PDF or Word, up to {mb(UPLOADS.cv.maxBytes)}.</p>
+      <input class="ifield__file" id="cv" name="cv" type="file" required accept={UPLOADS.cv.extensions.join(',')} />
+      <p class="ifield__err" data-err-for="cv" hidden></p>
+    </div>
+
+    <div class="ifield">
+      <label class="ifield__label" for="headshot">Recent headshot <b>*</b></label>
+      <p class="ifield__help">Image file, up to {mb(UPLOADS.headshot.maxBytes)}.</p>
+      <input class="ifield__file" id="headshot" name="headshot" type="file" required accept={UPLOADS.headshot.extensions.join(',')} />
+      <p class="ifield__err" data-err-for="headshot" hidden></p>
+    </div>
+  </fieldset>
+
+  {/* Honeypot */}
+  <div class="ihp" aria-hidden="true">
+    <label for="company">Company</label>
+    <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
+  </div>
+
+  <div class="iform__foot">
+    <button class="btn iform__submit" type="submit" data-submit>
+      <span data-submit-label>Submit application</span>
+      <span class="btn__arrow" aria-hidden="true">&rarr;</span>
+    </button>
+    <p class="iform__small">Fields marked <b>*</b> are required. Takes about 10 minutes.</p>
+  </div>
+
+  <p class="iform__status" role="status" aria-live="polite" data-status hidden></p>
+</form>
+
+<script>
+  const form = document.querySelector<HTMLFormElement>('[data-recruit-form]');
+  if (form) {
+    const status = form.querySelector<HTMLElement>('[data-status]')!;
+    const submit = form.querySelector<HTMLButtonElement>('[data-submit]')!;
+    const label = form.querySelector<HTMLElement>('[data-submit-label]')!;
+    const original = label.textContent;
+
+    const clearErrors = () => {
+      form.querySelectorAll<HTMLElement>('[data-err-for]').forEach((el) => { el.hidden = true; el.textContent = ''; });
+      form.querySelectorAll('[aria-invalid]').forEach((el) => el.removeAttribute('aria-invalid'));
+    };
+    const showErrors = (fieldErrors: Record<string, string>) => {
+      let first: HTMLElement | null = null;
+      for (const [name, message] of Object.entries(fieldErrors)) {
+        const slot = form.querySelector<HTMLElement>(`[data-err-for="${name}"]`);
+        if (slot) { slot.textContent = message; slot.hidden = false; }
+        const input = form.querySelector<HTMLElement>(`[name="${name}"]`);
+        if (input) input.setAttribute('aria-invalid', 'true');
+        first ??= (slot ?? input);
+      }
+      first?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+    const setStatus = (message: string, tone: 'ok' | 'error') => {
+      status.textContent = message;
+      status.dataset.tone = tone;
+      status.hidden = false;
+      status.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      clearErrors();
+      status.hidden = true;
+      submit.disabled = true;
+      label.textContent = 'Submitting…';
+      try {
+        const res = await fetch(form.action, { method: 'POST', headers: { Accept: 'application/json' }, body: new FormData(form) });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          form.reset();
+          setStatus(data.message ?? 'Thank you — your application has been submitted.', 'ok');
+        } else {
+          setStatus(data.error ?? 'Something went wrong. Please try again.', 'error');
+          if (data.fieldErrors) showErrors(data.fieldErrors);
+        }
+      } catch {
+        setStatus('We could not reach the server. Check your connection and try again.', 'error');
+      } finally {
+        submit.disabled = false;
+        label.textContent = original;
+      }
+    });
+  }
+</script>

@@ -1,0 +1,78 @@
+---
+import PipelineLayout from '../../layouts/PipelineLayout.astro';
+import { getPipelineTasks } from '../../lib/pipeline-tasks';
+
+export const prerender = false;
+const { supabase, person } = Astro.locals;
+const isAdmin = person.role === 'admin';
+
+const tasks = await getPipelineTasks(supabase, person);
+const urgent = tasks.filter((t) => t.urgent);
+const rest = tasks.filter((t) => !t.urgent);
+
+const KIND_LABEL: Record<string, string> = {
+  approval: 'Approval',
+  idea: 'New idea',
+  application: 'Recruitment',
+  stale: 'Needs update',
+  overdue: 'Overdue',
+  declined: 'Declined',
+};
+const fmt = (d?: string | null) =>
+  d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+---
+
+<PipelineLayout title="Tasks" active="tasks">
+  <h1 class="pl-h1">Pending tasks</h1>
+  <p class="pl-sub">
+    {isAdmin
+      ? 'Everything waiting on you — status approvals, new research ideas, and lab applications.'
+      : 'Papers of yours that need a status update, plus anything the coordinator sent back.'}
+  </p>
+
+  {tasks.length === 0 && (
+    <p class="pl-muted" style="margin-top:28px">You're all caught up — nothing pending.</p>
+  )}
+
+  {urgent.length > 0 && (
+    <>
+      <h2 class="pl-sech">Needs attention</h2>
+      <ul class="pl-tasks">
+        {urgent.map((t) => (
+          <li class="pl-task pl-task--urgent">
+            <div>
+              <p class="pl-task__k">{KIND_LABEL[t.kind] ?? t.kind}</p>
+              <p class="pl-task__t">{t.title}</p>
+              {t.detail && <p class="pl-task__d">{t.detail}</p>}
+            </div>
+            <div class="pl-task__go">
+              {t.when && <time>{fmt(t.when)}</time>}
+              <a class="pl-btn pl-btn--ghost" href={t.href}>{t.cta} →</a>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
+  )}
+
+  {rest.length > 0 && (
+    <>
+      <h2 class="pl-sech" style="margin-top:28px">{urgent.length > 0 ? 'Also pending' : 'Pending'}</h2>
+      <ul class="pl-tasks">
+        {rest.map((t) => (
+          <li class="pl-task">
+            <div>
+              <p class="pl-task__k">{KIND_LABEL[t.kind] ?? t.kind}</p>
+              <p class="pl-task__t">{t.title}</p>
+              {t.detail && <p class="pl-task__d">{t.detail}</p>}
+            </div>
+            <div class="pl-task__go">
+              {t.when && <time>{fmt(t.when)}</time>}
+              <a class="pl-btn pl-btn--ghost" href={t.href}>{t.cta} →</a>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
+  )}
+</PipelineLayout>

@@ -1,0 +1,135 @@
+/* Shared styles for the members app pages (/admin, /admin/access, and the
+   dashboard/access views). Global, prefixed class names. */
+
+.adm { display: grid; gap: var(--space-m); }
+
+.adm-panel {
+  padding: clamp(1.2rem, 1rem + 1.5vw, 2rem);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+}
+.adm-panel__title { font-size: var(--step-1); color: var(--text-strong); margin-bottom: var(--space-s); }
+
+.adm-flash {
+  padding: 0.95rem 1.2rem; border-radius: var(--radius);
+  font-size: var(--step--1); line-height: 1.6; display: grid; gap: 0.4rem; overflow-wrap: anywhere;
+}
+.adm-flash--ok { color: #166534; background: rgba(22, 101, 52, 0.1); border: 1px solid rgba(22, 101, 52, 0.4); }
+.adm-flash--error { color: var(--red); background: rgba(158, 27, 30, 0.06); border: 1px solid rgba(158, 27, 30, 0.35); }
+.adm-flash a { color: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; }
+
+/* --- Stat tiles --- */
+.adm-stats { display: grid; gap: var(--space-s); grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.stat {
+  padding: var(--space-s) var(--space-m);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  display: grid;
+  gap: 0.25rem;
+}
+.stat--warn { border-color: rgba(146, 96, 14, 0.45); background: rgba(146, 96, 14, 0.05); }
+.stat__n { font-family: var(--font-serif, Georgia, serif); font-size: var(--step-3); font-weight: 700; color: var(--text-strong); line-height: 1; }
+.stat__l { font-size: 0.76rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+
+/* --- Status bars --- */
+.adm-bars { display: grid; gap: 0.5rem; }
+.bar { display: grid; grid-template-columns: 190px 1fr 2rem; align-items: center; gap: 0.75rem; font-size: 0.8rem; }
+.bar__label { color: var(--text); }
+.bar__track { height: 8px; background: var(--bg-tint); border-radius: 999px; overflow: hidden; }
+.bar__fill { display: block; height: 100%; background: var(--blue); border-radius: 999px; min-width: 3px; }
+.bar__n { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+@media (max-width: 620px) { .bar { grid-template-columns: 1fr 2rem; } .bar__track { grid-column: 1 / -1; } }
+
+/* --- Tables --- */
+.adm-scroll { overflow-x: auto; }
+.adm-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 820px; }
+.adm-table th, .adm-table td {
+  text-align: left; padding: 0.7rem 0.75rem;
+  border-bottom: 1px solid var(--border-soft); vertical-align: top;
+}
+.adm-table th { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+.adm-table tr.is-off td { opacity: 0.55; }
+.adm-title { max-width: 320px; }
+.adm-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; }
+.adm-last { display: block; margin-top: 0.2rem; font-size: 0.74rem; color: var(--text-muted); max-width: 30ch; }
+.adm-status { font-size: 0.78rem; font-weight: 600; color: var(--blue); }
+.adm-count { text-align: center; font-variant-numeric: tabular-nums; }
+.adm-you { font-size: 0.68rem; color: var(--blue); font-weight: 700; text-transform: uppercase; }
+.adm-tag { font-size: 0.8rem; color: var(--text-muted); }
+
+.adm-pill { display: inline-block; margin-left: 0.4rem; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.15rem 0.45rem; border-radius: 999px; }
+.adm-pill--on { color: #166534; background: rgba(22, 101, 52, 0.12); margin-left: 0; }
+.adm-pill--off { color: var(--red); background: rgba(158, 27, 30, 0.1); }
+.adm-pill--wait { color: #92600e; background: rgba(146, 96, 14, 0.14); }
+
+.adm-inline { display: inline; }
+.adm-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.adm-btn {
+  padding: 0.35rem 0.65rem; font-size: 0.74rem; font-weight: 600;
+  border: 1px solid var(--border-soft); border-radius: 999px;
+  background: var(--bg); color: var(--text); cursor: pointer;
+}
+.adm-btn:hover { border-color: var(--border); }
+.adm-btn--danger { color: var(--red); border-color: rgba(158, 27, 30, 0.35); }
+.adm-btn--on { color: #166534; border-color: rgba(22, 101, 52, 0.4); background: rgba(22, 101, 52, 0.08); }
+
+.adm-add { display: flex; flex-wrap: wrap; gap: var(--space-s); align-items: end; }
+.adm-f { display: grid; gap: 0.35rem; flex: 1 1 180px; }
+.adm-f span { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text); }
+.adm-f input, .adm-f select, .adm-inline select {
+  padding: 0.65rem 0.8rem; background: var(--bg);
+  border: 1px solid var(--border-soft); border-radius: var(--radius);
+  font-size: 0.9rem; color: var(--text-strong);
+}
+.adm-hint { margin-top: var(--space-s); font-size: 0.8rem; color: var(--text-muted); line-height: 1.6; }
+
+.adm-reminders__head { display: flex; flex-wrap: wrap; gap: var(--space-s); align-items: center; justify-content: space-between; }
+.adm-reminders__actions { display: flex; gap: 0.5rem; }
+.adm-sweep {
+  margin-top: var(--space-s);
+  padding: 0.9rem 1.1rem;
+  background: var(--bg-tint);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.adm-sweep__list { margin-top: 0.5rem; display: grid; gap: 0.3rem; padding-left: 1rem; list-style: disc; }
+
+/* --- Email preview (decision confirm step) --- */
+.mailprev {
+  display: grid;
+  gap: var(--space-s);
+  padding: clamp(1.2rem, 1rem + 1.5vw, 2rem);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+}
+.mailprev__title { font-size: var(--step-1); color: var(--text-strong); }
+.mailprev__head { display: grid; gap: 0.35rem; font-size: 0.85rem; }
+.mailprev__head div { display: grid; grid-template-columns: 70px 1fr; gap: 0.6rem; }
+.mailprev__head dt { color: var(--text-muted); text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.08em; font-weight: 700; padding-top: 0.15rem; }
+.mailprev__head dd { margin: 0; color: var(--text-strong); overflow-wrap: anywhere; }
+.mailprev__frame {
+  width: 100%;
+  height: 420px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  background: #fff;
+}
+.mailprev__form { display: grid; gap: 0.5rem; }
+.mailprev__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-top: 0.3rem; }
+.mailprev__cancel { color: var(--text-muted); font-size: 0.85rem; font-weight: 600; }
+.mailprev__cancel:hover { color: var(--blue); }
+
+.idea__hint-inline { margin-top: 0.4rem; font-size: 0.76rem; color: var(--text-muted); }
+
+/* --- Feed --- */
+.adm-feed { display: grid; gap: 0.5rem; font-size: 0.83rem; }
+.adm-feed li { display: grid; grid-template-columns: 150px 1fr; gap: 0.75rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-soft); }
+.adm-feed time { color: var(--text-muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.76rem; }
+.adm-feed strong { color: var(--text-strong); }
+.adm-feed__ctx { display: block; margin-top: 0.15rem; font-size: 0.74rem; color: var(--text-muted); }
+@media (max-width: 620px) { .adm-feed li { grid-template-columns: 1fr; gap: 0.2rem; } }

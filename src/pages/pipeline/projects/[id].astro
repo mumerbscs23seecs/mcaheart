@@ -1,0 +1,346 @@
+---
+import PipelineLayout from '../../../layouts/PipelineLayout.astro';
+import { stagesFor } from '../../../lib/lifecycle.mjs';
+import { personOnProject } from '../../../lib/pipeline-scope';
+
+export const prerender = false;
+const { supabase, person } = Astro.locals;
+const { id } = Astro.params;
+const isAdmin = person.role === 'admin';
+
+const okMsg = Astro.url.searchParams.get('ok');
+const errMsg = Astro.url.searchParams.get('err');
+
+const { data: p } = await supabase.from('project_list').select('*').eq('id', id).maybeSingle();
+if (!p) return Astro.redirect('/pipeline/conferences', 302);
+if (!personOnProject(p, person)) return Astro.redirect('/pipeline/conferences', 302);
+
+const { data: allConferences } = await supabase
+  .from('conferences')
+  .select('name,abstract_deadline')
+  .order('abstract_deadline', { ascending: false });
+
+const ids = [p.lead_id, p.analyst_id, p.colead_id, p.presenter_id, p.corresponding_id].filter(Boolean);
+const { data: peopleRows } = ids.length
+  ? await supabase.from('people').select('id,full_name,email').in('id', ids)
+  : { data: [] };
+const who = new Map((peopleRows ?? []).map((r: any) => [r.id, r]));
+
+const { data: confAttempts } = await supabase
+  .from('conference_attempts')
+  .select('id,outcome,submitted_on,conference:conferences(name)')
+  .eq('project_id', id)
+  .order('submitted_on', { ascending: true })
+  .order('id', { ascending: true });
+const pendingAttempt = (confAttempts ?? []).find((a: any) => a.outcome == null);
+
+const { data: journalAttempts } = await supabase
+  .from('journal_attempts')
+  .select('id,journal,outcome,submitted_on,revision_round')
+  .eq('project_id', id)
+  .order('submitted_on', { ascending: true })
+  .order('id', { ascending: true });
+
+const { data: history } = await supabase
+  .from('project_history')
+  .select('at,label,actor')
+  .eq('project_id', id)
+  .order('at', { ascending: false })
+  .limit(60);
+
+const { data: requests } = await supabase
+  .from('stage_change_requests')
+  .select('id,requested_by,from_phase,from_stage,to_stage,note,status,decide_note,decided_at,created_at')
+  .eq('project_id', id)
+  .order('created_at', { ascending: false })
+  .limit(12);
+const reqIds = [...new Set((requests ?? []).map((r: any) => r.requested_by))];
+const { data: reqPeople } = reqIds.length
+  ? await supabase.from('people').select('id,full_name').in('id', reqIds)
+  : { data: [] };
+const reqName = new Map((reqPeople ?? []).map((r: any) => [r.id, r.full_name]));
+const pendingReqs = (requests ?? []).filter((r: any) => r.status === 'pending');
+const myPending = pendingReqs.find((r: any) => r.requested_by === person.id);
+
+const STAGE_LABEL = (phase: string, code: string) =>
+  stagesFor(phase).find((s: any) => s.code === code)?.label ?? code;
+const canRequest = !isAdmin && !p.archived_at && ['conference', 'manuscript'].includes(p.phase);
+
+const fmtDate = (d: string | null) =>
+  d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+const overdue = p.days_overdue != null && p.days_overdue > 0;
+const stale = p.days_in_stage != null && p.days_in_stage >= 21;
+const phaseTab = p.phase === 'journal' ? 'submissions' : p.phase === 'manuscript' ? 'ongoing' : 'conferences';
+const activeTab = phaseTab;
+const backHref = `/pipeline/${phaseTab}`;
+const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
+---
+
+<PipelineLayout title={p.title} active={activeTab}>
+  <p class="pl-crumb"><a class="pl-link" href={backHref}>← {backLabel}</a></p>
+
+  {okMsg && <p class="pl-flash pl-flash--ok">{okMsg}</p>}
+  {errMsg && <p class="pl-flash pl-flash--err">{errMsg}</p>}
+
+  <header class="pl-phead">
+    <h1 class="pl-h1">{p.title}</h1>
+    <p class="pl-phead__status">
+      <b>{p.stage_label}</b>
+      <span>{p.phase}{p.days_in_stage != null && <> · {p.days_in_stage}d in stage</>}</span>
+    </p>
+  </header>
+  <div class="pl-chips">
+    <span>{p.ref}</span>
+    <span>{p.study_type}</span>
+    {p.current_conference && <span>{p.current_conference}</span>}
+    {p.current_journal && <span>Journal: {p.current_journal}</span>}
+    {p.parked && <span>parked</span>}
+    {p.archived_at && <span class="pl-warn">archived — {p.archive_reason}</span>}
+    {overdue && <span class="pl-warn">overdue {p.days_overdue}d</span>}
+    {stale && !overdue && <span class="pl-warn">stale</span>}
+  </div>
+
+  {isAdmin && !p.archived_at && (
+    <section class="pl-actions">
+      <h2>Actions</h2>
+
+      {pendingReqs.length > 0 && (
+        <div class="pl-actrow pl-actrow--req">
+          <label class="pl-actlbl">Requests</label>
+          <div class="pl-reqlist">
+            {pendingReqs.map((r: any) => (
+              <div class="pl-reqcard">
+                <p class="pl-reqcard__line">
+                  <b>{reqName.get(r.requested_by) ?? 'A member'}</b> asks to set status to{' '}
+                  <b>{STAGE_LABEL(r.from_phase ?? p.phase, r.to_stage)}</b>
+                  {r.note && <span class="pl-muted"> — “{r.note}”</span>}
+                </p>
+                <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-mini">
+                  <input type="hidden" name="gate" value="request-decide" />
+                  <input type="hidden" name="request" value={r.id} />
+                  <input name="note" placeholder="Reply to the member (optional)" />
+                  <button class="pl-btn" name="approve" value="yes" type="submit">Approve</button>
+                  <button class="pl-btn pl-btn--danger" name="approve" value="no" type="submit">Decline</button>
+                </form>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Stage — within the current phase */}
+      {['idea', 'manuscript', 'journal'].includes(p.phase) && (
+        <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-actrow" data-stage-form>
+          <input type="hidden" name="gate" value="stage" />
+          <label class="pl-actlbl">Stage</label>
+          <select name="stage" data-stage-select>
+            {stagesFor(p.phase).map((s: any) => (
+              <option value={s.code} selected={s.code === p.stage}>{s.label}</option>
+            ))}
+          </select>
+          {p.phase === 'journal' && (
+            <input
+              name="journal"
+              placeholder="Enter journal name"
+              value={p.current_journal ?? ''}
+              data-journal-input
+              hidden={p.stage !== 'submitted'}
+            />
+          )}
+          <button class="pl-btn" type="submit">Update</button>
+        </form>
+      )}
+
+      {/* Abstract outcome */}
+      {pendingAttempt && (
+        <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-actrow">
+          <input type="hidden" name="gate" value="abstract" />
+          <input type="hidden" name="attempt" value={pendingAttempt.id} />
+          <label class="pl-actlbl">Abstract outcome</label>
+          <button class="pl-btn" name="outcome" value="accepted" type="submit">Accepted</button>
+          <button class="pl-btn pl-btn--danger" name="outcome" value="rejected" type="submit">Rejected</button>
+        </form>
+      )}
+
+      {/* GATE 1 — idea/conference -> a conference */}
+      {['idea', 'conference'].includes(p.phase) && (
+        <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-actrow">
+          <input type="hidden" name="gate" value="1" />
+          <label class="pl-actlbl">Send to conference</label>
+          <select name="conference" required>
+            <option value="">Choose…</option>
+            {(allConferences ?? []).map((c: any) => <option value={c.name}>{c.name}</option>)}
+          </select>
+          <button class="pl-btn" type="submit">Send</button>
+        </form>
+      )}
+
+      {/* GATE 2 — conference -> manuscript / archive */}
+      {p.phase === 'conference' && (
+        <div class="pl-actrow">
+          <label class="pl-actlbl">Gate 2</label>
+          <form method="post" action={`/pipeline/projects/${id}/gate`} style="display:inline">
+            <input type="hidden" name="gate" value="2" />
+            <button class="pl-btn" name="proceed" value="yes" type="submit">Proceed to full text →</button>
+          </form>
+          <details class="pl-inline-details">
+            <summary>Not proceeding</summary>
+            <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-mini">
+              <input type="hidden" name="gate" value="2" />
+              <input type="hidden" name="proceed" value="no" />
+              <select name="archive_reason">
+                <option value="not_novel">Not novel</option>
+                <option value="needs_reanalysis">Needs re-analysis</option>
+                <option value="lead_unresponsive">Lead unresponsive</option>
+                <option value="insufficient_data">Insufficient data</option>
+                <option value="superseded">Superseded</option>
+                <option value="other">Other</option>
+              </select>
+              <button class="pl-btn pl-btn--danger" type="submit">Archive</button>
+            </form>
+          </details>
+        </div>
+      )}
+
+      {/* GATE 3 — manuscript -> journal */}
+      {p.phase === 'manuscript' && (
+        <div class="pl-actrow">
+          <label class="pl-actlbl">Gate 3</label>
+          {['ms_5_review', 'ms_6_comments'].includes(p.stage) ? (
+            <details class="pl-inline-details">
+              <summary>Submit to journal →</summary>
+              <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-mini pl-mini--col">
+                <input type="hidden" name="gate" value="3" />
+                <input name="journal" placeholder="Journal name" required />
+                <input name="manuscript_url" placeholder="Manuscript link (if not set below)" />
+                <button class="pl-btn" type="submit">Submit</button>
+              </form>
+            </details>
+          ) : (
+            <span class="pl-muted pl-small">Reach stage 5 (sent to RG Operations) first.</span>
+          )}
+        </div>
+      )}
+    </section>
+  )}
+  {!isAdmin && !p.archived_at && (
+    <section class="pl-actions">
+      <h2>Your status update</h2>
+
+      {p.phase === 'idea' && (
+        <p class="pl-actrow pl-muted pl-small">Status updates open once this idea is sent to a conference.</p>
+      )}
+      {p.phase === 'journal' && (
+        <p class="pl-actrow pl-muted pl-small">
+          This paper is with a journal — the coordinator manages its status. Every change shows in the history below.
+        </p>
+      )}
+
+      {canRequest && (
+        <>
+          {myPending && (
+            <p class="pl-actrow pl-reqcard pl-reqcard--wait">
+              Requested: <b>{STAGE_LABEL(p.phase, myPending.to_stage)}</b> — waiting for the coordinator to approve.
+              {myPending.note && <span class="pl-muted"> “{myPending.note}”</span>}
+            </p>
+          )}
+          <form method="post" action={`/pipeline/projects/${id}/request`} class="pl-actrow">
+            <label class="pl-actlbl">New status</label>
+            <select name="stage" required>
+              <option value="">Choose…</option>
+              {stagesFor(p.phase)
+                .filter((s: any) => s.code !== p.stage)
+                .filter((s: any) => !(p.phase === 'conference' && ['accepted', 'rejected'].includes(s.code)))
+                .map((s: any) => <option value={s.code}>{s.label}</option>)}
+            </select>
+            <input name="note" placeholder="What changed? (optional)" />
+            <button class="pl-btn" type="submit">{myPending ? 'Replace request' : 'Send for approval'}</button>
+          </form>
+          <p class="pl-actrow pl-muted pl-small" style="border:0;padding-top:0">
+            The coordinator approves updates, so the record only ever shows progress that actually happened.
+          </p>
+        </>
+      )}
+    </section>
+  )}
+  {!isAdmin && p.archived_at && (
+    <p class="pl-muted pl-small" style="margin:14px 0">This project is archived — no further status changes.</p>
+  )}
+
+  <div class="pl-detail">
+    <div>
+      <h2 class="pl-sech">History</h2>
+      {(!history || history.length === 0) && (
+        <p class="pl-muted pl-small">No recorded events yet — they accumulate as the project moves.</p>
+      )}
+      <ul class="pl-history">
+        {(history ?? []).map((h: any) => (
+          <li>
+            <span>{h.label}{h.actor && <span class="pl-muted"> · {h.actor}</span>}</span>
+            <time>{fmtDate(h.at)}</time>
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    <aside class="pl-rail">
+      <h3>People</h3>
+      <dl>
+        <dt>Lead</dt><dd>{who.get(p.lead_id)?.full_name ?? '—'}</dd>
+        {p.colead_id && <><dt>Co-lead</dt><dd>{who.get(p.colead_id)?.full_name}</dd></>}
+        <dt>Analyst</dt><dd>{who.get(p.analyst_id)?.full_name ?? '—'}</dd>
+        {p.presenter_id && <><dt>Presenter</dt><dd>{who.get(p.presenter_id)?.full_name}</dd></>}
+        <dt>Corresponding author</dt><dd>{who.get(p.corresponding_id)?.full_name ?? <span class="pl-muted">not set</span>}</dd>
+      </dl>
+
+      <h3>Dates</h3>
+      <dl>
+        <dt>Opened</dt><dd>{fmtDate(p.created_at)}</dd>
+        <dt>In current stage</dt><dd>{p.days_in_stage ?? 0} days</dd>
+        <dt>Next target</dt><dd>{p.next_target ? fmtDate(p.next_target) : <span class="pl-muted">none</span>}</dd>
+      </dl>
+
+      {confAttempts && confAttempts.length > 0 && (
+        <>
+          <h3>Conference attempts</h3>
+          <dl>{confAttempts.map((a: any) => <><dt>{a.conference?.name}</dt><dd>{a.outcome ?? 'pending'}</dd></>)}</dl>
+        </>
+      )}
+
+      {journalAttempts && journalAttempts.length > 0 && (
+        <>
+          <h3>Journal attempts ({journalAttempts.length})</h3>
+          <dl>
+            {journalAttempts.map((a: any) => (
+              <><dt>{a.journal}</dt><dd>{a.outcome ?? 'open'}{a.revision_round ? ` · rev ${a.revision_round}` : ''}</dd></>
+            ))}
+          </dl>
+        </>
+      )}
+
+      <h3>Links</h3>
+      <dl>
+        <dt>Manuscript</dt><dd>{p.manuscript_url ? <a href={p.manuscript_url}>open</a> : <span class="pl-muted">not set</span>}</dd>
+        <dt>Legacy source</dt><dd class="pl-small">{p.legacy_source}</dd>
+      </dl>
+    </aside>
+  </div>
+</PipelineLayout>
+
+<script is:inline>
+  // Journal-name box appears only when the journal-phase stage is "Submitted".
+  (() => {
+    const form = document.querySelector('[data-stage-form]');
+    if (!form) return;
+    const sel = form.querySelector('[data-stage-select]');
+    const jrn = form.querySelector('[data-journal-input]');
+    const sync = () => {
+      if (!jrn || !sel) return;
+      const show = sel.value === 'submitted';
+      jrn.hidden = !show;
+      jrn.required = show;
+    };
+    if (sel) sel.addEventListener('change', sync);
+    sync();
+  })();
+</script>

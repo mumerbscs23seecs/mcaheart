@@ -1,0 +1,368 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
+import CTABanner from '../components/CTABanner.astro';
+import { testimonials, missionVision, director } from '../data/site';
+---
+
+<BaseLayout
+  title="MCA Research Group"
+  description="Over 100 cardiology researchers led by Dr Chadi Alraies — 40+ manuscripts and 50+ abstracts a year at SCAI, AHA, TCT and ACC."
+  transparentHeader
+>
+  <PageHero
+    eyebrow="The collective"
+    title="MCA Research Group"
+    subtitle="A thriving hub of innovation and collaboration in cardiovascular research, uniting over one hundred dedicated researchers."
+  />
+
+  {/* ----------------------------------------------------------------- About */}
+  <section class="section about" id="about">
+    <div class="shell shell--wide about__grid">
+      <figure class="about__portrait" data-reveal>
+        <img
+          src="/assets/research/alraies.jpg"
+          alt={`Portrait of ${director.name}`}
+          loading="lazy"
+          decoding="async"
+          width="800"
+          height="950"
+        />
+        <figcaption>
+          {director.name}<span>{director.credentials}</span>
+        </figcaption>
+      </figure>
+
+      <div class="about__copy" data-reveal style="--reveal-delay:120ms">
+        <p class="eyebrow">About the group</p>
+        <h2 class="about__title">
+          Excellence and productivity, at scale
+        </h2>
+        <div class="prose about__body">
+          <p>
+            Welcome to the MCA Research Group, a thriving hub of innovation and
+            collaboration in cardiovascular research. Led by Dr Chadi Alraies and
+            supported by two research coordinators, our group unites over 100
+            dedicated cardiology researchers.
+          </p>
+          <p>
+            Annually, our research fellows publish 40+ manuscripts in top journals
+            and present 50+ abstracts at leading conferences including SCAI, AHA,
+            TCT and ACC. Through diverse research opportunities, fellows contribute
+            to cardiology&rsquo;s progress while advancing their careers.
+          </p>
+        </div>
+
+        <dl class="about__figures">
+          <div><dt>40+</dt><dd>manuscripts a year</dd></div>
+          <div><dt>50+</dt><dd>abstracts presented</dd></div>
+          <div><dt>100+</dt><dd>active members</dd></div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  {/* --------------------------------------------------------- Mission/Vision */}
+  <section class="section--tight mv">
+    <div class="shell shell--wide mv__grid">
+      {missionVision.map((m, i) => (
+        <article class="mv__card" data-reveal style={`--reveal-delay:${i * 120}ms`}>
+          <span class="mv__index" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+          <div class="mv__figure">
+            <img src={m.image} alt="" loading="lazy" decoding="async" />
+          </div>
+          <div class="mv__body">
+            <h2 class="mv__kind">{m.kind}</h2>
+            <p class="mv__text">{m.body}</p>
+          </div>
+        </article>
+      ))}
+    </div>
+  </section>
+
+  {/* ------------------------------------------------------------- Testimonials */}
+  <section class="section voices" id="voices">
+    <div class="shell shell--wide">
+      <header class="voices__head" data-reveal>
+        <p class="eyebrow">In their words</p>
+        <h2 class="display voices__title">What our members say</h2>
+      </header>
+
+      <div class="voices__grid">
+        {testimonials.map((t, i) => (
+          <figure class="voice" data-reveal style={`--reveal-delay:${(i % 3) * 90}ms`}>
+            <blockquote class="voice__quote">{t.quote}</blockquote>
+            <figcaption class="voice__by">
+              <img
+                class="voice__avatar"
+                src={t.photo}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                width="400"
+                height="400"
+              />
+              <span class="voice__meta">
+                <span class="voice__name">{t.name}</span>
+                <span class="voice__affil">{t.affiliation}</span>
+                <span class="voice__future">Next: {t.future}</span>
+              </span>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  {/* ---------------------------------------------------------------- Why us */}
+  <section class="section--tall why dark-ground" id="why-us">
+    <div class="why__bg" aria-hidden="true">
+      <img src="/assets/research/networking.jpg" alt="" loading="lazy" decoding="async" />
+    </div>
+
+    <div class="shell shell--narrow center" data-reveal>
+      <p class="eyebrow eyebrow--center">Why us</p>
+      <h2 class="display why__title">A supportive ecosystem</h2>
+      <div class="prose why__body">
+        <p>
+          Joining the MCA Research Group means becoming part of a dynamic ecosystem
+          that values collaboration, innovation and excellence.
+        </p>
+        <p>
+          Whether you are an aspiring research fellow seeking unparalleled mentorship
+          or a seasoned professional looking to make impactful contributions, our
+          group provides the resources, guidance and community to help you succeed.
+        </p>
+        <p>
+          With us, you are not just advancing your career &mdash; you are making a
+          difference in the lives of patients worldwide.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <CTABanner
+    eyebrow="Interested to join?"
+    title="Get in touch with us"
+    body="Tell us where you are in your training and what you want to work on. We will point you to the right project."
+    ctaLabel="Start the conversation"
+    ctaHref="/contact"
+    image="/assets/home/group-photo.jpg"
+  />
+</BaseLayout>
+
+<style>
+  /* ----------------------------------------------------------------- About */
+  .about__grid {
+    display: grid;
+    grid-template-columns: 0.8fr 1.2fr;
+    gap: clamp(2rem, 1rem + 4vw, 5rem);
+    align-items: start;
+  }
+
+  .about__portrait {
+    position: relative;
+    padding: 0.5rem 0.5rem 0;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+  }
+  .about__portrait img {
+    width: 100%; height: auto;
+    border-radius: calc(var(--radius-lg) - 6px);
+  }
+  .about__portrait figcaption {
+    display: grid;
+    gap: 0.2rem;
+    padding: var(--space-s) 0.2rem 0.3rem;
+    font-family: var(--font-serif);
+    font-size: var(--step-1);
+  }
+  .about__portrait figcaption span {
+    font-family: var(--font-sans);
+    font-size: var(--step--1);
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--blue);
+  }
+
+  .about__title { font-size: var(--step-3); margin-top: var(--space-s); max-width: 16ch; }
+  .about__body { margin-top: var(--space-m); }
+
+  .about__figures {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-s);
+    margin-top: var(--space-l);
+    padding-top: var(--space-m);
+    border-top: 1px solid var(--border-soft);
+  }
+  .about__figures dt {
+    font-family: var(--font-serif);
+    font-size: var(--step-2);
+    font-weight: 600;
+    color: var(--blue);
+    line-height: 1;
+  }
+  .about__figures dd {
+    margin-top: 0.3rem;
+    font-size: var(--step--1);
+    color: var(--text-muted);
+  }
+
+  @media (max-width: 880px) {
+    .about__grid { grid-template-columns: 1fr; }
+    .about__portrait { max-width: 400px; }
+  }
+
+  /* ------------------------------------------------------- Mission / Vision */
+  .mv__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+    gap: var(--space-m);
+  }
+  .mv__card {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--space-m);
+    align-items: start;
+    padding: var(--space-m);
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-top: 2px solid var(--blue);
+    border-radius: var(--radius);
+  }
+
+  .mv__index {
+    position: absolute;
+    top: var(--space-m);
+    right: var(--space-m);
+    font-family: var(--font-serif);
+    font-size: var(--step-2);
+    font-weight: 700;
+    line-height: 1;
+    color: var(--border);
+  }
+
+  /* The supplied artwork is flat vector stock; a small tinted plate keeps it
+     as a supporting mark rather than a competing background. */
+  .mv__figure {
+    width: clamp(84px, 70px + 3vw, 116px);
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: 50%;
+    background: var(--bg-tint);
+    border: 1px solid var(--border-soft);
+  }
+  .mv__figure img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    mix-blend-mode: multiply;
+    filter: saturate(0.75) contrast(0.95);
+  }
+
+  .mv__kind {
+    font-size: var(--step-2);
+    letter-spacing: -0.015em;
+    color: var(--text-strong);
+  }
+  .mv__text {
+    margin-top: var(--space-xs);
+    font-size: var(--step--1);
+    line-height: 1.75;
+    color: var(--text);
+    max-width: 46ch;
+  }
+
+  @media (max-width: 520px) {
+    .mv__card { grid-template-columns: 1fr; }
+  }
+
+  /* ------------------------------------------------------------ Testimonials */
+  .voices__title { font-size: var(--step-3); margin-top: var(--space-s); }
+
+  .voices__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+    gap: var(--space-m);
+    margin-top: var(--space-l);
+  }
+
+  .voice {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-m);
+    padding: var(--space-m);
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    transition: transform 0.45s var(--ease), box-shadow 0.45s var(--ease),
+                border-color 0.45s var(--ease);
+  }
+  .voice:hover {
+    transform: translateY(-4px);
+    border-color: var(--border);
+    box-shadow: 0 22px 48px -30px rgba(30, 41, 59, 0.55);
+  }
+
+  .voice__quote {
+    flex: 1;
+    font-size: var(--step--1);
+    line-height: 1.75;
+    color: var(--text);
+    position: relative;
+    padding-top: 2.2rem;
+  }
+  .voice__quote::before {
+    content: '\201C';
+    position: absolute;
+    top: -0.6rem;
+    left: -0.2rem;
+    font-family: var(--font-serif);
+    font-size: 4.5rem;
+    line-height: 1;
+    color: var(--border);
+  }
+
+  .voice__by {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding-top: var(--space-s);
+    border-top: 1px solid var(--border-soft);
+  }
+  .voice__avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+  }
+  .voice__meta { display: grid; gap: 0.15rem; }
+  .voice__name {
+    font-family: var(--font-serif);
+    font-size: var(--step-0);
+    font-weight: 600;
+  }
+  .voice__affil { font-size: 0.76rem; line-height: 1.4; color: var(--text-muted); }
+  .voice__future {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--blue);
+  }
+
+  /* ---------------------------------------------------------------- Why us */
+  .why { position: relative; isolation: isolate; overflow: hidden; }
+  .why__bg { position: absolute; inset: 0; z-index: -1; }
+  .why__bg img { width: 100%; height: 100%; object-fit: cover; opacity: 0.18; }
+
+  .why__title { font-size: var(--step-4); margin-top: var(--space-s); }
+  .why__body { margin-top: var(--space-m); margin-inline: auto; }
+</style>

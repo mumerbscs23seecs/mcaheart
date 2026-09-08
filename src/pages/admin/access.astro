@@ -1,0 +1,186 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import '../../styles/admin.css';
+import {
+  currentUser,
+  listUsers,
+  listAudit,
+  addUser,
+  setActive,
+  setRole,
+  createResetToken,
+  getUser,
+} from '../../lib/auth';
+import { deliverAccessLink } from '../../lib/auth-mailer';
+
+export const prerender = false;
+
+const me = currentUser(Astro.cookies);
+if (!me) return Astro.redirect('/login', 302);
+if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+type Flash = { tone: 'ok' | 'error'; text: string; link?: string };
+let flash: Flash | null = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+
+  if (action === 'add') {
+    const res = addUser(
+      {
+        name: String(form.get('name') ?? ''),
+        email: String(form.get('email') ?? ''),
+        role: String(form.get('role') ?? 'member') === 'admin' ? 'admin' : 'member',
+      },
+      me.name,
+    );
+    if (!res.ok) {
+      flash = { tone: 'error', text: res.error ?? 'Could not add that user.' };
+    } else {
+      const link = res.resetToken ? `${Astro.url.origin}/reset-password?token=${res.resetToken}` : undefined;
+      let emailed = false;
+      if (link) {
+        const sent = await deliverAccessLink({ to: res.user!.email, name: res.user!.name, link, kind: 'invite' });
+        emailed = sent.ok;
+      }
+      flash = emailed
+        ? { tone: 'ok', text: `${res.user!.email} added — invite emailed to them.`, link }
+        : { tone: 'error', text: `${res.user!.email} added, but the invite email could not be sent. Share this link directly:`, link };
+    }
+  } else if (action === 'deactivate' || action === 'activate') {
+    const id = String(form.get('userId') ?? '');
+    if (id === me.id) {
+      flash = { tone: 'error', text: 'You cannot deactivate your own account.' };
+    } else {
+      const ok = setActive(id, action === 'activate', me.name);
+      flash = ok
+        ? { tone: 'ok', text: `Access ${action === 'activate' ? 'restored' : 'revoked'}.` }
+        : { tone: 'error', text: 'User not found.' };
+    }
+  } else if (action === 'role') {
+    const id = String(form.get('userId') ?? '');
+    const role = String(form.get('role') ?? 'member') === 'admin' ? 'admin' : 'member';
+    if (id === me.id) {
+      flash = { tone: 'error', text: 'You cannot change your own role.' };
+    } else {
+      const ok = setRole(id, role, me.name);
+      flash = ok ? { tone: 'ok', text: 'Role updated.' } : { tone: 'error', text: 'User not found.' };
+    }
+  } else if (action === 'resend') {
+    const target = getUser(String(form.get('userId') ?? ''));
+    const token = target ? createResetToken(target.email) : null;
+    if (!token || !target) {
+      flash = { tone: 'error', text: 'User not found.' };
+    } else {
+      const link = `${Astro.url.origin}/reset-password?token=${token}`;
+      const sent = await deliverAccessLink({ to: target.email, name: target.name, link, kind: 'reset' });
+      flash = sent.ok
+        ? { tone: 'ok', text: `Reset link emailed to ${target.email}.`, link }
+        : { tone: 'error', text: `Could not email ${target.email} — share this link directly:`, link };
+    }
+  }
+}
+
+const users = listUsers();
+const auditRows = listAudit().slice(0, 25);
+const fmt = (t: number | null) =>
+  t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+---
+
+<AppLayout title="Access control" heading="Access control" user={me} active="access">
+  <div class="adm">
+    {flash && (
+      <div class:list={['adm-flash', `adm-flash--${flash.tone}`]} role="status">
+        <p>{flash.text}</p>
+        {flash.link && <a class="link-underline" href={flash.link}>{flash.link}</a>}
+      </div>
+    )}
+
+    {/* ------------------------------------------------------ Add member */}
+    <div class="adm-panel">
+      <h2 class="adm-panel__title">Invite a member</h2>
+      <form class="adm-add" method="post">
+        <input type="hidden" name="action" value="add" />
+        <label class="adm-f"><span>Name</span><input name="name" type="text" required /></label>
+        <label class="adm-f"><span>Email</span><input name="email" type="email" required /></label>
+        <label class="adm-f">
+          <span>Role</span>
+          <select name="role"><option value="member">Member</option><option value="admin">Admin</option></select>
+        </label>
+        <button class="btn" type="submit">Add</button>
+      </form>
+      <p class="adm-hint">The person is emailed a one-time link to set their password. No public sign-up.</p>
+    </div>
+
+    {/* --------------------------------------------------------- Members */}
+    <div class="adm-panel">
+      <h2 class="adm-panel__title">Members ({users.length})</h2>
+      <div class="adm-scroll">
+        <table class="adm-table">
+          <thead>
+            <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th>Actions</th></tr>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr class:list={[!u.active && 'is-off']}>
+                <td>{u.name}{u.id === me.id && <span class="adm-you"> you</span>}</td>
+                <td class="adm-mono">{u.email}</td>
+                <td>
+                  {u.id === me.id ? (
+                    <span class="adm-tag">{u.role}</span>
+                  ) : (
+                    <form method="post" class="adm-inline">
+                      <input type="hidden" name="action" value="role" />
+                      <input type="hidden" name="userId" value={u.id} />
+                      <select name="role" onchange="this.form.submit()">
+                        <option value="member" selected={u.role === 'member'}>member</option>
+                        <option value="admin" selected={u.role === 'admin'}>admin</option>
+                      </select>
+                    </form>
+                  )}
+                </td>
+                <td>
+                  {!u.passwordHash
+                    ? <span class="adm-pill adm-pill--wait">invite sent</span>
+                    : u.active
+                      ? <span class="adm-pill adm-pill--on">active</span>
+                      : <span class="adm-pill adm-pill--off">no access</span>}
+                </td>
+                <td class="adm-mono">{fmt(u.lastLoginAt)}</td>
+                <td class="adm-actions">
+                  {u.id !== me.id && (
+                    <form method="post" class="adm-inline">
+                      <input type="hidden" name="userId" value={u.id} />
+                      {u.active
+                        ? <button class="adm-btn adm-btn--danger" name="action" value="deactivate" type="submit">Revoke</button>
+                        : <button class="adm-btn" name="action" value="activate" type="submit">Restore</button>}
+                    </form>
+                  )}
+                  <form method="post" class="adm-inline">
+                    <input type="hidden" name="action" value="resend" />
+                    <input type="hidden" name="userId" value={u.id} />
+                    <button class="adm-btn" type="submit">Reset link</button>
+                  </form>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {/* ----------------------------------------------------------- Audit */}
+    <div class="adm-panel">
+      <h2 class="adm-panel__title">Audit log</h2>
+      <ul class="adm-feed">
+        {auditRows.map((e) => (
+          <li>
+            <time>{fmt(e.at)}</time>
+            <span><strong>{e.actor}</strong> — {e.action}{e.target && <> · <span class="adm-mono">{e.target}</span></>}{e.detail && <> ({e.detail})</>}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </div>
+</AppLayout>
