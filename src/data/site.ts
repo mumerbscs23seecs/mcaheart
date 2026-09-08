@@ -13,15 +13,27 @@ export const site = {
   youtube: 'https://www.youtube.com/channel/UCR1U9EROhLsdeuCB4hlAw4w',
 } as const;
 
-export type NavItem = { label: string; href: string };
+export type NavLink = { label: string; href: string };
+export type NavItem = { label: string; href?: string; children?: NavLink[] };
 
 export const nav: NavItem[] = [
-  { label: 'Home', href: '/' },
   { label: 'Heart Trending', href: '/heart-trending' },
-  { label: 'MCA Research Group', href: '/research-group' },
-  { label: 'Publications', href: '/publications' },
-  { label: 'Submit an Idea', href: '/submit-idea' },
-  { label: 'Join the Lab', href: '/join-lab' },
+  {
+    label: 'Research',
+    href: '/research-group',
+    children: [
+      { label: 'MCA Research Group', href: '/research-group' },
+      { label: 'Publications', href: '/publications' },
+    ],
+  },
+  {
+    label: 'Get Involved',
+    href: '/submit-idea',
+    children: [
+      { label: 'Submit an Idea', href: '/submit-idea' },
+      { label: 'Join the Lab', href: '/join-lab' },
+    ],
+  },
   { label: 'Education', href: '/education' },
   { label: 'Contact', href: '/contact' },
 ];

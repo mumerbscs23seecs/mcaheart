@@ -4,8 +4,6 @@ const year = new Date().getFullYear();
 ---
 
 <footer class="foot">
-  <div class="foot__bg" aria-hidden="true"></div>
-
   <div class="shell shell--wide foot__inner">
     <div class="foot__brand">
       <a class="wordmark" href="/" aria-label="MCA Heart — home">
@@ -63,21 +61,9 @@ const year = new Date().getFullYear();
     position: relative;
     isolation: isolate;
     background: var(--dark);
-    color: rgba(248, 250, 252, 0.72);
+    color: var(--on-dark);
     padding-top: var(--space-xl);
     overflow: hidden;
-  }
-  /* The old paper texture muddied the navy; a dot grid and a soft accent
-     wash keep the footer in the palette. */
-  .foot__bg {
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background-image:
-      radial-gradient(circle at 2px 2px, rgba(248, 250, 252, 0.06) 1px, transparent 0),
-      radial-gradient(ellipse at 15% 0%, rgba(43, 57, 144, 0.55), transparent 60%),
-      radial-gradient(ellipse at 90% 100%, rgba(158, 27, 30, 0.22), transparent 55%);
-    background-size: 40px 40px, 100% 100%, 100% 100%;
   }
 
   .foot__inner {
@@ -93,10 +79,10 @@ const year = new Date().getFullYear();
     align-items: center;
     gap: 0.6em;
     font-family: var(--font-serif);
-    font-weight: 700;
+    font-weight: 600;
     font-size: 1.5rem;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.12em;
     line-height: 1;
   }
 
@@ -106,21 +92,21 @@ const year = new Date().getFullYear();
     width: 2.1em; height: 2.1em;
     flex-shrink: 0;
     color: #fff;
-    background: linear-gradient(140deg, var(--blue), var(--red));
-    border-radius: 0.55em;
+    background: var(--blue);
+    border-radius: var(--radius);
     font-size: 0.66em;
     transition: transform 0.35s var(--ease);
   }
-  .wordmark:hover .wordmark__badge { transform: scale(1.08); }
+  .wordmark:hover .wordmark__badge { transform: scale(1.06); }
   .wordmark__text { display: inline-flex; gap: 0.32em; align-items: baseline; }
-  .wordmark__mca { color: #8f9bd8; }
-  .wordmark__heart { color: var(--on-dark); }
+  .wordmark__mca { color: var(--on-dark-accent); }
+  .wordmark__heart { color: var(--on-dark-strong); }
 
   .foot__tag {
     margin-top: var(--space-xs);
     font-family: var(--font-serif);
     font-size: var(--step-1);
-    color: rgba(248, 250, 252, 0.6);
+    color: var(--on-dark-muted);
     max-width: 22ch;
   }
 
@@ -133,10 +119,10 @@ const year = new Date().getFullYear();
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.14em;
-    color: var(--on-dark);
+    color: var(--on-dark-strong);
     transition: color 0.3s var(--ease);
   }
-  .foot__yt:hover { color: #8f9bd8; }
+  .foot__yt:hover { color: var(--on-dark-accent); }
 
   .foot__head {
     font-family: var(--font-sans);
@@ -144,12 +130,12 @@ const year = new Date().getFullYear();
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.2em;
-    color: #8f9bd8;
+    color: var(--on-dark-faint);
     margin-bottom: var(--space-s);
   }
   .foot__list { display: grid; gap: 0.7rem; font-size: var(--step--1); }
-  .foot__list a { color: rgba(248, 250, 252, 0.78); }
-  .foot__list a:hover { color: var(--on-dark); }
+  .foot__list a { color: var(--on-dark); }
+  .foot__list a:hover { color: var(--on-dark-strong); }
 
   .foot__mark { width: 180px; opacity: 0.5; justify-self: end; }
   .foot__mark img { width: 100%; height: auto; }
@@ -161,9 +147,9 @@ const year = new Date().getFullYear();
     align-items: center;
     justify-content: space-between;
     padding-block: var(--space-s);
-    border-top: 1px solid rgba(248, 250, 252, 0.14);
+    border-top: 1px solid var(--on-dark-border);
     font-size: var(--step--1);
-    color: rgba(248, 250, 252, 0.55);
+    color: var(--on-dark-faint);
   }
   .foot__legal { display: flex; gap: var(--space-m); }
 

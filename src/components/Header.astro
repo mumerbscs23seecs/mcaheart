@@ -1,11 +1,15 @@
 ---
 import { nav } from '../data/site';
+import type { NavItem } from '../data/site';
 
 interface Props { transparent?: boolean }
 const { transparent = false } = Astro.props;
 
 const path = Astro.url.pathname.replace(/\/$/, '') || '/';
-const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWith(href));
+const matches = (href?: string) =>
+  !!href && (href === '/' ? path === '/' : path === href || path.startsWith(href + '/'));
+const isActive = (item: NavItem) =>
+  matches(item.href) || (item.children?.some((c) => matches(c.href)) ?? false);
 ---
 
 <header class:list={['masthead', transparent && 'masthead--transparent']} data-header>
@@ -22,26 +26,48 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     <nav class="nav" aria-label="Primary">
       <ul class="nav__list">
         {nav.map((item) => (
-          <li>
+          <li class:list={['nav__item', item.children && 'nav__item--has-children']}>
             <a
-              class:list={['nav__link', isCurrent(item.href) && 'is-current']}
-              href={item.href}
-              aria-current={isCurrent(item.href) ? 'page' : undefined}
+              class:list={['nav__link', isActive(item) && 'is-current']}
+              href={item.href ?? item.children?.[0]?.href}
+              aria-current={isActive(item) ? 'page' : undefined}
+              aria-haspopup={item.children ? 'true' : undefined}
+              aria-expanded={item.children ? 'false' : undefined}
             >
               {item.label}
+              {item.children && (
+                <svg class="nav__caret" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
+                  <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" />
+                </svg>
+              )}
             </a>
+            {item.children && (
+              <div class="nav__panel">
+                <ul>
+                  {item.children.map((c) => (
+                    <li>
+                      <a
+                        class:list={['nav__sublink', matches(c.href) && 'is-current']}
+                        href={c.href}
+                        aria-current={matches(c.href) ? 'page' : undefined}
+                      >{c.label}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </li>
         ))}
       </ul>
 
       {/* Members-only. Rendered for everyone, revealed by the mca_hint cookie;
-          the /submissions and /admin routes enforce access server-side. */}
+          the /pipeline and /admin routes enforce access server-side. */}
       <div class="authbar" data-auth>
         <a class="btn btn--ghost authbar__login" href="/login" data-auth-guest>Log in</a>
         <span class="authbar__account" data-auth-member hidden>
           {/* One link into the app. JS swaps it to "Admin" → /admin for admins. */}
           <a
-            class:list={['nav__link', (isCurrent('/pipeline') || isCurrent('/admin')) && 'is-current']}
+            class:list={['nav__link', (matches('/pipeline') || matches('/admin')) && 'is-current']}
             href="/pipeline" data-auth-home
           >Pipeline</a>
           <form method="post" action="/logout" class="authbar__logout">
@@ -61,13 +87,29 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     <ul class="drawer__list">
       {nav.map((item, i) => (
         <li style={`--i:${i}`}>
-          <a
-            class:list={['drawer__link', isCurrent(item.href) && 'is-current']}
-            href={item.href}
-          >
-            <span class="drawer__num">{String(i + 1).padStart(2, '0')}</span>
-            {item.label}
-          </a>
+          {item.children ? (
+            <details class="drawer__group" open={isActive(item)}>
+              <summary class="drawer__link drawer__summary">
+                <span class="drawer__num">{String(i + 1).padStart(2, '0')}</span>
+                <span>{item.label}</span>
+                <svg class="drawer__caret" width="14" height="9" viewBox="0 0 14 9" aria-hidden="true">
+                  <path d="M1 1l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" />
+                </svg>
+              </summary>
+              <ul class="drawer__sublist">
+                {item.children.map((c) => (
+                  <li>
+                    <a class:list={['drawer__sublink', matches(c.href) && 'is-current']} href={c.href}>{c.label}</a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : (
+            <a class:list={['drawer__link', matches(item.href) && 'is-current']} href={item.href}>
+              <span class="drawer__num">{String(i + 1).padStart(2, '0')}</span>
+              {item.label}
+            </a>
+          )}
         </li>
       ))}
     </ul>
@@ -76,7 +118,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
       <a class="drawer__link" href="/login" data-auth-guest>Log in</a>
       <span class="drawer__member" data-auth-member hidden>
         <a
-          class:list={['drawer__link', (isCurrent('/pipeline') || isCurrent('/admin')) && 'is-current']}
+          class:list={['drawer__link', (matches('/pipeline') || matches('/admin')) && 'is-current']}
           href="/pipeline" data-auth-home
         >Pipeline</a>
         <form method="post" action="/logout">
@@ -92,7 +134,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     position: sticky;
     top: 0;
     z-index: 100;
-    background: var(--on-dark);
+    background: var(--surface);
     border-bottom: 1px solid var(--border-soft);
     transition: background 0.4s var(--ease), border-color 0.4s var(--ease);
   }
@@ -117,10 +159,10 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     align-items: center;
     gap: 0.6em;
     font-family: var(--font-serif);
-    font-weight: 700;
+    font-weight: 600;
     font-size: clamp(1.1rem, 0.95rem + 0.7vw, 1.5rem);
     text-transform: uppercase;
-    letter-spacing: 0.14em;
+    letter-spacing: 0.12em;
     line-height: 1;
     flex-shrink: 0;
   }
@@ -131,29 +173,41 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     width: 2.1em; height: 2.1em;
     flex-shrink: 0;
     color: #fff;
-    background: linear-gradient(140deg, var(--blue), var(--red));
-    border-radius: 0.55em;
+    background: var(--blue);
+    border-radius: var(--radius);
     font-size: 0.66em;
     transition: transform 0.35s var(--ease);
   }
-  .wordmark:hover .wordmark__badge { transform: scale(1.08); }
+  .wordmark:hover .wordmark__badge { transform: scale(1.06); }
   .wordmark__text { display: inline-flex; gap: 0.32em; align-items: baseline; }
   .wordmark__mca { color: var(--blue); }
   .wordmark__heart { color: var(--text-strong); }
 
   /* --- Desktop nav --- */
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: clamp(0.9rem, 0.1rem + 1.4vw, 1.9rem);
+    min-width: 0;
+  }
   .nav__list {
     display: flex;
     align-items: center;
-    gap: clamp(1rem, 0.2rem + 1.9vw, 2.6rem);
+    gap: clamp(0.85rem, 0.1rem + 1.4vw, 1.9rem);
   }
+  .nav__item { position: relative; }
   .nav__link {
     position: relative;
+    display: inline-flex;
+    align-items: center;
     font-size: 0.9rem;
     font-weight: 500;
-    letter-spacing: 0;
     color: var(--text);
     padding-block: 0.5rem;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
     transition: color 0.3s var(--ease);
     white-space: nowrap;
   }
@@ -161,7 +215,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     content: '';
     position: absolute;
     left: 0; bottom: 0;
-    width: 100%; height: 1.5px;
+    width: 100%; height: 2px;
     background: var(--blue);
     transform: scaleX(0);
     transform-origin: right;
@@ -172,6 +226,52 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
   .nav__link.is-current { color: var(--blue); }
   .nav__link.is-current::after { transform: scaleX(1); }
 
+  .nav__caret { margin-left: 0.4em; opacity: 0.65; transition: transform 0.25s var(--ease); }
+  .nav__item--has-children:hover .nav__caret,
+  .nav__item--has-children:focus-within .nav__caret { transform: rotate(180deg); }
+
+  /* Dropdown panel — pure CSS reveal */
+  .nav__panel {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translate(-50%, 6px);
+    min-width: 220px;
+    padding: 0.35rem;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.18s var(--ease), transform 0.18s var(--ease), visibility 0.18s;
+    z-index: 120;
+  }
+  .nav__panel::before {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; top: -8px; height: 8px;
+  }
+  .nav__item--has-children:hover .nav__panel,
+  .nav__item--has-children:focus-within .nav__panel {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translate(-50%, 0);
+  }
+  .nav__sublink {
+    display: block;
+    padding: 0.55rem 0.8rem;
+    border-radius: var(--radius);
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+  }
+  .nav__sublink:hover { background: var(--accent-wash); color: var(--blue); }
+  .nav__sublink.is-current { color: var(--blue); font-weight: 600; }
+
   /* --- Burger --- */
   .burger {
     display: none;
@@ -181,11 +281,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     font-weight: 600;
     color: var(--text-strong);
   }
-  .burger__bars {
-    display: grid;
-    gap: 5px;
-    width: 24px;
-  }
+  .burger__bars { display: grid; gap: 5px; width: 24px; }
   .burger__bars i {
     display: block;
     height: 1.5px;
@@ -199,7 +295,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
   .drawer {
     position: fixed;
     inset: var(--header-h) 0 0;
-    background: var(--on-dark);
+    background: var(--surface);
     padding: var(--space-l) var(--gutter);
     overflow-y: auto;
   }
@@ -209,12 +305,14 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     display: flex;
     align-items: baseline;
     gap: 1rem;
+    width: 100%;
     padding-block: var(--space-s);
     border-bottom: 1px solid var(--border-soft);
     font-family: var(--font-serif);
     font-size: var(--step-2);
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: -0.01em;
+    color: var(--text-strong);
     opacity: 0;
     transform: translateY(12px);
     animation: drawer-in 0.5s var(--ease-out) forwards;
@@ -229,40 +327,43 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     color: var(--blue);
   }
 
+  .drawer__group { border-bottom: 1px solid var(--border-soft); }
+  .drawer__group .drawer__link { border-bottom: 0; }
+  .drawer__summary { list-style: none; cursor: pointer; align-items: center; }
+  .drawer__summary::-webkit-details-marker { display: none; }
+  .drawer__caret { margin-left: auto; align-self: center; transition: transform 0.25s var(--ease); }
+  .drawer__group[open] .drawer__caret { transform: rotate(180deg); }
+  .drawer__sublist { display: grid; gap: 0.1rem; padding: 0 0 var(--space-s) 2.7rem; }
+  .drawer__sublink {
+    display: block;
+    padding-block: 0.55rem;
+    font-family: var(--font-sans);
+    font-size: var(--step-0);
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+  .drawer__sublink.is-current { color: var(--blue); font-weight: 600; }
+
   @keyframes drawer-in { to { opacity: 1; transform: none; } }
 
   /* --- Auth bar (desktop) --- */
-  /* Class-based display rules outrank the UA [hidden] rule, so restore it. */
   [data-auth] [hidden] { display: none !important; }
-  .nav {
-    display: flex;
-    align-items: center;
-    gap: clamp(0.9rem, 0.1rem + 1.4vw, 1.9rem);
-    min-width: 0;
-  }
-  .nav__list { gap: clamp(0.85rem, 0.1rem + 1.4vw, 1.9rem); }
-  .authbar {
-    display: flex;
-    align-items: center;
-    gap: 0.9rem;
-  }
+  .authbar { display: flex; align-items: center; gap: 0.9rem; }
   .authbar__login { padding-block: 0.4rem; padding-inline: 0.9rem; font-size: 0.8rem; }
 
-  /* Members zone: a blue pill so the app nav reads as a distinct area from the
-     public site nav. */
+  /* Members zone: a charcoal pill so the app nav reads as a distinct area. */
   .authbar__account {
     display: flex;
     align-items: center;
     gap: clamp(0.9rem, 0.4rem + 0.8vw, 1.5rem);
     padding: 0.3rem 0.3rem 0.3rem 1.15rem;
-    background: var(--blue);
+    background: var(--dark);
     border-radius: var(--radius-pill);
   }
   .authbar__account .nav__link { color: rgba(255, 255, 255, 0.82); }
   .authbar__account .nav__link:hover { color: #fff; }
   .authbar__account .nav__link::after { background: #fff; }
   .authbar__account .nav__link.is-current { color: #fff; }
-  .authbar__account .nav__link { white-space: nowrap; }
   .authbar__logout { display: flex; margin: 0; }
   .authbar__logout button {
     cursor: pointer;
@@ -275,13 +376,12 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
 
   /* --- Auth block (mobile drawer) --- */
   .drawer__auth { margin-top: var(--space-m); display: grid; gap: 0.25rem; }
-  /* Members zone gets the same blue treatment as the desktop pill. */
   .drawer__member {
     display: grid;
     gap: 0.15rem;
     margin-top: var(--space-xs);
     padding: 0.4rem var(--space-s) var(--space-xs);
-    background: var(--blue);
+    background: var(--dark);
     border-radius: var(--radius);
   }
   .drawer__member .drawer__link { color: #fff; border-bottom-color: rgba(255, 255, 255, 0.16); }
@@ -298,22 +398,19 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     padding-block: var(--space-s);
   }
 
-  /* Breaks to the drawer earlier than the marketing-only nav did, to leave
-     room for the members items (Submissions / Admin / Log out). */
-  @media (max-width: 1280px) {
+  @media (max-width: 1180px) {
     .nav { display: none; }
     .burger { display: inline-flex; }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .drawer__link { opacity: 1; transform: none; animation: none; }
+    .nav__panel { transition: none; }
   }
 </style>
 
 <script>
   // Reveal the members-only nav from the (non-sensitive) mca_hint cookie.
-  // This is a display hint only — /submissions and /admin check the real
-  // session server-side.
   {
     const match = document.cookie.match(/(?:^|;\s*)mca_hint=([^;]+)/);
     let info: { name?: string; role?: string } | null = null;
@@ -339,6 +436,19 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
   const header = document.querySelector<HTMLElement>('[data-header]');
   const burger = document.querySelector<HTMLButtonElement>('[data-burger]');
   const drawer = document.querySelector<HTMLElement>('[data-drawer]');
+
+  // Keep aria-expanded honest on the dropdown triggers.
+  for (const group of document.querySelectorAll<HTMLElement>('.nav__item--has-children')) {
+    const trigger = group.querySelector<HTMLElement>('.nav__link');
+    const sync = () => trigger?.setAttribute('aria-expanded', String(group.matches(':hover, :focus-within')));
+    group.addEventListener('mouseenter', sync);
+    group.addEventListener('mouseleave', sync);
+    group.addEventListener('focusin', sync);
+    group.addEventListener('focusout', sync);
+    group.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') (document.activeElement as HTMLElement | null)?.blur();
+    });
+  }
 
   // Swap the transparent masthead to solid once the hero is behind it.
   if (header?.classList.contains('masthead--transparent')) {
@@ -366,8 +476,7 @@ const isCurrent = (href: string) => (href === '/' ? path === '/' : path.startsWi
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !drawer.hidden) { setOpen(false); burger.focus(); }
     });
-    // Reset when resizing up to the desktop nav.
-    matchMedia('(min-width: 1281px)').addEventListener('change', (e) => {
+    matchMedia('(min-width: 1181px)').addEventListener('change', (e) => {
       if (e.matches && !drawer.hidden) setOpen(false);
     });
   }
