@@ -146,8 +146,8 @@ const navItems = isAdmin
         place-items: center;
         width: 1.8em; height: 1.8em;
         color: #fff;
-        background: linear-gradient(140deg, var(--blue), var(--red));
-        border-radius: 0.45em;
+        background: var(--blue);
+        border-radius: var(--radius);
       }
 
       .appbar__nav { display: flex; gap: 0.35rem; margin-left: var(--space-s); }
@@ -159,7 +159,7 @@ const navItems = isAdmin
         color: var(--text-muted);
       }
       .appbar__link:hover { color: var(--text-strong); background: var(--bg-tint); }
-      .appbar__link.is-active { color: var(--blue); background: rgba(43, 57, 144, 0.08); }
+      .appbar__link.is-active { color: var(--blue); background: var(--accent-wash); }
       .appbar__badge-n {
         display: inline-grid;
         place-items: center;
@@ -234,7 +234,7 @@ const navItems = isAdmin
       }
       .nbell__item:last-child { border-bottom: 0; }
       .nbell__item:hover { background: var(--bg-tint); }
-      .nbell__item.is-unread { background: rgba(43, 57, 144, 0.05); }
+      .nbell__item.is-unread { background: var(--accent-wash); }
       .nbell__item b { display: block; font-size: 0.85rem; font-weight: 700; color: var(--text-strong); }
       .nbell__item span { display: block; font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
       .nbell__item time { display: block; font-size: 0.72rem; color: var(--text-faint); margin-top: 4px; }

@@ -45,10 +45,7 @@ const pageTitle = `${title} | ${site.name}`;
     <style is:global>
       .authbody {
         min-height: 100dvh;
-        background:
-          radial-gradient(circle at 15% 0%, rgba(43, 57, 144, 0.06), transparent 45%),
-          radial-gradient(circle at 90% 100%, rgba(158, 27, 30, 0.05), transparent 45%),
-          var(--bg);
+        background: var(--bg);
       }
       .authpage {
         min-height: 100dvh;
@@ -80,8 +77,8 @@ const pageTitle = `${title} | ${site.name}`;
         place-items: center;
         width: 1.9em; height: 1.9em;
         color: #fff;
-        background: linear-gradient(140deg, var(--blue), var(--red));
-        border-radius: 0.5em;
+        background: var(--blue);
+        border-radius: var(--radius);
       }
 
       /* --- The card --- */
@@ -92,7 +89,7 @@ const pageTitle = `${title} | ${site.name}`;
         background: var(--surface);
         border: 1px solid var(--border-soft);
         border-radius: var(--radius-lg);
-        box-shadow: 0 24px 60px -34px rgba(43, 57, 144, 0.35);
+        box-shadow: var(--shadow-lg);
       }
       .auth-card__title {
         font-size: 1.45rem;
@@ -123,7 +120,7 @@ const pageTitle = `${title} | ${site.name}`;
       .auth-field input:focus {
         outline: none;
         border-color: var(--blue);
-        box-shadow: 0 0 0 3px rgba(43, 57, 144, 0.14);
+        box-shadow: 0 0 0 3px var(--accent-wash-strong);
       }
 
       .auth-card .btn {
@@ -149,17 +146,17 @@ const pageTitle = `${title} | ${site.name}`;
         font-size: 0.85rem;
         font-weight: 600;
         color: var(--red);
-        background: rgba(158, 27, 30, 0.06);
-        border: 1px solid rgba(158, 27, 30, 0.3);
+        background: var(--red-wash);
+        border: 1px solid var(--red-border);
       }
       .auth-ok-box {
         padding: 0.85rem 1rem;
         border-radius: var(--radius);
         font-size: 0.86rem;
         line-height: 1.6;
-        color: #166534;
-        background: rgba(22, 101, 52, 0.09);
-        border: 1px solid rgba(22, 101, 52, 0.3);
+        color: var(--ok);
+        background: var(--ok-bg);
+        border: 1px solid var(--ok-border);
       }
       .auth-linkbox {
         padding: 0.75rem 0.9rem;
@@ -170,7 +167,7 @@ const pageTitle = `${title} | ${site.name}`;
         line-height: 1.55;
         overflow-wrap: anywhere;
       }
-      .auth-linkbox a { color: var(--blue); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .auth-linkbox a { color: var(--blue); font-family: var(--font-mono); }
 
       /* --- Below-card bits --- */
       .authpage__note {
@@ -201,7 +198,7 @@ const pageTitle = `${title} | ${site.name}`;
       .authpage__demo td {
         padding: 0.35rem 0.9rem 0.35rem 0;
         border-top: 1px solid var(--border-soft);
-        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-family: var(--font-mono);
         font-size: 0.76rem;
         color: var(--text);
       }
