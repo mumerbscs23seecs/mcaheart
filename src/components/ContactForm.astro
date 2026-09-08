@@ -125,13 +125,13 @@ import { INTENT_LABELS } from '../lib/contact-schema';
     outline: none;
     background: var(--surface);
     border-color: var(--blue);
-    box-shadow: 0 0 0 3px rgba(43, 57, 144, 0.13);
+    box-shadow: 0 0 0 3px var(--accent-wash-strong);
   }
   .field__input--area { resize: vertical; min-height: 8rem; line-height: 1.6; }
 
   .field__input[aria-invalid='true'] {
     border-color: var(--red);
-    background: rgba(158, 27, 30, 0.04);
+    background: var(--red-wash);
   }
 
   .field__error {
@@ -213,14 +213,14 @@ import { INTENT_LABELS } from '../lib/contact-schema';
     border: 1px solid;
   }
   .cform__status[data-tone='ok'] {
-    color: #166534;
-    background: rgba(22, 101, 52, 0.1);
-    border-color: rgba(22, 101, 52, 0.4);
+    color: var(--ok);
+    background: var(--ok-bg);
+    border-color: var(--ok-border);
   }
   .cform__status[data-tone='error'] {
     color: var(--red);
-    background: rgba(158, 27, 30, 0.06);
-    border-color: rgba(158, 27, 30, 0.35);
+    background: var(--red-wash);
+    border-color: var(--red-border);
   }
 </style>
 

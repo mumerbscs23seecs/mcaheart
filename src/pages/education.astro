@@ -157,7 +157,7 @@ const webinarVideo = videos.find((v) => v.title === 'Monthly Webinar')!;
     display: grid;
     place-items: center;
     color: var(--surface);
-    background: rgba(22, 32, 58, 0.2);
+    background: rgba(0, 0, 0, 0.2);
     transition: background 0.4s var(--ease);
   }
   .thumb__play svg {
@@ -165,11 +165,11 @@ const webinarVideo = videos.find((v) => v.title === 'Monthly Webinar')!;
     box-sizing: content-box;
     background: var(--blue);
     border-radius: 50%;
-    box-shadow: 0 10px 30px -8px rgba(22, 32, 58, 0.7);
+    box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.55);
     transition: transform 0.45s var(--ease-out), background 0.35s var(--ease);
   }
-  .thumb:hover .thumb__play { background: rgba(22, 32, 58, 0.34); }
-  .thumb:hover .thumb__play svg { transform: scale(1.1); background: var(--red); }
+  .thumb:hover .thumb__play { background: rgba(0, 0, 0, 0.34); }
+  .thumb:hover .thumb__play svg { transform: scale(1.1); background: var(--blue-deep); }
   .thumb__cap {
     margin-top: var(--space-xs);
     font-size: var(--step--1);
@@ -239,20 +239,20 @@ const webinarVideo = videos.find((v) => v.title === 'Monthly Webinar')!;
     gap: var(--space-xs);
     margin-top: var(--space-l);
     padding-top: var(--space-s);
-    border-top: 1px solid rgba(248, 250, 252, 0.2);
+    border-top: 1px solid var(--on-dark-border);
   }
   .webinar__partner-mark {
     font-family: var(--font-serif);
     font-size: var(--step-2);
     font-weight: 700;
     letter-spacing: 0.1em;
-    color: #8f9bd8;
+    color: var(--on-dark-accent);
   }
   .webinar__partner-note {
     font-size: var(--step--1);
-    color: rgba(248, 250, 252, 0.6);
+    color: var(--on-dark-muted);
   }
-  .webinar .thumb__media { border-color: rgba(248, 250, 252, 0.18); }
+  .webinar .thumb__media { border-color: var(--on-dark-border); }
 
   @media (max-width: 880px) {
     .webinar__grid { grid-template-columns: 1fr; }

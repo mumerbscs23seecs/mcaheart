@@ -275,7 +275,7 @@ import { director, stats, societies } from '../data/site';
     max-width: 100%;
     object-fit: contain;
     mix-blend-mode: multiply;
-    filter: drop-shadow(0 34px 64px rgba(43, 57, 144, 0.26));
+    filter: drop-shadow(0 34px 64px rgba(0, 0, 0, 0.20));
     /* Cardiac 'lub-dub': two quick contractions, then a long rest. */
     transform-origin: 50% 55%;
     animation: heartbeat 1.5s ease-in-out infinite;
@@ -422,14 +422,13 @@ import { director, stats, societies } from '../data/site';
     grid-template-columns: repeat(4, 1fr);
     gap: 1px;
     margin-top: var(--space-xl);
-    background: rgba(248, 250, 252, 0.14);
-    border: 1px solid rgba(248, 250, 252, 0.16);
+    background: var(--on-dark-border);
+    border: 1px solid var(--on-dark-border);
     border-radius: var(--radius-lg);
     overflow: hidden;
   }
   .stat {
-    background: rgba(22, 32, 58, 0.72);
-    backdrop-filter: blur(6px);
+    background: var(--dark);
     padding: var(--space-m) var(--space-s);
   }
   .stat__value {
@@ -437,13 +436,13 @@ import { director, stats, societies } from '../data/site';
     font-size: var(--step-4);
     font-weight: 600;
     line-height: 1;
-    color: #8f9bd8;
+    color: var(--on-dark-accent);
   }
   .stat__label {
     margin-top: 0.7rem;
     font-size: var(--step--1);
     line-height: 1.5;
-    color: rgba(248, 250, 252, 0.66);
+    color: var(--on-dark-muted);
     max-width: 22ch;
   }
 
