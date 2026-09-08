@@ -2,7 +2,7 @@
 import '../styles/global.css';
 import '../styles/pipeline.css';
 import FontLinks from '../components/FontLinks.astro';
-import Header from '../components/Header.astro';
+import AppBar from '../components/AppBar.astro';
 import { scopeProjects } from '../lib/pipeline-scope';
 import { getPipelineTasks } from '../lib/pipeline-tasks';
 
@@ -49,16 +49,6 @@ const tabs: Tab[] = [
   { key: 'submissions', label: 'Submissions', href: '/pipeline/submissions', count: subsN.count ?? null },
   taskTab,
 ];
-
-// The person's own inbox (RLS keeps it to them). For members this is every
-// update the coordinator makes to their papers; for admins, the requests.
-const { data: notifs } = await supabase
-  .from('notifications')
-  .select('id,title,body,link,read_at,created_at')
-  .order('created_at', { ascending: false })
-  .limit(20);
-const unread = (notifs ?? []).filter((n: any) => !n.read_at).length;
-const fmtNotif = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 ---
 
 <!doctype html>
@@ -72,11 +62,10 @@ const fmtNotif = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: '
     <FontLinks />
   </head>
   <body class="pl-body">
-    <Header />
+    <AppBar active="pipeline" name={person.full_name} role={person.role} email={person.email} />
 
-    <nav class="pl-tabs" aria-label="Pipeline">
+    <nav class="pl-tabs" aria-label="Pipeline sections">
       <div class="pl-tabs__row">
-        <span class="pl-tabs__brand">Research Pipeline</span>
         {tabs.map((t) => (
           <a class:list={['pl-tab', active === t.key && 'is-active']} href={t.href}>
             {t.label}
@@ -85,33 +74,6 @@ const fmtNotif = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: '
             )}
           </a>
         ))}
-
-        <span class="pl-tabs__acct">
-          <span class="pl-bell" data-bell>
-            <button type="button" class="pl-bell__btn" data-bell-toggle aria-label="Notifications" aria-expanded="false">
-              <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
-                <path
-                  fill="currentColor"
-                  d="M10 2a5 5 0 0 0-5 5v3.2l-1.4 2.5A1 1 0 0 0 4.5 16h11a1 1 0 0 0 .9-1.3L15 10.2V7a5 5 0 0 0-5-5Zm0 16a2.5 2.5 0 0 0 2.4-1.8H7.6A2.5 2.5 0 0 0 10 18Z"
-                />
-              </svg>
-              {unread > 0 && <span class="pl-bell__dot" data-bell-count>{unread > 9 ? '9+' : unread}</span>}
-            </button>
-            <div class="pl-notif" data-bell-panel hidden>
-              <p class="pl-notif__head">Notifications</p>
-              {(!notifs || notifs.length === 0) && <p class="pl-notif__empty">Nothing yet.</p>}
-              {(notifs ?? []).map((n: any) => (
-                <a class:list={['pl-notif__item', !n.read_at && 'is-unread']} href={n.link ?? '#'}>
-                  <b>{n.title}</b>
-                  {n.body && <span>{n.body}</span>}
-                  <time>{fmtNotif(n.created_at)}</time>
-                </a>
-              ))}
-            </div>
-          </span>
-          <span class="pl-tabs__who">{person.full_name} <em>({person.role})</em></span>
-          <form method="post" action="/logout" class="pl-tabs__out"><button type="submit">Sign out</button></form>
-        </span>
       </div>
     </nav>
 
@@ -133,42 +95,6 @@ const fmtNotif = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: '
     </div>
 
     <script is:inline>
-      // Notification bell.
-      (() => {
-        const bell = document.querySelector('[data-bell]');
-        if (!bell) return;
-        const btn = bell.querySelector('[data-bell-toggle]');
-        const panel = bell.querySelector('[data-bell-panel]');
-        const dot = bell.querySelector('[data-bell-count]');
-        let open = false;
-
-        function setOpen(v) {
-          open = v;
-          panel.hidden = !v;
-          bell.classList.toggle('is-open', v);
-          btn.setAttribute('aria-expanded', String(v));
-          if (v && dot) {
-            fetch('/pipeline/notifications/read', { method: 'POST' })
-              .then(() => {
-                dot.remove();
-                bell.querySelectorAll('.pl-notif__item.is-unread').forEach((e) => e.classList.remove('is-unread'));
-              })
-              .catch(() => {});
-          }
-        }
-
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          setOpen(!open);
-        });
-        document.addEventListener('click', (e) => {
-          if (open && !bell.contains(e.target)) setOpen(false);
-        });
-        document.addEventListener('keydown', (e) => {
-          if (e.key === 'Escape' && open) setOpen(false);
-        });
-      })();
-
       // Project detail drawer.
       (() => {
         const drawer = document.getElementById('pl-drawer');
