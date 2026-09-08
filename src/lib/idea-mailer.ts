@@ -67,7 +67,7 @@ function rows(data: IdeaPayload): string {
 function renderEmail(data: IdeaPayload, hasFile: boolean): string {
   return `<div style="background:#f8fafc;padding:28px">
   <div style="max-width:660px;margin:0 auto;background:#fff;border:1px solid rgba(43,57,144,.14);border-radius:12px;padding:28px">
-    <p style="margin:0 0 4px;color:#2b3990;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart</p>
+    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart</p>
     <h1 style="margin:0 0 18px;color:#1e293b;font:600 21px/1.25 Georgia,serif">New research-idea submission</h1>
     <table style="border-collapse:collapse;width:100%">${rows(data)}</table>
     ${
@@ -100,7 +100,7 @@ export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: stri
 
   const html = `<div style="background:#f8fafc;padding:28px">
   <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid rgba(43,57,144,.14);border-radius:12px;padding:28px">
-    <p style="margin:0 0 4px;color:#2b3990;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart</p>
+    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart</p>
     <h1 style="margin:0 0 12px;color:#1e293b;font:600 20px/1.3 Georgia,serif">${accepted ? 'Idea accepted' : 'Idea review outcome'}</h1>
     <p style="margin:0 0 8px;color:#1e293b;font:14px/1.6 Arial,sans-serif">Hi ${esc(opts.leadName)},</p>
     <p style="margin:0 0 8px;color:#1e293b;font:14px/1.6 Arial,sans-serif">${lead}</p>

@@ -44,7 +44,7 @@ function digestHtml(items: Submission[]): string {
           ${s.title}<br>
           <span style="color:#64748b;font-size:12px">${s.lead} &middot; ${s.target} &middot; ${s.status}</span>
         </td>
-        <td style="padding:8px 0;font:600 13px/1.5 Arial,sans-serif;color:#9e1b1e;white-space:nowrap;vertical-align:top">
+        <td style="padding:8px 0;font:600 13px/1.5 Arial,sans-serif;color:#a51c30;white-space:nowrap;vertical-align:top">
           ${daysSince(s.updatedAt)} days idle
         </td>
       </tr>`,
@@ -53,11 +53,11 @@ function digestHtml(items: Submission[]): string {
 
   return `<div style="background:#f8fafc;padding:28px">
   <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid rgba(43,57,144,.12);border-radius:12px;padding:28px">
-    <p style="margin:0 0 4px;color:#2b3990;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart · Pipeline</p>
+    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart · Pipeline</p>
     <h1 style="margin:0 0 6px;color:#1e293b;font:600 20px/1.3 Georgia,serif">${items.length} submission${items.length === 1 ? '' : 's'} need a nudge</h1>
     <p style="margin:0 0 18px;color:#64748b;font:14px/1.6 Arial,sans-serif">
       No recorded activity in over a week and still open. Review in the
-      <a href="https://www.mcaheart.com/admin" style="color:#2b3990">admin dashboard</a>.
+      <a href="https://www.mcaheart.com/admin" style="color:#a51c30">admin dashboard</a>.
     </p>
     <table style="border-collapse:collapse;width:100%">${rows}</table>
     <hr style="border:0;border-top:1px solid rgba(43,57,144,.12);margin:20px 0">
