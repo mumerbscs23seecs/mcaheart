@@ -2,6 +2,7 @@
 import '../styles/global.css';
 import '../styles/pipeline.css';
 import FontLinks from '../components/FontLinks.astro';
+import Header from '../components/Header.astro';
 import { scopeProjects } from '../lib/pipeline-scope';
 import { getPipelineTasks } from '../lib/pipeline-tasks';
 
@@ -71,12 +72,21 @@ const fmtNotif = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: '
     <FontLinks />
   </head>
   <body class="pl-body">
-    <header class="pl-banner">
-      <div class="pl-banner__row">
-        <span class="pl-banner__title"><a href="/pipeline">MCA Research Pipeline</a></span>
-        <span class="pl-acct">
-          <a href="/admin">← Members area</a>
+    <Header />
 
+    <nav class="pl-tabs" aria-label="Pipeline">
+      <div class="pl-tabs__row">
+        <span class="pl-tabs__brand">Research Pipeline</span>
+        {tabs.map((t) => (
+          <a class:list={['pl-tab', active === t.key && 'is-active']} href={t.href}>
+            {t.label}
+            {typeof t.count === 'number' && (
+              <span class:list={['pl-tab__count', t.alert && t.count > 0 && 'is-alert']}>{t.count}</span>
+            )}
+          </a>
+        ))}
+
+        <span class="pl-tabs__acct">
           <span class="pl-bell" data-bell>
             <button type="button" class="pl-bell__btn" data-bell-toggle aria-label="Notifications" aria-expanded="false">
               <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
@@ -99,26 +109,11 @@ const fmtNotif = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: '
               ))}
             </div>
           </span>
-
-          <span>{person.full_name}</span>
-          <form method="post" action="/pipeline/logout" style="display:inline">
-            <button type="submit">Log out</button>
-          </form>
+          <span class="pl-tabs__who">{person.full_name} <em>({person.role})</em></span>
+          <form method="post" action="/logout" class="pl-tabs__out"><button type="submit">Sign out</button></form>
         </span>
       </div>
-      <nav class="pl-tabs">
-        <div class="pl-tabs__row">
-          {tabs.map((t) => (
-            <a class:list={['pl-tab', active === t.key && 'is-active']} href={t.href}>
-              {t.label}
-              {typeof t.count === 'number' && (
-                <span class:list={['pl-tab__count', t.alert && t.count > 0 && 'is-alert']}>{t.count}</span>
-              )}
-            </a>
-          ))}
-        </div>
-      </nav>
-    </header>
+    </nav>
 
     <main class="pl-main">
       <slot />

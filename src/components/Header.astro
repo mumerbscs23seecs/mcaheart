@@ -409,75 +409,76 @@ const isActive = (item: NavItem) =>
   }
 </style>
 
-<script>
-  // Reveal the members-only nav from the (non-sensitive) mca_hint cookie.
-  {
+<script is:inline>
+  (() => {
+    // Reveal the members-only nav from the (non-sensitive) mca_hint cookie.
     const match = document.cookie.match(/(?:^|;\s*)mca_hint=([^;]+)/);
-    let info: { name?: string; role?: string } | null = null;
+    let info = null;
     if (match) {
-      try { info = JSON.parse(decodeURIComponent(match[1]!)); } catch { info = null; }
+      try { info = JSON.parse(decodeURIComponent(match[1])); } catch { info = null; }
     }
-    for (const bar of document.querySelectorAll<HTMLElement>('[data-auth]')) {
-      const guest = bar.querySelector<HTMLElement>('[data-auth-guest]');
-      const member = bar.querySelector<HTMLElement>('[data-auth-member]');
-      if (info?.name && member) {
+    document.querySelectorAll('[data-auth]').forEach((bar) => {
+      const guest = bar.querySelector('[data-auth-guest]');
+      const member = bar.querySelector('[data-auth-member]');
+      if (info && info.name && member) {
         if (guest) guest.hidden = true;
         member.hidden = false;
         if (info.role === 'admin') {
-          bar.querySelectorAll<HTMLAnchorElement>('[data-auth-home]').forEach((el) => {
+          bar.querySelectorAll('[data-auth-home]').forEach((el) => {
             el.textContent = 'Admin';
             el.setAttribute('href', '/admin');
           });
         }
       }
+    });
+
+    const header = document.querySelector('[data-header]');
+    const burger = document.querySelector('[data-burger]');
+    const drawer = document.querySelector('[data-drawer]');
+
+    // Keep aria-expanded honest on the dropdown triggers.
+    document.querySelectorAll('.nav__item--has-children').forEach((group) => {
+      const trigger = group.querySelector('.nav__link');
+      const sync = () => trigger && trigger.setAttribute('aria-expanded', String(group.matches(':hover, :focus-within')));
+      group.addEventListener('mouseenter', sync);
+      group.addEventListener('mouseleave', sync);
+      group.addEventListener('focusin', sync);
+      group.addEventListener('focusout', sync);
+      group.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      });
+    });
+
+    // Swap the transparent masthead to solid once the hero is behind it.
+    if (header && header.classList.contains('masthead--transparent')) {
+      const sentinel = document.createElement('div');
+      sentinel.style.cssText = 'position:absolute;top:0;height:1px;width:1px;';
+      document.body.prepend(sentinel);
+      new IntersectionObserver(
+        ([e]) => header.classList.toggle('is-stuck', !e.isIntersecting),
+        { threshold: 0 },
+      ).observe(sentinel);
     }
-  }
 
-  const header = document.querySelector<HTMLElement>('[data-header]');
-  const burger = document.querySelector<HTMLButtonElement>('[data-burger]');
-  const drawer = document.querySelector<HTMLElement>('[data-drawer]');
+    if (burger && drawer) {
+      const setOpen = (open) => {
+        burger.setAttribute('aria-expanded', String(open));
+        drawer.hidden = !open;
+        document.body.style.overflow = open ? 'hidden' : '';
+        const label = burger.querySelector('.burger__label');
+        if (label) label.textContent = open ? 'Close' : 'Menu';
+      };
 
-  // Keep aria-expanded honest on the dropdown triggers.
-  for (const group of document.querySelectorAll<HTMLElement>('.nav__item--has-children')) {
-    const trigger = group.querySelector<HTMLElement>('.nav__link');
-    const sync = () => trigger?.setAttribute('aria-expanded', String(group.matches(':hover, :focus-within')));
-    group.addEventListener('mouseenter', sync);
-    group.addEventListener('mouseleave', sync);
-    group.addEventListener('focusin', sync);
-    group.addEventListener('focusout', sync);
-    group.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') (document.activeElement as HTMLElement | null)?.blur();
-    });
-  }
-
-  // Swap the transparent masthead to solid once the hero is behind it.
-  if (header?.classList.contains('masthead--transparent')) {
-    const sentinel = document.createElement('div');
-    sentinel.style.cssText = 'position:absolute;top:0;height:1px;width:1px;';
-    document.body.prepend(sentinel);
-    new IntersectionObserver(
-      ([e]) => header.classList.toggle('is-stuck', !e.isIntersecting),
-      { threshold: 0 },
-    ).observe(sentinel);
-  }
-
-  if (burger && drawer) {
-    const setOpen = (open: boolean) => {
-      burger.setAttribute('aria-expanded', String(open));
-      drawer.hidden = !open;
-      document.body.style.overflow = open ? 'hidden' : '';
-      burger.querySelector('.burger__label')!.textContent = open ? 'Close' : 'Menu';
-    };
-
-    burger.addEventListener('click', () => setOpen(drawer.hidden));
-    drawer.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).closest('a')) setOpen(false);
-    });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !drawer.hidden) { setOpen(false); burger.focus(); }
-    });
-    matchMedia('(min-width: 1181px)').addEventListener('change', (e) => {
-      if (e.matches && !drawer.hidden) setOpen(false);
-    });
-  }
+      burger.addEventListener('click', () => setOpen(drawer.hidden));
+      drawer.addEventListener('click', (e) => {
+        if (e.target.closest('a')) setOpen(false);
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !drawer.hidden) { setOpen(false); burger.focus(); }
+      });
+      matchMedia('(min-width: 1181px)').addEventListener('change', (e) => {
+        if (e.matches && !drawer.hidden) setOpen(false);
+      });
+    }
+  })();
 </script>
