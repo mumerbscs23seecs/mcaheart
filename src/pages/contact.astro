@@ -7,9 +7,14 @@ import { contactIntents } from '../data/site';
 <BaseLayout
   title="Contact"
   description="Join a community of experts shaping the future of cardiology. Publish, present and lead the way in cardiovascular research."
+  transparentHeader
 >
   {/* ------------------------------------------------------------------ Hero */}
   <section class="chero grid-ground">
+    <div class="chero__bg" aria-hidden="true">
+      <img src="/assets/home/contact-us.png" alt="" fetchpriority="high" decoding="async" />
+    </div>
+
     <div class="shell shell--wide chero__inner">
       <p class="eyebrow">Contact</p>
       <h1 class="display chero__title">
@@ -64,8 +69,25 @@ import { contactIntents } from '../data/site';
 <style>
   /* ------------------------------------------------------------------ Hero */
   .chero {
+    position: relative;
+    isolation: isolate;
     padding-block: calc(var(--header-h) + var(--space-l)) 0;
     overflow: hidden;
+  }
+  .chero__bg { position: absolute; inset: 0; z-index: -1; }
+  .chero__bg img { width: 100%; height: 100%; object-fit: cover; object-position: 70% 40%; }
+  /* The supplied art is mid-grey with baked-in type, so it reads as a faint
+     texture behind the headline rather than a competing image. */
+  .chero__bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      to top,
+      rgba(252, 252, 251, 1) 0%,
+      rgba(252, 252, 251, 0.92) 45%,
+      rgba(252, 252, 251, 0.8) 100%
+    );
   }
   .chero__inner { padding-bottom: var(--space-xl); }
   .chero__title {
