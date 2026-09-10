@@ -11,6 +11,7 @@ import {
   submissionsDueForReminder,
 } from '../lib/submissions';
 import { runReminderSweep, type SweepResult } from '../lib/reminders';
+import { sweepPipelineReminders, type PipelineSweepResult } from '../lib/pipeline-reminders';
 
 export const prerender = false;
 
@@ -21,6 +22,7 @@ if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
 type Flash = { tone: 'ok' | 'error'; text: string };
 let flash: Flash | null = null;
 let sweepResult: SweepResult | null = null;
+let pipelineSweep: PipelineSweepResult | null = null;
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
@@ -32,13 +34,20 @@ if (Astro.request.method === 'POST') {
       ? { tone: 'ok', text: action === 'review' ? 'Marked as reviewed.' : 'Review re-opened.' }
       : { tone: 'error', text: 'Submission not found.' };
   } else if (action === 'sweep' || action === 'sweep-dry') {
-    sweepResult = await runReminderSweep({ actor: me.name, dryRun: action === 'sweep-dry' });
+    const dry = action === 'sweep-dry';
+    sweepResult = await runReminderSweep({ actor: me.name, dryRun: dry });
+    pipelineSweep = await sweepPipelineReminders(dry);
+    const plParts = [
+      `${pipelineSweep.sent.length} manuscript reminder(s)`,
+      pipelineSweep.flagged.length ? `${pipelineSweep.flagged.length} flagged for reassignment` : '',
+    ].filter(Boolean);
     flash = {
       tone: 'ok',
       text:
-        sweepResult.dueCount === 0
-          ? 'Sweep ran — nothing is due for a reminder.'
-          : `Sweep ran — ${sweepResult.dueCount} item(s), digest ${sweepResult.emailStatus}.`,
+        (sweepResult.dueCount === 0
+          ? 'Sweep ran — nothing due in the demo store.'
+          : `Sweep ran — ${sweepResult.dueCount} demo item(s), digest ${sweepResult.emailStatus}.`) +
+        ` Pipeline: ${plParts.join(', ') || 'nothing due'}.`,
     };
   }
 }

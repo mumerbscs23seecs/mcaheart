@@ -2,6 +2,7 @@
 import PipelineLayout from '../../../layouts/PipelineLayout.astro';
 import { stagesFor } from '../../../lib/lifecycle.mjs';
 import { personOnProject } from '../../../lib/pipeline-scope';
+import { docLinkLabel, DOC_LINK_HINT } from '../../../lib/doc-links';
 
 export const prerender = false;
 const { supabase, person } = Astro.locals;
@@ -40,6 +41,7 @@ const { data: journalAttempts } = await supabase
   .eq('project_id', id)
   .order('submitted_on', { ascending: true })
   .order('id', { ascending: true });
+const openJournalAttempt = [...(journalAttempts ?? [])].reverse().find((a: any) => a.outcome == null);
 
 const { data: history } = await supabase
   .from('project_history')
@@ -65,6 +67,8 @@ const myPending = pendingReqs.find((r: any) => r.requested_by === person.id);
 const STAGE_LABEL = (phase: string, code: string) =>
   stagesFor(phase).find((s: any) => s.code === code)?.label ?? code;
 const canRequest = !isAdmin && !p.archived_at && ['conference', 'manuscript'].includes(p.phase);
+// Anyone on the project can attach the draft doc link once past the idea stage.
+const canLink = !p.archived_at && p.phase !== 'idea';
 
 const fmtDate = (d: string | null) =>
   d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
@@ -98,7 +102,24 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
     {p.archived_at && <span class="pl-warn">archived — {p.archive_reason}</span>}
     {overdue && <span class="pl-warn">overdue {p.days_overdue}d</span>}
     {stale && !overdue && <span class="pl-warn">stale</span>}
+    {p.needs_reassignment && <span class="pl-warn">needs reassignment</span>}
   </div>
+
+  {p.needs_reassignment && (
+    <div class="pl-flash pl-flash--err">
+      <b>Flagged for reassignment.</b> This manuscript sat {p.days_in_stage}+ days with no status change.
+      {isAdmin ? (
+        <> The lead and coordinators have been emailed. Reassign the lead, or{' '}
+          <form method="post" action={`/pipeline/projects/${id}/gate`} style="display:inline">
+            <input type="hidden" name="gate" value="clear-reassignment" />
+            <button class="pl-link" style="border:0;background:none;cursor:pointer;font:inherit;color:var(--pl-accent)" type="submit">clear the flag</button>
+          </form>{' '}if it's back on track.
+        </>
+      ) : (
+        <> Update the stage today and reply to the coordinator's email if you're still on this.</>
+      )}
+    </div>
+  )}
 
   {isAdmin && !p.archived_at && (
     <section class="pl-actions">
@@ -157,6 +178,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
           <input type="hidden" name="gate" value="abstract" />
           <input type="hidden" name="attempt" value={pendingAttempt.id} />
           <label class="pl-actlbl">Abstract outcome</label>
+          <input name="review_url" placeholder="Reviewed copy link (optional)" title={DOC_LINK_HINT} />
           <button class="pl-btn" name="outcome" value="accepted" type="submit">Accepted</button>
           <button class="pl-btn pl-btn--danger" name="outcome" value="rejected" type="submit">Rejected</button>
         </form>
@@ -179,9 +201,11 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
       {p.phase === 'conference' && (
         <div class="pl-actrow">
           <label class="pl-actlbl">Gate 2</label>
-          <form method="post" action={`/pipeline/projects/${id}/gate`} style="display:inline">
+          <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-mini">
             <input type="hidden" name="gate" value="2" />
-            <button class="pl-btn" name="proceed" value="yes" type="submit">Proceed to full text →</button>
+            <input type="hidden" name="proceed" value="yes" />
+            <input name="review_url" placeholder="Reviewed abstract link (optional)" title={DOC_LINK_HINT} />
+            <button class="pl-btn" type="submit">Proceed to full text →</button>
           </form>
           <details class="pl-inline-details">
             <summary>Not proceeding</summary>
@@ -196,7 +220,8 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
                 <option value="superseded">Superseded</option>
                 <option value="other">Other</option>
               </select>
-              <button class="pl-btn pl-btn--danger" type="submit">Archive</button>
+              <input name="review_url" placeholder="Reviewed copy link (optional)" title={DOC_LINK_HINT} />
+              <button class="pl-btn pl-btn--danger" type="submit">Not proceeding — close out</button>
             </form>
           </details>
         </div>
@@ -219,6 +244,24 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
           ) : (
             <span class="pl-muted pl-small">Reach stage 5 (sent to RG Operations) first.</span>
           )}
+        </div>
+      )}
+
+      {/* Journal outcome — submissions phase */}
+      {p.phase === 'journal' && openJournalAttempt && (
+        <div class="pl-actrow">
+          <label class="pl-actlbl">Journal outcome</label>
+          <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-mini pl-mini--col">
+            <input type="hidden" name="gate" value="journal-outcome" />
+            <input type="hidden" name="attempt" value={openJournalAttempt.id} />
+            <span class="pl-muted pl-small">Deciding: <b>{openJournalAttempt.journal}</b></span>
+            <input name="review_url" placeholder="Reviewer report / decision letter link (optional)" title={DOC_LINK_HINT} />
+            <input name="next_journal" placeholder="Next journal (only if rejected — reopens at Submitted)" />
+            <div class="pl-mini">
+              <button class="pl-btn" name="outcome" value="accepted" type="submit">Accepted</button>
+              <button class="pl-btn pl-btn--danger" name="outcome" value="rejected" type="submit">Rejected</button>
+            </div>
+          </form>
         </div>
       )}
     </section>
@@ -265,6 +308,27 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
   )}
   {!isAdmin && p.archived_at && (
     <p class="pl-muted pl-small" style="margin:14px 0">This project is archived — no further status changes.</p>
+  )}
+
+  {canLink && (
+    <section class="pl-actions">
+      <h2>Manuscript link</h2>
+      <form method="post" action={`/pipeline/projects/${id}/link`} class="pl-actrow">
+        <label class="pl-actlbl">Draft document</label>
+        <input
+          name="link"
+          type="url"
+          placeholder="https://docs.google.com/… or OneDrive / SharePoint"
+          value={p.manuscript_url ?? ''}
+          title={DOC_LINK_HINT}
+          style="flex:1;min-width:260px"
+        />
+        <button class="pl-btn" type="submit">Save</button>
+      </form>
+      <p class="pl-actrow pl-muted pl-small" style="border:0;padding-top:0">
+        {DOC_LINK_HINT} Whoever is drafting keeps this pointed at the working copy.
+      </p>
+    </section>
   )}
 
   <div class="pl-detail">
@@ -320,7 +384,14 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
 
       <h3>Links</h3>
       <dl>
-        <dt>Manuscript</dt><dd>{p.manuscript_url ? <a href={p.manuscript_url}>open</a> : <span class="pl-muted">not set</span>}</dd>
+        <dt>Manuscript draft</dt>
+        <dd>{p.manuscript_url
+          ? <a href={p.manuscript_url} target="_blank" rel="noopener">{docLinkLabel(p.manuscript_url)} →</a>
+          : <span class="pl-muted">not set</span>}</dd>
+        <dt>Reviewed copy</dt>
+        <dd>{p.review_url
+          ? <a href={p.review_url} target="_blank" rel="noopener">{docLinkLabel(p.review_url)} →</a>
+          : <span class="pl-muted">none yet</span>}</dd>
         <dt>Legacy source</dt><dd class="pl-small">{p.legacy_source}</dd>
       </dl>
     </aside>

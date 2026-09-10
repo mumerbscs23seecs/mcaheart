@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { deliverTransition } from '../../../../lib/pipeline-mailer';
+import { isDocLink, DOC_LINK_HINT } from '../../../../lib/doc-links';
 
 export const prerender = false;
 
@@ -21,6 +22,11 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
   const form = await request.formData();
   const gate = String(form.get('gate') ?? '');
   const note = String(form.get('note') ?? '').trim() || undefined;
+  // Optional coordinator "reviewed copy" link, attached alongside a decision.
+  const reviewUrl = String(form.get('review_url') ?? '').trim();
+  if (reviewUrl && !isDocLink(reviewUrl)) {
+    return redirect(`${back}?err=${encodeURIComponent(DOC_LINK_HINT)}`);
+  }
 
   const { data: p0 } = await supabase.from('projects').select('*').eq('id', projectId).maybeSingle();
   if (!p0) return redirect('/pipeline/conferences');
@@ -42,7 +48,19 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
       fn: 'gate2_proceed',
       args: { p_project: projectId, p_proceed: proceed, p_archive_reason: proceed ? null : String(form.get('archive_reason') ?? 'other') },
     };
-    if (proceed) mail = { template: 'proceeding_full_text', to: [p0.lead_id, p0.analyst_id] };
+    mail = {
+      template: proceed ? 'proceeding_full_text' : 'not_proceeding_full_text',
+      to: [p0.lead_id, p0.analyst_id, p0.colead_id],
+    };
+  } else if (gate === 'journal-outcome') {
+    const attempt = String(form.get('attempt') ?? '');
+    const outcome = String(form.get('outcome') ?? '');
+    const nextJournal = String(form.get('next_journal') ?? '').trim() || null;
+    rpc = {
+      fn: 'record_journal_outcome',
+      args: { p_attempt: attempt, p_outcome: outcome, p_next_journal: nextJournal },
+    };
+    // Journal outcomes surface via the in-app notification trigger; no email.
   } else if (gate === '3') {
     const journal = String(form.get('journal') ?? '');
     const murl = String(form.get('manuscript_url') ?? '').trim() || null;
@@ -64,6 +82,8 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
     } else {
       rpc = { fn: 'advance_stage', args: { p_project: projectId, p_stage: stage } };
     }
+  } else if (gate === 'clear-reassignment') {
+    rpc = { fn: 'clear_reassignment_flag', args: { p_project: projectId } };
   } else if (gate === 'request-decide') {
     const requestId = String(form.get('request') ?? '');
     const approve = String(form.get('approve') ?? '') === 'yes';
@@ -74,6 +94,11 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
 
   const { error } = await supabase.rpc(rpc.fn, rpc.args);
   if (error) return redirect(`${back}?err=${encodeURIComponent(error.message)}`);
+
+  // A reviewed-copy link travels with the abstract / gate-2 / journal decision.
+  if (reviewUrl && ['abstract', '2', 'journal-outcome'].includes(gate)) {
+    await supabase.rpc('attach_review_link', { p_project: projectId, p_url: reviewUrl });
+  }
 
   let emailNote = '';
   if (mail) {

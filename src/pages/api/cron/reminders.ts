@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { runReminderSweep } from '../../../lib/reminders';
+import { sweepPipelineReminders } from '../../../lib/pipeline-reminders';
 
 // On-demand endpoint the scheduler calls. Not prerendered.
 export const prerender = false;
@@ -25,12 +26,11 @@ export const POST: APIRoute = async ({ request, url }) => {
     }
   }
 
-  const result = await runReminderSweep({
-    dryRun: url.searchParams.get('dry') === '1',
-    actor: 'cron',
-  });
+  const dry = url.searchParams.get('dry') === '1';
+  const result = await runReminderSweep({ dryRun: dry, actor: 'cron' });
+  const pipeline = await sweepPipelineReminders(dry);
 
-  return new Response(JSON.stringify({ ok: true, result }, null, 2), {
+  return new Response(JSON.stringify({ ok: true, result, pipeline }, null, 2), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });
