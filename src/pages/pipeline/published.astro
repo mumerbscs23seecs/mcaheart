@@ -1,0 +1,58 @@
+---
+import PipelineLayout from '../../layouts/PipelineLayout.astro';
+
+export const prerender = false;
+const { supabase, person } = Astro.locals;
+
+// Admin-only view. Members see published papers under Submissions.
+if (person.role !== 'admin') return Astro.redirect('/pipeline/submissions', 302);
+
+const q = (Astro.url.searchParams.get('q') ?? '').trim();
+
+let query = supabase
+  .from('project_list')
+  .select('id,ref,title,lead_name,current_journal,journals_tried,days_in_stage')
+  .eq('phase', 'journal')
+  .eq('stage', 'published')
+  .is('archived_at', null)
+  .order('days_in_stage', { ascending: true });
+if (q) query = query.ilike('title', `%${q}%`);
+
+const { data: rows, error } = await query;
+---
+
+<PipelineLayout title="Published" active="published">
+  <h1 class="pl-h1">Published</h1>
+  <p class="pl-sub">
+    Papers that have appeared in a journal. Nothing here moves — it is the record of what the group has published.
+  </p>
+
+  <form class="pl-filter" method="get">
+    <input type="search" name="q" placeholder="Filter by title" value={q} />
+    <button class="pl-btn pl-btn--ghost" type="submit">Filter</button>
+  </form>
+
+  {error && <p class="pl-flash pl-flash--err">{error.message}</p>}
+  {rows && rows.length === 0 && <p class="pl-muted" style="margin-top:20px">Nothing published yet.</p>}
+
+  <ul class="pl-list">
+    {(rows ?? []).map((p) => (
+      <li class="pl-card">
+        <p class="pl-card__title"><a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a></p>
+        <p class="pl-card__meta">
+          {p.lead_name ?? '(no lead)'}
+          {p.journals_tried >= 2 && <> · <span class="pl-muted">{p.journals_tried} journals tried</span></>}
+        </p>
+        <p class="pl-card__ref">{p.ref}</p>
+        <div class="pl-card__status">
+          <b>Published</b>
+          {p.current_journal && <span class="pl-when"><em>{p.current_journal}</em></span>}
+          <span class="pl-when">{p.days_in_stage ?? 0} days ago</span>
+        </div>
+        <p class="pl-card__link"><a href={`/pipeline/projects/${p.id}`}>View project details →</a></p>
+      </li>
+    ))}
+  </ul>
+
+  <p class="pl-count">{(rows ?? []).length} published</p>
+</PipelineLayout>

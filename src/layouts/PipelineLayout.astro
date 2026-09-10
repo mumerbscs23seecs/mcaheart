@@ -8,7 +8,7 @@ import { getPipelineTasks } from '../lib/pipeline-tasks';
 
 interface Props {
   title: string;
-  active?: 'conferences' | 'ongoing' | 'submissions' | 'tasks';
+  active?: 'conferences' | 'ongoing' | 'submissions' | 'published' | 'tasks';
 }
 const { title, active } = Astro.props;
 const { supabase, person } = Astro.locals;
@@ -35,18 +35,31 @@ const phaseCount = (phase: string) => {
   return isAdmin ? q : scopeProjects(q, person);
 };
 
-const [confN, ongoingN, subsN] = await Promise.all([
+// Admin only: journal-phase projects split into "still at a journal" vs "published".
+const journalStageCount = (op: 'eq' | 'neq') =>
+  supabase
+    .from('projects')
+    .select('id', { count: 'exact', head: true })
+    .eq('phase', 'journal')
+    .is('archived_at', null)
+    [op]('stage', 'published');
+
+const [confN, ongoingN, subsN, pubN] = await Promise.all([
   isAdmin
     ? supabase.from('conferences').select('id', { count: 'exact', head: true })
     : phaseCount('conference'),
   phaseCount('manuscript'),
-  phaseCount('journal'),
+  isAdmin ? journalStageCount('neq') : phaseCount('journal'),
+  isAdmin ? journalStageCount('eq') : Promise.resolve({ count: null }),
 ]);
 
 const tabs: Tab[] = [
   { key: 'conferences', label: 'Conferences', href: '/pipeline/conferences', count: confN.count ?? null },
   { key: 'ongoing', label: 'Ongoing', href: '/pipeline/ongoing', count: ongoingN.count ?? null },
   { key: 'submissions', label: 'Submissions', href: '/pipeline/submissions', count: subsN.count ?? null },
+  ...(isAdmin
+    ? [{ key: 'published', label: 'Published', href: '/pipeline/published', count: pubN.count ?? null }]
+    : []),
   taskTab,
 ];
 ---

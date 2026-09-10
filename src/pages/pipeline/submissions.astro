@@ -14,6 +14,9 @@ let query = supabase
   .eq('phase', 'journal')
   .is('archived_at', null)
   .order('days_in_stage', { ascending: false });
+// Admins get a dedicated "Published" tab, so keep those out of here.
+// Members see everything (incl. published) under Submissions.
+if (isAdmin) query = query.neq('stage', 'published');
 if (q) query = query.ilike('title', `%${q}%`);
 if (!isAdmin) query = scopeProjects(query, person);
 
