@@ -470,7 +470,7 @@
 .pl-flash--err { border-left-color: var(--pl-danger); background: var(--red-wash, rgba(180, 35, 24, 0.05)); }
 
 /* ---------- slide-in detail drawer ---------- */
-.pl-drawer { position: fixed; inset: 0; z-index: 60; }
+.pl-drawer { position: fixed; inset: 0; z-index: 200; }
 .pl-drawer[hidden] { display: none; }
 .pl-drawer__backdrop {
   position: absolute;
