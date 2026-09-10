@@ -12,3 +12,8 @@ reference/
 # Separate AI Studio React build, kept for evaluation
 mca-heart-research/
 mca-heart-research.zip
+
+# agent skills (local tooling)
+.agents/
+.claude/skills/
+skills-lock.json
