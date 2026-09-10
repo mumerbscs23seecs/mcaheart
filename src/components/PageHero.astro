@@ -36,17 +36,8 @@ const { eyebrow, title, subtitle, image, align = 'left', compact = false } = Ast
     min-height: clamp(46vh, 30vh + 22vw, 68vh);
     padding-block: calc(var(--header-h) + var(--space-l)) var(--space-xl);
     background: var(--bg);
-    border-bottom: 1px solid var(--border-soft);
+    border-bottom: 2px solid var(--ink);
     overflow: hidden;
-  }
-
-  /* A hairline that fades out, echoing the section headers. */
-  .phero::after {
-    content: '';
-    position: absolute;
-    left: 0; right: 0; bottom: 0;
-    height: 1px;
-    background: linear-gradient(90deg, var(--border), transparent 60%);
   }
   .phero__bg { position: absolute; inset: 0; z-index: -1; }
   .phero__bg img { width: 100%; height: 100%; object-fit: cover; }

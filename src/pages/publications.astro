@@ -213,13 +213,13 @@ const newest = PUBLICATIONS[0];
     letter-spacing: 0.08em;
     color: var(--text);
     background: var(--surface);
-    border: 1px solid var(--border-soft);
-    border-radius: 999px;
+    border: 1px solid var(--border);
+    border-radius: 0;
     transition: background 0.25s var(--ease), color 0.25s var(--ease),
                 border-color 0.25s var(--ease);
   }
-  .chip:hover { border-color: var(--border); }
-  .chip.is-active { background: var(--blue); color: var(--surface); border-color: var(--blue); }
+  .chip:hover { border-color: var(--ink); color: var(--text-strong); }
+  .chip.is-active { background: var(--ink); color: #fff; border-color: var(--ink); }
   .chip__n {
     font-size: 0.68rem;
     opacity: 0.7;
@@ -275,11 +275,11 @@ const newest = PUBLICATIONS[0];
     display: grid;
     place-items: center;
     width: 2.1rem; height: 2.1rem;
-    border: 1px solid var(--border);
-    border-radius: 50%;
+    border: 1px solid var(--ink);
+    border-radius: 0;
     transition: background 0.25s var(--ease), color 0.25s var(--ease);
   }
-  .cite__close:hover { background: var(--blue); color: var(--surface); }
+  .cite__close:hover { background: var(--ink); color: var(--surface); }
 
   .cite__tabs { display: flex; gap: 0.4rem; margin-top: var(--space-s); }
   .cite__tab {

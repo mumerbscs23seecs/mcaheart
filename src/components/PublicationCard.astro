@@ -61,14 +61,14 @@ const parts = authors.split(/(Alraies\s+M?C?)/i);
     gap: 0.55rem;
     padding: var(--space-m);
     background: var(--surface);
-    border: 1px solid var(--border-soft);
-    border-left: 2px solid var(--border);
-    border-radius: var(--radius);
-    transition: border-left-color 0.35s var(--ease), box-shadow 0.35s var(--ease);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--border);
+    border-radius: 0;
+    transition: border-left-color 0.3s var(--ease), border-color 0.3s var(--ease);
   }
   .pub:hover {
+    border-color: var(--ink);
     border-left-color: var(--blue);
-    box-shadow: var(--shadow);
   }
   .pub[hidden] { display: none; }
 
@@ -86,8 +86,8 @@ const parts = authors.split(/(Alraies\s+M?C?)/i);
     letter-spacing: 0.13em;
     color: var(--blue);
     background: var(--accent-wash);
-    padding: 0.3em 0.7em;
-    border-radius: 999px;
+    padding: 0.35em 0.7em;
+    border-radius: 0;
   }
   .pub__date {
     font-size: 0.75rem;

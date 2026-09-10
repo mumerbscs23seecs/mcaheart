@@ -27,10 +27,9 @@
     position: relative;
     aspect-ratio: 16 / 9;
     background: #000;
-    border: 1px solid rgba(248, 250, 252, 0.18);
-    border-radius: var(--radius-lg);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 0;
     overflow: hidden;
-    box-shadow: 0 40px 90px -40px rgba(0, 0, 0, 0.9);
   }
   .lb__frame :global(iframe) {
     position: absolute;
@@ -46,7 +45,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.16em;
-    color: rgba(248, 250, 252, 0.75);
+    color: rgba(255, 255, 255, 0.75);
   }
 
   .lb__close {
@@ -58,11 +57,11 @@
     width: 2.5rem;
     height: 2.5rem;
     color: var(--on-dark);
-    border: 1px solid rgba(248, 250, 252, 0.3);
-    border-radius: 50%;
-    transition: background 0.3s var(--ease), transform 0.3s var(--ease);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 0;
+    transition: background 0.3s var(--ease);
   }
-  .lb__close:hover { background: var(--blue); transform: rotate(90deg); }
+  .lb__close:hover { background: var(--blue); border-color: var(--blue); }
 </style>
 
 <script>

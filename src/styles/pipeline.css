@@ -1,7 +1,7 @@
-/* MCA Research Pipeline — internal tooling in the main site's harvard.edu
-   idiom (Newsreader / Libre Franklin, white ground, crimson accent, charcoal
-   banner) but kept dense and quiet: no frosted glass, no hover lift, status as
-   a sentence not a pill. Tokens come from global.css. */
+/* MCA Research Pipeline — internal tooling in the main site's Information-
+   Architecture idiom (Archivo, white ground, crimson accent, charcoal banner):
+   zero radius, zero shadow, heavy --ink rules, register-style project list,
+   status as a sentence not a pill. Tokens come from global.css. */
 
 :root {
   --pl-navy: var(--dark, #1b1b1b);      /* banner ground — charcoal */

@@ -104,7 +104,7 @@
   width: 17px; height: 17px;
   margin-top: 0.12rem;
   border: 1.5px solid var(--border-strong);
-  border-radius: 4px;
+  border-radius: 0;
   display: grid;
   place-items: center;
   transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
@@ -113,7 +113,7 @@
 .ichoice__mark::after {
   content: '';
   width: 9px; height: 9px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--blue);
   transform: scale(0);
   transition: transform 0.18s var(--ease-out);

@@ -253,7 +253,7 @@ import { testimonials, missionVision, director } from '../data/site';
     width: clamp(84px, 70px + 3vw, 116px);
     aspect-ratio: 1;
     overflow: hidden;
-    border-radius: 50%;
+    border-radius: 0;
     background: var(--bg-tint);
     border: 1px solid var(--border-soft);
   }
@@ -298,16 +298,11 @@ import { testimonials, missionVision, director } from '../data/site';
     gap: var(--space-m);
     padding: var(--space-m);
     background: var(--surface);
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius);
-    transition: transform 0.45s var(--ease), box-shadow 0.45s var(--ease),
-                border-color 0.45s var(--ease);
+    border: 1px solid var(--border);
+    border-radius: 0;
+    transition: border-color 0.3s var(--ease);
   }
-  .voice:hover {
-    transform: translateY(-2px);
-    border-color: var(--border-strong);
-    box-shadow: var(--shadow);
-  }
+  .voice:hover { border-color: var(--ink); }
 
   .voice__quote {
     flex: 1;
@@ -338,7 +333,7 @@ import { testimonials, missionVision, director } from '../data/site';
   .voice__avatar {
     width: 52px;
     height: 52px;
-    border-radius: 50%;
+    border-radius: 0;
     object-fit: cover;
     flex-shrink: 0;
     border: 1px solid var(--border);
