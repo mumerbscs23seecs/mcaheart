@@ -1,0 +1,56 @@
+---
+import { stagesFor } from '../lib/lifecycle.mjs';
+
+interface Props {
+  /** A project_list row — needs id, phase, stage, stage_label, days_in_stage, archived_at. */
+  project: any;
+  isAdmin: boolean;
+}
+const { project: p, isAdmin } = Astro.props;
+// So a change made from a list drops the person back on that list, not the detail page.
+const returnTo = Astro.url.pathname + Astro.url.search;
+
+// Outcomes freeze an attempt and (journal) "submitted" needs a journal name —
+// those stay on the detail page. Inline editing is plain within-phase progress.
+const OUTCOME_CODES: Record<string, string[]> = {
+  conference: ['accepted', 'rejected'],
+  journal: ['accepted', 'published', 'rejected_comments', 'submitted'],
+};
+const blocked = OUTCOME_CODES[p.phase] ?? [];
+const options = stagesFor(p.phase).filter((s: any) => !blocked.includes(s.code));
+
+const warn = p.days_in_stage != null && p.days_in_stage >= 21;
+// advance_stage covers idea / manuscript / journal; request_stage_change only
+// conference / manuscript. Conference outcomes + journal "submitted" stay on the
+// detail page (they need an attempt / a journal name).
+const phaseOK = isAdmin
+  ? ['idea', 'manuscript', 'journal'].includes(p.phase)
+  : ['conference', 'manuscript'].includes(p.phase);
+const editable =
+  phaseOK && !p.archived_at && !blocked.includes(p.stage) && options.length > 1;
+---
+
+{!editable ? (
+  <span class:list={['pl-status', warn && 'pl-status--warn']}>{p.stage_label}</span>
+) : isAdmin ? (
+  <form method="post" action={`/pipeline/projects/${p.id}/gate`}>
+    <input type="hidden" name="gate" value="stage" />
+    <input type="hidden" name="return" value={returnTo} />
+    <select class="pl-status" name="stage" aria-label={`Status for ${p.title ?? p.ref}`} onchange="this.form.submit()">
+      {options.map((s: any) => (
+        <option value={s.code} selected={s.code === p.stage}>{s.label}</option>
+      ))}
+    </select>
+  </form>
+) : (
+  <form method="post" action={`/pipeline/projects/${p.id}/request`}>
+    <input type="hidden" name="return" value={returnTo} />
+    <select class="pl-status" name="stage" aria-label={`Request a status change for ${p.title ?? p.ref}`} onchange="if (this.value) this.form.submit()">
+      <option value="" selected>{p.stage_label}</option>
+      {options
+        .filter((s: any) => s.code !== p.stage)
+        .map((s: any) => <option value={s.code}>&rarr; {s.label}</option>)}
+    </select>
+    <span class="pl-status__note">change needs coordinator approval</span>
+  </form>
+)}

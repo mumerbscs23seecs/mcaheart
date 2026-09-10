@@ -27,10 +27,11 @@ const { data: attempts } = await supabase
   .order('outcome', { ascending: true });
 
 const fmtDate = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
 const s = score ?? { submitted: 0, accepted: 0, rejected: 0, accept_pct: null };
 const phaseLabel = (p: string) =>
-  ({ idea: 'now: idea', conference: 'now: conference', manuscript: 'now: manuscript', journal: 'now: journal', archived: 'archived' })[p] ?? p;
+  ({ idea: 'idea', conference: 'conference', manuscript: 'manuscript', journal: 'journal', archived: 'archived' })[p] ?? p;
+const cap = (x: string | null) => (x ? x[0].toUpperCase() + x.slice(1) : 'Pending');
 ---
 
 <PipelineLayout title={conf.name} active="conferences">
@@ -49,24 +50,43 @@ const phaseLabel = (p: string) =>
     <p class="pl-muted" style="margin-top:20px">No abstract outcomes recorded for this conference.</p>
   )}
 
-  <ul class="pl-list" style="margin-top:16px">
-    {(attempts ?? []).map((a: any) => (
-      <li class="pl-card">
-        <p class="pl-card__title">
-          <a href={`/pipeline/projects/${a.project?.id}`} data-panel={a.project?.id}>{a.project?.title ?? '(project removed)'}</a>
-        </p>
-        <p class="pl-card__meta">
-          {a.presenter?.full_name ? <>Presenter: {a.presenter.full_name} · </> : null}
-          <em>{phaseLabel(a.project?.phase ?? '')}</em>
-          {a.recycled_from && <> · recycled from an earlier attempt</>}
-        </p>
-        <p class="pl-card__ref">{a.project?.ref}</p>
-        <div class="pl-card__status">
-          <b>{a.outcome ? a.outcome[0].toUpperCase() + a.outcome.slice(1) : 'Pending'}</b>
-          <span class="pl-when">{fmtDate(a.decided_on)}</span>
-        </div>
-        <p class="pl-card__link"><a href={`/pipeline/projects/${a.project?.id}`}>View project details →</a></p>
-      </li>
-    ))}
-  </ul>
+  {attempts && attempts.length > 0 && (
+    <div class="pl-tablewrap" style="margin-top:16px">
+      <table class="pl-table">
+        <thead>
+          <tr>
+            <th>Submission title</th>
+            <th>Presenter</th>
+            <th>Now in</th>
+            <th>Decided</th>
+            <th>Outcome</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {attempts.map((a: any) => (
+            <tr>
+              <td class="pl-t__title" data-th="Submission title">
+                <a href={`/pipeline/projects/${a.project?.id}`} data-panel={a.project?.id}>
+                  {a.project?.title ?? '(project removed)'}
+                </a>
+                <span class="pl-t__ref">
+                  {a.project?.ref}{a.recycled_from ? ' · recycled from an earlier attempt' : ''}
+                </span>
+              </td>
+              <td data-th="Presenter">{a.presenter?.full_name ?? '—'}</td>
+              <td class="pl-t__venue" data-th="Now in">{phaseLabel(a.project?.phase ?? '')}</td>
+              <td class="pl-t__date" data-th="Decided">{fmtDate(a.decided_on)}</td>
+              <td data-th="Outcome">
+                <span class:list={['pl-status', a.outcome === 'rejected' && 'pl-status--warn']}>{cap(a.outcome)}</span>
+              </td>
+              <td class="pl-t__actions" data-th="Actions">
+                <a href={`/pipeline/projects/${a.project?.id}`}>Check progress &nearr;</a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
 </PipelineLayout>

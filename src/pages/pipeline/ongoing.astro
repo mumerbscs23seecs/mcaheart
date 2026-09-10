@@ -1,5 +1,6 @@
 ---
 import PipelineLayout from '../../layouts/PipelineLayout.astro';
+import PipelineStatusCell from '../../components/PipelineStatusCell.astro';
 import { scopeProjects } from '../../lib/pipeline-scope';
 
 export const prerender = false;
@@ -11,16 +12,18 @@ const q = (Astro.url.searchParams.get('q') ?? '').trim();
 
 let query = supabase
   .from('project_list')
-  .select('id,ref,title,stage_label,lead_name,analyst_name,current_conference,days_in_stage,days_overdue,parked,ms_version')
+  .select('id,ref,title,phase,stage,stage_label,lead_name,analyst_name,current_conference,days_in_stage,days_overdue,parked,ms_version,created_at,stage_changed_at,archived_at')
   .eq('phase', 'manuscript')
   .is('archived_at', null)
-  .order('days_in_stage', { ascending: false });
+  .order('stage_changed_at', { ascending: false });
 if (!showParked) query = query.eq('parked', false);
 if (q) query = query.ilike('title', `%${q}%`);
 if (!isAdmin) query = scopeProjects(query, person);
 
 const { data: rows, error } = await query;
-const stale = (d: number | null) => d != null && d >= 21;
+
+const fmt = (d: string | null) =>
+  d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
 ---
 
 <PipelineLayout title="Ongoing" active="ongoing">
@@ -40,29 +43,43 @@ const stale = (d: number | null) => d != null && d >= 21;
   {error && <p class="pl-flash pl-flash--err">{error.message}</p>}
   {rows && rows.length === 0 && <p class="pl-muted" style="margin-top:20px">Nothing here.</p>}
 
-  <ul class="pl-list">
-    {(rows ?? []).map((p) => (
-      <li class:list={['pl-card', stale(p.days_in_stage) && 'pl-card--warn']}>
-        <p class="pl-card__title"><a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a></p>
-        <p class="pl-card__meta">
-          {p.lead_name ?? '(no lead)'}
-          {p.analyst_name && <> · analyst {p.analyst_name}</>}
-          {p.current_conference && <> · <em>{p.current_conference}</em></>}
-          {p.parked && <> · parked</>}
-        </p>
-        <p class="pl-card__ref">{p.ref} | {p.ms_version ?? 'v1.0'}</p>
-        <div class="pl-card__status">
-          <b>{p.stage_label}</b>
-          <span class="pl-when">
-            {stale(p.days_in_stage)
-              ? <span class="pl-warn">{p.days_in_stage} days in stage</span>
-              : <>{p.days_in_stage ?? 0} days in stage</>}
-          </span>
-        </div>
-        <p class="pl-card__link"><a href={`/pipeline/projects/${p.id}`}>View project details →</a></p>
-      </li>
-    ))}
-  </ul>
+  {rows && rows.length > 0 && (
+    <div class="pl-tablewrap">
+      <table class="pl-table">
+        <thead>
+          <tr>
+            <th>Submission title</th>
+            <th>Conference</th>
+            <th>Started</th>
+            <th>Last updated</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p) => (
+            <tr>
+              <td class="pl-t__title" data-th="Submission title">
+                <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a>
+                <span class="pl-t__ref">
+                  {p.ref} · {p.ms_version ?? 'v1.0'}
+                  {p.analyst_name ? ` · analyst ${p.analyst_name}` : ''}
+                  {p.parked ? ' · parked' : ''}
+                </span>
+              </td>
+              <td class="pl-t__venue" data-th="Conference">{p.current_conference ?? '—'}</td>
+              <td class="pl-t__date" data-th="Started">{fmt(p.created_at)}</td>
+              <td class="pl-t__date" data-th="Last updated">{fmt(p.stage_changed_at)}</td>
+              <td data-th="Status"><PipelineStatusCell project={p} isAdmin={isAdmin} /></td>
+              <td class="pl-t__actions" data-th="Actions">
+                <a href={`/pipeline/projects/${p.id}`}>Check progress &nearr;</a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
 
   <p class="pl-count">{(rows ?? []).length} projects</p>
 </PipelineLayout>

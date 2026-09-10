@@ -21,6 +21,9 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
 
   const form = await request.formData();
   const gate = String(form.get('gate') ?? '');
+  // A change made from a list view returns there; anything else lands on the project.
+  const ret = String(form.get('return') ?? '');
+  const dest = /^\/pipeline\/[\w/-]*(\?[\w=&%-]*)?$/.test(ret) ? ret : back;
   const note = String(form.get('note') ?? '').trim() || undefined;
   // Optional coordinator "reviewed copy" link, attached alongside a decision.
   const reviewUrl = String(form.get('review_url') ?? '').trim();
@@ -93,7 +96,10 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
   }
 
   const { error } = await supabase.rpc(rpc.fn, rpc.args);
-  if (error) return redirect(`${back}?err=${encodeURIComponent(error.message)}`);
+  if (error) {
+    const sep = dest.includes('?') ? '&' : '?';
+    return redirect(`${dest}${sep}err=${encodeURIComponent(error.message)}`);
+  }
 
   // A reviewed-copy link travels with the abstract / gate-2 / journal decision.
   if (reviewUrl && ['abstract', '2', 'journal-outcome'].includes(gate)) {
@@ -120,5 +126,6 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
     }
   }
 
-  return redirect(`${back}?ok=${encodeURIComponent('Done' + emailNote)}`);
+  const sep = dest.includes('?') ? '&' : '?';
+  return redirect(`${dest}${sep}ok=${encodeURIComponent('Done' + emailNote)}`);
 };

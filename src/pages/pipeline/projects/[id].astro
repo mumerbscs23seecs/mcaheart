@@ -9,9 +9,6 @@ const { supabase, person } = Astro.locals;
 const { id } = Astro.params;
 const isAdmin = person.role === 'admin';
 
-const okMsg = Astro.url.searchParams.get('ok');
-const errMsg = Astro.url.searchParams.get('err');
-
 const { data: p } = await supabase.from('project_list').select('*').eq('id', id).maybeSingle();
 if (!p) return Astro.redirect('/pipeline/conferences', 302);
 if (!personOnProject(p, person)) return Astro.redirect('/pipeline/conferences', 302);
@@ -89,9 +86,6 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
 
 <PipelineLayout title={p.title} active={activeTab}>
   <p class="pl-crumb"><a class="pl-link" href={backHref}>← {backLabel}</a></p>
-
-  {okMsg && <p class="pl-flash pl-flash--ok">{okMsg}</p>}
-  {errMsg && <p class="pl-flash pl-flash--err">{errMsg}</p>}
 
   <header class="pl-phead">
     <h1 class="pl-h1">{p.title}</h1>

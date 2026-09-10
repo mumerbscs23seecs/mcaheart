@@ -1,5 +1,6 @@
 ---
 import PipelineLayout from '../../layouts/PipelineLayout.astro';
+import PipelineStatusCell from '../../components/PipelineStatusCell.astro';
 import { scopeProjects } from '../../lib/pipeline-scope';
 
 export const prerender = false;
@@ -10,10 +11,10 @@ const q = (Astro.url.searchParams.get('q') ?? '').trim();
 
 let query = supabase
   .from('project_list')
-  .select('id,ref,title,stage_label,lead_name,current_journal,journals_tried,revision_round,days_in_stage')
+  .select('id,ref,title,phase,stage,stage_label,lead_name,current_journal,journals_tried,revision_round,days_in_stage,created_at,stage_changed_at,archived_at')
   .eq('phase', 'journal')
   .is('archived_at', null)
-  .order('days_in_stage', { ascending: false });
+  .order('stage_changed_at', { ascending: false });
 // Admins get a dedicated "Published" tab, so keep those out of here.
 // Members see everything (incl. published) under Submissions.
 if (isAdmin) query = query.neq('stage', 'published');
@@ -21,6 +22,9 @@ if (q) query = query.ilike('title', `%${q}%`);
 if (!isAdmin) query = scopeProjects(query, person);
 
 const { data: rows, error } = await query;
+
+const fmt = (d: string | null) =>
+  d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
 ---
 
 <PipelineLayout title="Submissions" active="submissions">
@@ -39,24 +43,43 @@ const { data: rows, error } = await query;
   {error && <p class="pl-flash pl-flash--err">{error.message}</p>}
   {rows && rows.length === 0 && <p class="pl-muted" style="margin-top:20px">Nothing here.</p>}
 
-  <ul class="pl-list">
-    {(rows ?? []).map((p) => (
-      <li class:list={['pl-card', p.journals_tried >= 4 && 'pl-card--warn']}>
-        <p class="pl-card__title"><a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a></p>
-        <p class="pl-card__meta">
-          {p.lead_name ?? '(no lead)'}
-          {p.journals_tried >= 4 && <> · <span class="pl-warn">multiple rejections ({p.journals_tried})</span></>}
-        </p>
-        <p class="pl-card__ref">{p.ref}{p.revision_round ? ` · revision round ${p.revision_round}` : ''}</p>
-        <div class="pl-card__status">
-          <b>{p.stage_label}</b>
-          {p.current_journal && <span class="pl-when"><em>{p.current_journal}</em></span>}
-          <span class="pl-when">{p.days_in_stage ?? 0} days in stage</span>
-        </div>
-        <p class="pl-card__link"><a href={`/pipeline/projects/${p.id}`}>View project details →</a></p>
-      </li>
-    ))}
-  </ul>
+  {rows && rows.length > 0 && (
+    <div class="pl-tablewrap">
+      <table class="pl-table">
+        <thead>
+          <tr>
+            <th>Submission title</th>
+            <th>Journal</th>
+            <th>Submitted</th>
+            <th>Last updated</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p) => (
+            <tr>
+              <td class="pl-t__title" data-th="Submission title">
+                <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a>
+                <span class="pl-t__ref">
+                  {p.ref}
+                  {p.revision_round ? ` · revision ${p.revision_round}` : ''}
+                  {p.journals_tried >= 4 ? ` · ${p.journals_tried} journals tried` : ''}
+                </span>
+              </td>
+              <td class="pl-t__venue" data-th="Journal">{p.current_journal ?? '—'}</td>
+              <td class="pl-t__date" data-th="Submitted">{fmt(p.created_at)}</td>
+              <td class="pl-t__date" data-th="Last updated">{fmt(p.stage_changed_at)}</td>
+              <td data-th="Status"><PipelineStatusCell project={p} isAdmin={isAdmin} /></td>
+              <td class="pl-t__actions" data-th="Actions">
+                <a href={`/pipeline/projects/${p.id}`}>Check progress &nearr;</a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
 
   <p class="pl-count">{(rows ?? []).length} projects · submission dates are the import date, not real</p>
 </PipelineLayout>

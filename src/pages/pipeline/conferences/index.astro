@@ -1,5 +1,6 @@
 ---
 import PipelineLayout from '../../../layouts/PipelineLayout.astro';
+import PipelineStatusCell from '../../../components/PipelineStatusCell.astro';
 import { scopeProjects } from '../../../lib/pipeline-scope';
 
 export const prerender = false;
@@ -11,17 +12,17 @@ const active = (Astro.url.searchParams.get('series') ?? '').toUpperCase();
 const activeSeries = SERIES.includes(active as any) ? active : null;
 
 const fmtDate = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
 
-// ---- Members: their own conference-phase papers, same card UI as the other tabs.
+// ---- Members: their own conference-phase papers, as a table.
 let mine: any[] = [];
 if (!isAdmin) {
   let q = supabase
     .from('project_list')
-    .select('id,ref,title,stage_label,lead_name,analyst_name,current_conference,days_in_stage')
+    .select('id,ref,title,phase,stage,stage_label,lead_name,analyst_name,current_conference,days_in_stage,created_at,stage_changed_at,archived_at')
     .eq('phase', 'conference')
     .is('archived_at', null)
-    .order('days_in_stage', { ascending: false });
+    .order('stage_changed_at', { ascending: false });
   q = scopeProjects(q, person);
   const { data } = await q;
   mine = data ?? [];
@@ -57,28 +58,41 @@ if (isAdmin) {
 
       {rows.length === 0 && <p class="pl-muted" style="margin-top:20px">No conferences match.</p>}
 
-      <ul class="pl-list">
-        {rows.map((c) => (
-          <li class="pl-card">
-            <p class="pl-card__title"><a href={`/pipeline/conferences/${c.id}`}>{c.name}</a></p>
-            <p class="pl-card__meta">Abstract deadline {fmtDate(c.abstract_deadline)}</p>
-            <p class="pl-card__ref">
-              {c.submitted} submitted{c.recycled_in > 0 && <> · {c.recycled_in} recycled in</>}
-            </p>
-            <div class="pl-card__status">
-              {c.submitted > 0 ? (
-                <>
-                  <b>{c.accepted} accepted</b>
-                  <span class="pl-when">{c.rejected} rejected{c.accept_pct != null && <> · {c.accept_pct}%</>}</span>
-                </>
-              ) : (
-                <span class="pl-when">no outcomes recorded</span>
-              )}
-            </div>
-            <p class="pl-card__link"><a href={`/pipeline/conferences/${c.id}`}>View conference →</a></p>
-          </li>
-        ))}
-      </ul>
+      {rows.length > 0 && (
+        <div class="pl-tablewrap">
+          <table class="pl-table">
+            <thead>
+              <tr>
+                <th>Conference</th>
+                <th>Abstract deadline</th>
+                <th>Submitted</th>
+                <th>Accepted</th>
+                <th>Rejected</th>
+                <th>Accept %</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((c) => (
+                <tr>
+                  <td class="pl-t__title" data-th="Conference">
+                    <a href={`/pipeline/conferences/${c.id}`}>{c.name}</a>
+                    {c.recycled_in > 0 && <span class="pl-t__ref">{c.recycled_in} recycled in</span>}
+                  </td>
+                  <td class="pl-t__date" data-th="Abstract deadline">{fmtDate(c.abstract_deadline)}</td>
+                  <td data-th="Submitted">{c.submitted}</td>
+                  <td data-th="Accepted">{c.accepted}</td>
+                  <td data-th="Rejected">{c.rejected}</td>
+                  <td data-th="Accept %">{c.accept_pct != null ? `${c.accept_pct}%` : '—'}</td>
+                  <td class="pl-t__actions" data-th="Actions">
+                    <a href={`/pipeline/conferences/${c.id}`}>View conference &nearr;</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <p class="pl-count">Deadlines are approximate placeholders from the import — verify before relying on them.</p>
     </>
@@ -88,23 +102,39 @@ if (isAdmin) {
 
       {mine.length === 0 && <p class="pl-muted" style="margin-top:20px">Nothing here.</p>}
 
-      <ul class="pl-list">
-        {mine.map((p) => (
-          <li class:list={['pl-card', (p.days_in_stage ?? 0) >= 21 && 'pl-card--warn']}>
-            <p class="pl-card__title"><a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a></p>
-            <p class="pl-card__meta">
-              {p.current_conference ?? 'no conference yet'}
-              {p.analyst_name && <> · analyst {p.analyst_name}</>}
-            </p>
-            <p class="pl-card__ref">{p.ref}</p>
-            <div class="pl-card__status">
-              <b>{p.stage_label}</b>
-              <span class="pl-when">{p.days_in_stage ?? 0} days in stage</span>
-            </div>
-            <p class="pl-card__link"><a href={`/pipeline/projects/${p.id}`}>Open details →</a></p>
-          </li>
-        ))}
-      </ul>
+      {mine.length > 0 && (
+        <div class="pl-tablewrap">
+          <table class="pl-table">
+            <thead>
+              <tr>
+                <th>Submission title</th>
+                <th>Conference</th>
+                <th>Opened</th>
+                <th>Last updated</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mine.map((p) => (
+                <tr>
+                  <td class="pl-t__title" data-th="Submission title">
+                    <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a>
+                    <span class="pl-t__ref">{p.ref}{p.analyst_name ? ` · analyst ${p.analyst_name}` : ''}</span>
+                  </td>
+                  <td class="pl-t__venue" data-th="Conference">{p.current_conference ?? 'no conference yet'}</td>
+                  <td class="pl-t__date" data-th="Opened">{fmtDate(p.created_at)}</td>
+                  <td class="pl-t__date" data-th="Last updated">{fmtDate(p.stage_changed_at)}</td>
+                  <td data-th="Status"><PipelineStatusCell project={p} isAdmin={false} /></td>
+                  <td class="pl-t__actions" data-th="Actions">
+                    <a href={`/pipeline/projects/${p.id}`}>Check progress &nearr;</a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {mine.length > 0 && <p class="pl-count">{mine.length} {mine.length === 1 ? 'paper' : 'papers'}</p>}
     </>
