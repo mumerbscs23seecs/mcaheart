@@ -88,61 +88,66 @@ const navItems = isAdmin
     position: sticky;
     top: 0;
     z-index: 100;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg);
+    border-bottom: 1px solid var(--ink);
   }
   .appbar__inner {
-    max-width: 1200px;
+    max-width: 1400px;
     margin-inline: auto;
     padding: 0 var(--gutter);
     height: 60px;
     display: flex;
-    align-items: center;
-    gap: var(--space-m);
+    align-items: stretch;
+    gap: clamp(0.75rem, 0.3rem + 1.6vw, 2rem);
   }
   .appbar__brand {
     display: inline-flex;
     align-items: center;
     gap: 0.5em;
-    font-family: var(--font-serif);
-    font-size: 0.86rem;
+    font-family: var(--font-display);
+    font-size: 0.9rem;
+    font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.14em;
+    letter-spacing: -0.01em;
     color: var(--text-strong);
     flex-shrink: 0;
   }
-  .appbar__brand b { color: var(--blue); font-weight: 700; }
+  .appbar__brand b { color: var(--blue); font-weight: 800; }
   .appbar__badge {
     display: grid;
     place-items: center;
-    width: 1.8em; height: 1.8em;
+    width: 1.9em; height: 1.9em;
     color: #fff;
     background: var(--blue);
-    border-radius: var(--radius);
+    border-radius: 0;
   }
 
-  .appbar__nav { display: flex; gap: 0.35rem; margin-left: var(--space-s); flex-wrap: wrap; }
+  .appbar__nav { display: flex; align-items: stretch; gap: clamp(0.1rem, 0.6vw, 0.6rem); }
   .appbar__link {
-    padding: 0.4rem 0.8rem;
-    border-radius: var(--radius);
-    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 0.45rem;
+    font-size: 0.86rem;
     font-weight: 600;
     color: var(--text-muted);
     white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s var(--ease), border-color 0.15s var(--ease);
   }
-  .appbar__link:hover { color: var(--text-strong); background: var(--bg-tint); }
-  .appbar__link.is-active { color: var(--blue); background: var(--accent-wash); }
+  .appbar__link:hover { color: var(--text-strong); }
+  .appbar__link.is-active { color: var(--text-strong); border-bottom-color: var(--blue); }
   .appbar__badge-n {
     display: inline-grid;
     place-items: center;
-    min-width: 1.25em;
-    height: 1.25em;
+    min-width: 1.3em;
+    height: 1.3em;
     margin-left: 0.4em;
     padding: 0 0.35em;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
     color: #fff;
-    background: var(--red);
+    background: var(--blue);
     border-radius: 999px;
   }
 
@@ -159,32 +164,32 @@ const navItems = isAdmin
     border: 0; background: none;
     color: var(--text-muted);
     cursor: pointer;
-    border-radius: var(--radius);
+    border-radius: 0;
   }
   .nbell__btn:hover, .nbell.is-open .nbell__btn { color: var(--blue); background: var(--bg-tint); }
   .nbell__dot {
     position: absolute;
-    top: -1px; right: -2px;
+    top: -2px; right: -3px;
     min-width: 16px; height: 16px;
     padding: 0 4px;
     border-radius: 999px;
-    background: var(--red);
+    background: var(--blue);
     color: #fff;
     font: 700 0.62rem/16px var(--font-sans);
+    font-variant-numeric: tabular-nums;
     text-align: center;
-    box-shadow: 0 0 0 2px var(--surface);
+    box-shadow: 0 0 0 2px var(--bg);
   }
   .nbell__panel {
     position: absolute;
-    top: calc(100% + 10px);
+    top: calc(100% + 8px);
     right: 0;
-    width: min(340px, 86vw);
+    width: min(360px, 88vw);
     max-height: 70vh;
     overflow-y: auto;
     background: var(--surface);
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--ink);
+    border-radius: 0;
     z-index: 130;
   }
   .nbell__panel[hidden] { display: none; }
@@ -221,17 +226,18 @@ const navItems = isAdmin
   }
   .appbar__user em { font-style: normal; font-weight: 500; color: var(--text-faint); }
   .appbar__logout {
-    padding: 0.4rem 0.85rem;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-pill);
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--text);
-    background: var(--surface);
+    padding: 0.42rem 0.9rem;
+    border: 1px solid var(--ink);
+    border-radius: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--ink);
+    background: transparent;
     cursor: pointer;
     white-space: nowrap;
+    transition: background 0.15s var(--ease), color 0.15s var(--ease);
   }
-  .appbar__logout:hover { border-color: var(--blue); color: var(--blue); }
+  .appbar__logout:hover { background: var(--ink); color: #fff; }
 
   @media (max-width: 720px) {
     .appbar__inner { height: auto; flex-wrap: wrap; gap: 0.5rem; padding-block: 0.5rem; }

@@ -134,9 +134,9 @@ const isActive = (item: NavItem) =>
     position: sticky;
     top: 0;
     z-index: 100;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border-soft);
-    transition: background 0.4s var(--ease), border-color 0.4s var(--ease);
+    background: var(--bg);
+    border-bottom: 1px solid var(--ink);
+    transition: background 0.35s var(--ease), border-color 0.35s var(--ease);
   }
 
   /* Transparent variant sits over a hero until the page scrolls. */
@@ -157,12 +157,12 @@ const isActive = (item: NavItem) =>
   .wordmark {
     display: inline-flex;
     align-items: center;
-    gap: 0.6em;
-    font-family: var(--font-serif);
-    font-weight: 600;
-    font-size: clamp(1.1rem, 0.95rem + 0.7vw, 1.5rem);
+    gap: 0.5em;
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: clamp(1rem, 0.9rem + 0.5vw, 1.22rem);
     text-transform: uppercase;
-    letter-spacing: 0.12em;
+    letter-spacing: -0.01em;
     line-height: 1;
     flex-shrink: 0;
   }
@@ -170,16 +170,14 @@ const isActive = (item: NavItem) =>
   .wordmark__badge {
     display: grid;
     place-items: center;
-    width: 2.1em; height: 2.1em;
+    width: 2em; height: 2em;
     flex-shrink: 0;
     color: #fff;
     background: var(--blue);
-    border-radius: var(--radius);
-    font-size: 0.66em;
-    transition: transform 0.35s var(--ease);
+    border-radius: 0;
+    font-size: 0.62em;
   }
-  .wordmark:hover .wordmark__badge { transform: scale(1.06); }
-  .wordmark__text { display: inline-flex; gap: 0.32em; align-items: baseline; }
+  .wordmark__text { display: inline-flex; gap: 0.28em; align-items: baseline; }
   .wordmark__mca { color: var(--blue); }
   .wordmark__heart { color: var(--text-strong); }
 
@@ -200,15 +198,16 @@ const isActive = (item: NavItem) =>
     position: relative;
     display: inline-flex;
     align-items: center;
-    font-size: 0.9rem;
-    font-weight: 500;
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: -0.003em;
     color: var(--text);
     padding-block: 0.5rem;
     background: none;
     border: 0;
     cursor: pointer;
-    font-family: inherit;
-    transition: color 0.3s var(--ease);
+    font-family: var(--font-sans);
+    transition: color 0.2s var(--ease);
     white-space: nowrap;
   }
   .nav__link::after {
@@ -235,17 +234,16 @@ const isActive = (item: NavItem) =>
     position: absolute;
     top: 100%;
     left: 50%;
-    transform: translate(-50%, 6px);
-    min-width: 220px;
-    padding: 0.35rem;
+    transform: translate(-50%, 4px);
+    min-width: 230px;
+    padding: 0.25rem;
     background: var(--surface);
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--ink);
+    border-radius: 0;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
-    transition: opacity 0.18s var(--ease), transform 0.18s var(--ease), visibility 0.18s;
+    transition: opacity 0.15s var(--ease), transform 0.15s var(--ease), visibility 0.15s;
     z-index: 120;
   }
   .nav__panel::before {
@@ -262,15 +260,16 @@ const isActive = (item: NavItem) =>
   }
   .nav__sublink {
     display: block;
-    padding: 0.55rem 0.8rem;
-    border-radius: var(--radius);
-    font-size: 0.88rem;
-    font-weight: 500;
+    padding: 0.6rem 0.85rem;
+    border-radius: 0;
+    font-size: 0.875rem;
+    font-weight: 600;
     color: var(--text);
     white-space: nowrap;
+    transition: background 0.12s var(--ease), color 0.12s var(--ease);
   }
-  .nav__sublink:hover { background: var(--accent-wash); color: var(--blue); }
-  .nav__sublink.is-current { color: var(--blue); font-weight: 600; }
+  .nav__sublink:hover { background: var(--ink); color: #fff; }
+  .nav__sublink.is-current { color: var(--blue); }
 
   /* --- Burger --- */
   .burger {
@@ -307,11 +306,11 @@ const isActive = (item: NavItem) =>
     gap: 1rem;
     width: 100%;
     padding-block: var(--space-s);
-    border-bottom: 1px solid var(--border-soft);
-    font-family: var(--font-serif);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-display);
     font-size: var(--step-2);
-    font-weight: 600;
-    letter-spacing: -0.01em;
+    font-weight: 800;
+    letter-spacing: -0.02em;
     color: var(--text-strong);
     opacity: 0;
     transform: translateY(12px);
@@ -351,15 +350,16 @@ const isActive = (item: NavItem) =>
   .authbar { display: flex; align-items: center; gap: 0.9rem; }
   .authbar__login { padding-block: 0.4rem; padding-inline: 0.9rem; font-size: 0.8rem; }
 
-  /* Members zone: a charcoal pill so the app nav reads as a distinct area. */
+  /* Members zone: a solid charcoal block so the app nav reads as a distinct area. */
   .authbar__account {
     display: flex;
     align-items: center;
-    gap: clamp(0.9rem, 0.4rem + 0.8vw, 1.5rem);
-    padding: 0.3rem 0.3rem 0.3rem 1.15rem;
-    background: var(--dark);
-    border-radius: var(--radius-pill);
+    gap: clamp(0.8rem, 0.4rem + 0.7vw, 1.3rem);
+    padding: 0.4rem 0.4rem 0.4rem 1.05rem;
+    background: var(--ink);
+    border-radius: 0;
   }
+  .authbar__account .nav__link { font-weight: 700; font-size: 0.82rem; }
   .authbar__account .nav__link { color: rgba(255, 255, 255, 0.82); }
   .authbar__account .nav__link:hover { color: #fff; }
   .authbar__account .nav__link::after { background: #fff; }
@@ -381,8 +381,8 @@ const isActive = (item: NavItem) =>
     gap: 0.15rem;
     margin-top: var(--space-xs);
     padding: 0.4rem var(--space-s) var(--space-xs);
-    background: var(--dark);
-    border-radius: var(--radius);
+    background: var(--ink);
+    border-radius: 0;
   }
   .drawer__member .drawer__link { color: #fff; border-bottom-color: rgba(255, 255, 255, 0.16); }
   .drawer__member .drawer__link.is-current { color: #fff; }
