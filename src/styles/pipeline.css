@@ -518,13 +518,11 @@ select.pl-status:focus-visible { outline: 2px solid var(--pl-accent); outline-of
 .pl-rail h3 {
   margin: 0 0 10px;
   font-family: var(--font-sans);
-  font-size: 0.66rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted, #64748b);
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: var(--text-strong);
 }
-.pl-rail h3:not(:first-child) { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border-soft); }
+.pl-rail h3:not(:first-child) { margin-top: 22px; }
 .pl-rail dl { margin: 0; }
 .pl-rail dt { color: var(--text-muted, #64748b); font-size: 0.72rem; margin-top: 8px; }
 .pl-rail dt:first-child { margin-top: 0; }
@@ -534,11 +532,9 @@ select.pl-status:focus-visible { outline: 2px solid var(--pl-accent); outline-of
 /* history */
 .pl-sech {
   font-family: var(--font-sans);
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted, #64748b);
+  font-size: 0.98rem;
+  font-weight: 800;
+  color: var(--text-strong);
   margin: 0 0 14px;
 }
 .pl-history { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
@@ -670,16 +666,12 @@ select.pl-status:focus-visible { outline: 2px solid var(--pl-accent); outline-of
 .pl-drawer__status span { font-size: 0.8rem; color: var(--text-muted, #64748b); }
 .pl-drawer__body h3 {
   font-family: var(--font-sans);
-  font-size: 0.64rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-muted, #64748b);
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: var(--text-strong);
   margin: 20px 0 8px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-soft);
 }
-.pl-drawer__body h3:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+.pl-drawer__body h3:first-of-type { margin-top: 0; }
 .pl-drawer__dl { margin: 0; display: grid; grid-template-columns: minmax(0, 44%) 1fr; gap: 4px 12px; font-size: 0.85rem; }
 .pl-drawer__dl dt { color: var(--text-muted, #64748b); font-size: 0.78rem; }
 .pl-drawer__dl dd { margin: 0; color: var(--text-strong, #1e293b); }
