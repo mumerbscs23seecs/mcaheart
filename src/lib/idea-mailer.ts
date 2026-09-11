@@ -90,22 +90,45 @@ export interface IdeaDecisionOpts {
 /** Build the accept/decline email (template + reviewer note) without sending. */
 export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: string; html: string } {
   const accepted = opts.decision === 'accepted';
-  const subject = `[MCA Heart] Your research idea was ${accepted ? 'accepted' : 'not taken forward'}`;
-  const lead = accepted
-    ? 'Good news — your research idea has been accepted into the MCA pipeline. The team will be in touch about the analysis and next steps.'
-    : 'Thank you for the submission. After review, the team has decided not to take this idea forward at this time.';
-  const noteBlock = opts.note
-    ? `<p style="margin:16px 0 0;padding:12px 14px;background:#f1f5f9;border-radius:8px;color:#1e293b;font:14px/1.6 Arial,sans-serif;white-space:pre-wrap"><strong>Reviewer note:</strong> ${esc(opts.note)}</p>`
-    : '';
+  const subject = `[MCA Heart] Idea submission outcome — ${accepted ? 'Accepted' : 'Rejected'}`;
+  const comments = opts.note ? esc(opts.note) : '—';
 
   const html = `<div style="background:#f8fafc;padding:28px">
-  <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid rgba(43,57,144,.14);border-radius:12px;padding:28px">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid rgba(165,28,48,.14);border-radius:12px;padding:28px">
     <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart</p>
-    <h1 style="margin:0 0 12px;color:#1e293b;font:600 20px/1.3 Georgia,serif">${accepted ? 'Idea accepted' : 'Idea review outcome'}</h1>
-    <p style="margin:0 0 8px;color:#1e293b;font:14px/1.6 Arial,sans-serif">Hi ${esc(opts.leadName)},</p>
-    <p style="margin:0 0 8px;color:#1e293b;font:14px/1.6 Arial,sans-serif">${lead}</p>
-    <p style="margin:0;color:#64748b;font:13px/1.6 Arial,sans-serif">Idea: <em>${esc(opts.title)}</em></p>
-    ${noteBlock}
+    <h1 style="margin:0 0 18px;color:#1e293b;font:600 20px/1.3 Georgia,serif">Idea submission outcome</h1>
+
+    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">Dear ${esc(opts.leadName)},</p>
+    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
+      Thank you for submitting your idea '<strong>${esc(opts.title)}</strong>' to the MCA Research Lab. We
+      evaluate ideas based on clinical relevance, methodological practicality, and publication value. Any
+      relevant comments and the outcome of your idea submission are at the bottom of this email.
+    </p>
+    <p style="margin:0 0 24px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
+      Best regards,<br />MCA HEART RESEARCH LAB
+    </p>
+
+    <table style="border-collapse:collapse;width:100%;border-top:1px solid rgba(165,28,48,.14);padding-top:16px">
+      <tr>
+        <td style="padding:16px 0 4px;color:#64748b;font:600 12px/1.4 Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em">Outcome</td>
+      </tr>
+      <tr>
+        <td style="padding:0 0 14px;color:${accepted ? '#166534' : '#a51c30'};font:700 15px/1.5 Arial,sans-serif">${accepted ? 'Accepted' : 'Rejected'}</td>
+      </tr>
+      <tr>
+        <td style="padding:0 0 4px;color:#64748b;font:600 12px/1.4 Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em">Comments</td>
+      </tr>
+      <tr>
+        <td style="padding:0;color:#1e293b;font:14px/1.6 Arial,sans-serif;white-space:pre-wrap">${comments}</td>
+      </tr>
+    </table>
+
+    <p style="margin:24px 0 0;padding:12px 14px;background:#f1f5f9;border-radius:8px;color:#1e293b;font:13px/1.6 Arial,sans-serif">
+      <strong>Important instructions:</strong> If your idea is accepted for further processing, the lead
+      author must complete and provide the full manuscript within 1 month from the date the analysis is
+      provided. Failure to follow this timeline may result in the lead author's demotion from first
+      authorship, and the lab will appoint a new lead.
+    </p>
   </div>
 </div>`;
 
