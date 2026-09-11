@@ -225,11 +225,19 @@
 }
 .pl-t__actions a:hover { text-decoration: underline; }
 
-/* status shown as a bordered control; a <select> when it is editable */
+/* status shown as a bordered control; a <select> when it is editable.
+   A native <select> sizes itself to its widest OPTION, not the chosen one —
+   several manuscript stage labels run 40-50 characters, which was blowing
+   the whole row (and the Actions column after it) out past the table's
+   width. Cap it and ellipsize; the open dropdown still shows full labels. */
 .pl-status,
 select.pl-status {
   display: inline-block;
-  max-width: 100%;
+  width: 100%;
+  max-width: 230px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 7px 12px;
   border: 1px solid var(--border-strong);
   border-radius: 4px;

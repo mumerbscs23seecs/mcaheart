@@ -36,7 +36,7 @@ const editable =
   <form method="post" action={`/pipeline/projects/${p.id}/gate`}>
     <input type="hidden" name="gate" value="stage" />
     <input type="hidden" name="return" value={returnTo} />
-    <select class="pl-status" name="stage" aria-label={`Status for ${p.title ?? p.ref}`} onchange="this.form.submit()">
+    <select class="pl-status" name="stage" title={p.stage_label} aria-label={`Status for ${p.title ?? p.ref}`} onchange="this.form.submit()">
       {options.map((s: any) => (
         <option value={s.code} selected={s.code === p.stage}>{s.label}</option>
       ))}
@@ -45,7 +45,7 @@ const editable =
 ) : (
   <form method="post" action={`/pipeline/projects/${p.id}/request`}>
     <input type="hidden" name="return" value={returnTo} />
-    <select class="pl-status" name="stage" aria-label={`Request a status change for ${p.title ?? p.ref}`} onchange="if (this.value) this.form.submit()">
+    <select class="pl-status" name="stage" title={p.stage_label} aria-label={`Request a status change for ${p.title ?? p.ref}`} onchange="if (this.value) this.form.submit()">
       <option value="" selected>{p.stage_label}</option>
       {options
         .filter((s: any) => s.code !== p.stage)

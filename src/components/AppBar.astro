@@ -243,6 +243,16 @@ const navItems = isAdmin
     .appbar__inner { height: auto; flex-wrap: wrap; gap: 0.5rem; padding-block: 0.5rem; }
     .appbar__account { width: 100%; }
     .appbar__user { display: none; }
+    /* Five nav links no longer fit one row at phone widths - scroll them
+       horizontally (same fix as the pipeline tab strip) instead of letting
+       them spill past the viewport and force the whole page to scroll sideways. */
+    .appbar__nav {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .appbar__nav::-webkit-scrollbar { display: none; }
   }
 </style>
 
