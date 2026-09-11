@@ -81,7 +81,7 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   if (parsed.data.company) {
-    return json({ ok: true, message: 'Thank you — your application has been received.' });
+    return json({ ok: true, message: 'Thank you - your application has been received.' });
   }
 
   // --- Files (both required) ------------------------------------------------
@@ -118,7 +118,7 @@ export const POST: APIRoute = async ({ request }) => {
   return json({
     ok: true,
     message:
-      'Thank you — your application has been submitted. You will get an email with the outcome, usually within five days. No response within three weeks? Email researchoperations@mcaheart.com.',
+      'Thank you - your application has been submitted. You will get an email with the outcome, usually within five days. No response within three weeks? Email researchoperations@mcaheart.com.',
   });
 };
 

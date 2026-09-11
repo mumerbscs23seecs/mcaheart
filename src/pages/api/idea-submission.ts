@@ -71,9 +71,9 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ ok: false, error: 'Please check the highlighted fields.', fieldErrors }, 422);
   }
 
-  // Honeypot tripped — accept silently.
+  // Honeypot tripped - accept silently.
   if (parsed.data.company) {
-    return json({ ok: true, message: 'Thank you — your research idea has been received.' });
+    return json({ ok: true, message: 'Thank you - your research idea has been received.' });
   }
 
   // --- 4. Optional file --------------------------------------------------
@@ -113,7 +113,7 @@ export const POST: APIRoute = async ({ request }) => {
   return json({
     ok: true,
     message:
-      'Thank you — your research idea has been submitted. The team will review it for feasibility and publication value and follow up about next steps.',
+      'Thank you - your research idea has been submitted. The team will review it for feasibility and publication value and follow up about next steps.',
   });
 };
 

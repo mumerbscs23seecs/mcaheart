@@ -2,7 +2,7 @@
 import { stagesFor } from '../lib/lifecycle.mjs';
 
 interface Props {
-  /** A project_list row — needs id, phase, stage, stage_label, days_in_stage, archived_at. */
+  /** A project_list row - needs id, phase, stage, stage_label, days_in_stage, archived_at. */
   project: any;
   isAdmin: boolean;
 }
@@ -10,7 +10,7 @@ const { project: p, isAdmin } = Astro.props;
 // So a change made from a list drops the person back on that list, not the detail page.
 const returnTo = Astro.url.pathname + Astro.url.search;
 
-// Outcomes freeze an attempt and (journal) "submitted" needs a journal name —
+// Outcomes freeze an attempt and (journal) "submitted" needs a journal name -
 // those stay on the detail page. Inline editing is plain within-phase progress.
 const OUTCOME_CODES: Record<string, string[]> = {
   conference: ['accepted', 'rejected'],

@@ -5,7 +5,7 @@ export const prerender = false;
 const { supabase, person } = Astro.locals;
 const { id } = Astro.params;
 
-// The per-conference scorecard is aggregate data — coordinators only.
+// The per-conference scorecard is aggregate data - coordinators only.
 if (person.role !== 'admin') return Astro.redirect('/pipeline/conferences', 302);
 
 const { data: conf } = await supabase.from('conferences').select('*').eq('id', id).maybeSingle();
@@ -17,7 +17,7 @@ const { data: score } = await supabase
   .eq('name', conf.name)
   .maybeSingle();
 
-// Every attempt at this conference — including papers that have since moved on.
+// Every attempt at this conference - including papers that have since moved on.
 const { data: attempts } = await supabase
   .from('conference_attempts')
   .select(
@@ -27,7 +27,7 @@ const { data: attempts } = await supabase
   .order('outcome', { ascending: true });
 
 const fmtDate = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+  d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
 const s = score ?? { submitted: 0, accepted: 0, rejected: 0, accept_pct: null };
 const phaseLabel = (p: string) =>
   ({ idea: 'idea', conference: 'conference', manuscript: 'manuscript', journal: 'journal', archived: 'archived' })[p] ?? p;
@@ -43,7 +43,7 @@ const cap = (x: string | null) => (x ? x[0].toUpperCase() + x.slice(1) : 'Pendin
     <div><b>{s.submitted}</b><span>Submitted</span></div>
     <div><b>{s.accepted}</b><span>Accepted</span></div>
     <div><b>{s.rejected}</b><span>Rejected</span></div>
-    <div><b>{s.accept_pct != null ? `${s.accept_pct}%` : '—'}</b><span>Acceptance</span></div>
+    <div><b>{s.accept_pct != null ? `${s.accept_pct}%` : '-'}</b><span>Acceptance</span></div>
   </div>
 
   {(!attempts || attempts.length === 0) && (
@@ -74,7 +74,7 @@ const cap = (x: string | null) => (x ? x[0].toUpperCase() + x.slice(1) : 'Pendin
                   {a.project?.ref}{a.recycled_from ? ' · recycled from an earlier attempt' : ''}
                 </span>
               </td>
-              <td data-th="Presenter">{a.presenter?.full_name ?? '—'}</td>
+              <td data-th="Presenter">{a.presenter?.full_name ?? '-'}</td>
               <td class="pl-t__venue" data-th="Now in">{phaseLabel(a.project?.phase ?? '')}</td>
               <td class="pl-t__date" data-th="Decided">{fmtDate(a.decided_on)}</td>
               <td data-th="Outcome">

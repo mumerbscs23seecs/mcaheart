@@ -90,8 +90,8 @@ export interface IdeaDecisionOpts {
 /** Build the accept/decline email (template + reviewer note) without sending. */
 export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: string; html: string } {
   const accepted = opts.decision === 'accepted';
-  const subject = `[MCA Heart] Idea submission outcome — ${accepted ? 'Accepted' : 'Rejected'}`;
-  const comments = opts.note ? esc(opts.note) : '—';
+  const subject = `[MCA Heart] Idea submission outcome - ${accepted ? 'Accepted' : 'Rejected'}`;
+  const comments = opts.note ? esc(opts.note) : '-';
 
   const html = `<div style="background:#f8fafc;padding:28px">
   <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid rgba(165,28,48,.14);border-radius:12px;padding:28px">
@@ -147,7 +147,7 @@ export async function deliverIdea(data: IdeaPayload, attachment?: Attachment): P
     to: TO,
     from: FROM,
     replyTo: data.leadEmail,
-    subject: `[MCA Heart] Research idea — ${data.title}`,
+    subject: `[MCA Heart] Research idea - ${data.title}`,
     html: renderEmail(data, Boolean(attachment)),
     attachments: attachment ? [attachment] : undefined,
   });

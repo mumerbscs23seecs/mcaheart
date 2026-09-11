@@ -1,11 +1,11 @@
 /**
- * DEMO authentication — in-memory only.
+ * DEMO authentication - in-memory only.
  *
  * There is no database. Every user, session, reset token and audit entry lives
  * in module memory and is wiped when the Node process restarts (or when the dev
  * server hot-reloads this file). This exists so the login / members-area / admin
  * flow can be clicked through and handed to an engineer as a reference. The real
- * build replaces this whole file with a database-backed implementation — the
+ * build replaces this whole file with a database-backed implementation - the
  * exported function signatures are the contract to keep.
  */
 import type { AstroCookies } from 'astro';
@@ -238,7 +238,7 @@ export interface LoginResult {
 
 export function verifyLogin(email: string, password: string): LoginResult {
   const user = findByEmail(email);
-  // Same message either way — do not reveal which accounts exist.
+  // Same message either way - do not reveal which accounts exist.
   const generic = { ok: false as const, error: 'Email or password is incorrect.' };
   if (!user || !user.active) return generic;
   if (!verifyPassword(password, user.passwordHash)) return generic;
@@ -248,7 +248,7 @@ export function verifyLogin(email: string, password: string): LoginResult {
 }
 
 function hintValue(user: User): string {
-  // Raw JSON — Astro's cookie layer percent-encodes it once on the way out,
+  // Raw JSON - Astro's cookie layer percent-encodes it once on the way out,
   // so the browser script decodes exactly once. No sensitive data here.
   return JSON.stringify({ name: user.name, role: user.role });
 }

@@ -12,7 +12,7 @@ const active = (Astro.url.searchParams.get('series') ?? '').toUpperCase();
 const activeSeries = SERIES.includes(active as any) ? active : null;
 
 const fmtDate = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+  d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
 
 // ---- Members: their own conference-phase papers, as a table.
 let mine: any[] = [];
@@ -83,7 +83,7 @@ if (isAdmin) {
                   <td data-th="Submitted">{c.submitted}</td>
                   <td data-th="Accepted">{c.accepted}</td>
                   <td data-th="Rejected">{c.rejected}</td>
-                  <td data-th="Accept %">{c.accept_pct != null ? `${c.accept_pct}%` : '—'}</td>
+                  <td data-th="Accept %">{c.accept_pct != null ? `${c.accept_pct}%` : '-'}</td>
                   <td class="pl-t__actions" data-th="Actions">
                     <a href={`/pipeline/conferences/${c.id}`}>View conference &nearr;</a>
                   </td>
@@ -94,11 +94,11 @@ if (isAdmin) {
         </div>
       )}
 
-      <p class="pl-count">Deadlines are approximate placeholders from the import — verify before relying on them.</p>
+      <p class="pl-count">Deadlines are approximate placeholders from the import - verify before relying on them.</p>
     </>
   ) : (
     <>
-      <p class="pl-sub">Your papers at the abstract stage — being written, submitted, or awaiting a decision.</p>
+      <p class="pl-sub">Your papers at the abstract stage - being written, submitted, or awaiting a decision.</p>
 
       {mine.length === 0 && <p class="pl-muted" style="margin-top:20px">Nothing here.</p>}
 

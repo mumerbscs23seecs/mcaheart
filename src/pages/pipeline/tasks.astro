@@ -26,12 +26,12 @@ const fmt = (d?: string | null) =>
   <h1 class="pl-h1">Pending tasks</h1>
   <p class="pl-sub">
     {isAdmin
-      ? 'Everything waiting on you — status approvals, new research ideas, and lab applications.'
+      ? 'Everything waiting on you - status approvals, new research ideas, and lab applications.'
       : 'Papers of yours that need a status update, plus anything the coordinator sent back.'}
   </p>
 
   {tasks.length === 0 && (
-    <p class="pl-muted" style="margin-top:28px">You're all caught up — nothing pending.</p>
+    <p class="pl-muted" style="margin-top:28px">You're all caught up - nothing pending.</p>
   )}
 
   {urgent.length > 0 && (

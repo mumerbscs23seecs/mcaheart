@@ -1,10 +1,10 @@
 /**
- * DEMO store for lab recruitment applications — in-memory only, no database.
+ * DEMO store for lab recruitment applications - in-memory only, no database.
  *
  * FILE STORAGE (answer to "where are uploads stored"):
  *   The CV and headshot bytes are held IN MEMORY on the record below, so the
  *   admin can download them from the review panel during the session. They are
- *   wiped when the Node process restarts — nothing touches disk or a bucket.
+ *   wiped when the Node process restarts - nothing touches disk or a bucket.
  *   Production must stream uploads to object storage (S3 / R2 / Supabase) and
  *   keep only a key here.
  */

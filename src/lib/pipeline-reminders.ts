@@ -8,7 +8,7 @@
  *   20 days  → member + coordinators, and flag the project for reassignment
  *
  * Any stage change resets the clock (a BEFORE UPDATE trigger on projects does
- * this — see mca-pipeline/links-reminders.sql). Each level fires at most once.
+ * this - see mca-pipeline/links-reminders.sql). Each level fires at most once.
  */
 import { supabaseAdmin } from './supabase';
 import { deliverPipelineReminder } from './pipeline-mailer';

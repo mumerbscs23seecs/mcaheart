@@ -3,7 +3,7 @@ import { z } from 'zod';
 /**
  * MCA Research Lab recruitment application. Shared between the browser (hints)
  * and the API route (enforcement). The CV and headshot files are handled in
- * the API route — they arrive as Files in the multipart body.
+ * the API route - they arrive as Files in the multipart body.
  */
 
 export const JOB_STATUSES = [
@@ -28,7 +28,7 @@ export const EXPERTISE = [
 export type Expertise = (typeof EXPERTISE)[number];
 
 const longText = (min: number, label: string, max = 4000) =>
-  z.string().trim().min(min, `${label} — please add a little more.`).max(max, `${label} is too long.`);
+  z.string().trim().min(min, `${label} - please add a little more.`).max(max, `${label} is too long.`);
 const optText = (max: number) => z.string().trim().max(max).optional().default('');
 
 export const recruitmentSchema = z.object({
@@ -73,7 +73,7 @@ export const recruitmentSchema = z.object({
     .max(40)
     .regex(/^[0-9+()\-.\s]+$/, 'Phone can only contain digits and + ( ) - .'),
 
-  // Honeypot — must pass; the route checks it after parsing.
+  // Honeypot - must pass; the route checks it after parsing.
   company: z.string().max(200).optional(),
 });
 

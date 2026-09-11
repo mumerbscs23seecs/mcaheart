@@ -79,7 +79,7 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
     const stage = String(form.get('stage') ?? '');
     const journal = String(form.get('journal') ?? '').trim();
     if (p0.phase === 'journal' && stage === 'submitted') {
-      // A journal-phase "Submitted — technical check" also records which journal.
+      // A journal-phase "Submitted - technical check" also records which journal.
       if (!journal) return redirect(`${back}?err=${encodeURIComponent('Enter the journal name.')}`);
       rpc = { fn: 'set_submitted_journal', args: { p_project: projectId, p_journal: journal } };
     } else {

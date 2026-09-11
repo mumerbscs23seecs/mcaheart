@@ -3,7 +3,7 @@ import { AUTHOR_TERM } from '../data/publications';
 
 /**
  * PubMed helpers shared by the prerendered page and its client island.
- * Framework-agnostic on purpose — no DOM, no imports beyond the data types.
+ * Framework-agnostic on purpose - no DOM, no imports beyond the data types.
  */
 
 const EUTILS = 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils';
@@ -21,7 +21,7 @@ export const pubmedUrl = (pmid: string) => `https://pubmed.ncbi.nlm.nih.gov/${pm
 export const doiUrl = (p: Pick<Publication, 'doi' | 'pmid'>) =>
   p.doi ? `https://doi.org/${p.doi}` : pubmedUrl(p.pmid);
 
-/** "Smith J, Doe A, … Alraies MC" — keeps lists readable without hiding the PI. */
+/** "Smith J, Doe A, … Alraies MC" - keeps lists readable without hiding the PI. */
 export function authorString(authors: string[], max = 5): string {
   if (authors.length <= max) return authors.join(', ');
   return `${authors.slice(0, max - 1).join(', ')} … ${authors[authors.length - 1]}`;

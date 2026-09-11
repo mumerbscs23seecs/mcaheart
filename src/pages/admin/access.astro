@@ -45,7 +45,7 @@ if (Astro.request.method === 'POST') {
         emailed = sent.ok;
       }
       flash = emailed
-        ? { tone: 'ok', text: `${res.user!.email} added — invite emailed to them.`, link }
+        ? { tone: 'ok', text: `${res.user!.email} added - invite emailed to them.`, link }
         : { tone: 'error', text: `${res.user!.email} added, but the invite email could not be sent. Share this link directly:`, link };
     }
   } else if (action === 'deactivate' || action === 'activate') {
@@ -77,7 +77,7 @@ if (Astro.request.method === 'POST') {
       const sent = await deliverAccessLink({ to: target.email, name: target.name, link, kind: 'reset' });
       flash = sent.ok
         ? { tone: 'ok', text: `Reset link emailed to ${target.email}.`, link }
-        : { tone: 'error', text: `Could not email ${target.email} — share this link directly:`, link };
+        : { tone: 'error', text: `Could not email ${target.email} - share this link directly:`, link };
     }
   }
 }
@@ -85,7 +85,7 @@ if (Astro.request.method === 'POST') {
 const users = listUsers();
 const auditRows = listAudit().slice(0, 25);
 const fmt = (t: number | null) =>
-  t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+  t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
 ---
 
 <AppLayout title="Access control" heading="Access control" user={me} active="access">
@@ -177,7 +177,7 @@ const fmt = (t: number | null) =>
         {auditRows.map((e) => (
           <li>
             <time>{fmt(e.at)}</time>
-            <span><strong>{e.actor}</strong> — {e.action}{e.target && <> · <span class="adm-mono">{e.target}</span></>}{e.detail && <> ({e.detail})</>}</span>
+            <span><strong>{e.actor}</strong> - {e.action}{e.target && <> · <span class="adm-mono">{e.target}</span></>}{e.detail && <> ({e.detail})</>}</span>
           </li>
         ))}
       </ul>

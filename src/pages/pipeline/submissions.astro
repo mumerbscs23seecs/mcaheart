@@ -24,14 +24,14 @@ if (!isAdmin) query = scopeProjects(query, person);
 const { data: rows, error } = await query;
 
 const fmt = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+  d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
 ---
 
 <PipelineLayout title="Submissions" active="submissions">
   <h1 class="pl-h1">Submissions</h1>
   <p class="pl-sub">
     {isAdmin
-      ? 'Journal-phase projects — manuscripts under review at a journal.'
+      ? 'Journal-phase projects - manuscripts under review at a journal.'
       : 'Your papers currently under review at a journal.'}
   </p>
 
@@ -67,7 +67,7 @@ const fmt = (d: string | null) =>
                   {p.journals_tried >= 4 ? ` · ${p.journals_tried} journals tried` : ''}
                 </span>
               </td>
-              <td class="pl-t__venue" data-th="Journal">{p.current_journal ?? '—'}</td>
+              <td class="pl-t__venue" data-th="Journal">{p.current_journal ?? '-'}</td>
               <td class="pl-t__date" data-th="Submitted">{fmt(p.created_at)}</td>
               <td class="pl-t__date" data-th="Last updated">{fmt(p.stage_changed_at)}</td>
               <td data-th="Status"><PipelineStatusCell project={p} isAdmin={isAdmin} /></td>

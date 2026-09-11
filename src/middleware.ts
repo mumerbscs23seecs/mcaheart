@@ -3,7 +3,7 @@ import { getPipelineSession, bridgeAdminSession } from './lib/pipeline-auth';
 import { currentUser as inMemoryUser } from './lib/auth';
 
 /** Gate every /pipeline route. Preferred path: the visitor is already signed
- *  into the members area — bridgeAdminSession() gives them a Supabase session
+ *  into the members area - bridgeAdminSession() gives them a Supabase session
  *  transparently. Magic-link (/pipeline/login) stays as a fallback. */
 export const onRequest = defineMiddleware(async (context, next) => {
   const { url, request, cookies, redirect, locals } = context;
@@ -32,7 +32,7 @@ export const onRequest = defineMiddleware(async (context, next) => {
   locals.supabase = session.supabase;
   locals.person = session.person;
 
-  // Pipeline data changes on every gate action — never let a browser (or its
+  // Pipeline data changes on every gate action - never let a browser (or its
   // back/forward cache) show a stale copy after a change.
   const res = await next();
   res.headers.set('Cache-Control', 'no-store, must-revalidate');

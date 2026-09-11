@@ -1,5 +1,5 @@
 /**
- * "Pending tasks" — the open action items for the signed-in person, derived
+ * "Pending tasks" - the open action items for the signed-in person, derived
  * live from existing state (no new table). Admins see approvals + new ideas +
  * new lab applications; members see their own stalled / overdue papers and any
  * recently declined request.
@@ -41,7 +41,7 @@ async function adminTasks(supabase: SupabaseClient): Promise<Task[]> {
     .select('id,project_id,requested_by,to_stage,from_phase,note,created_at')
     .eq('status', 'pending')
     .order('created_at', { ascending: true });
-  if (reqErr) console.warn('[tasks] stage_change_requests unavailable — run requests.sql:', reqErr.message);
+  if (reqErr) console.warn('[tasks] stage_change_requests unavailable - run requests.sql:', reqErr.message);
 
   if (reqs && reqs.length) {
     const projIds = [...new Set(reqs.map((r: any) => r.project_id))];
@@ -57,8 +57,8 @@ async function adminTasks(supabase: SupabaseClient): Promise<Task[]> {
       tasks.push({
         id: 'req-' + r.id,
         kind: 'approval',
-        title: `Approve or decline — ${name.get(r.requested_by) ?? 'a member'} wants “${labelFor(r.from_phase, r.to_stage)}”`,
-        detail: [p?.ref, p?.title].filter(Boolean).join(' · ') + (r.note ? ` — “${r.note}”` : ''),
+        title: `Approve or decline - ${name.get(r.requested_by) ?? 'a member'} wants “${labelFor(r.from_phase, r.to_stage)}”`,
+        detail: [p?.ref, p?.title].filter(Boolean).join(' · ') + (r.note ? ` - “${r.note}”` : ''),
         href: `/pipeline/projects/${r.project_id}`,
         cta: 'Review',
         when: r.created_at,
@@ -72,7 +72,7 @@ async function adminTasks(supabase: SupabaseClient): Promise<Task[]> {
     tasks.push({
       id: 'idea-' + i.id,
       kind: 'idea',
-      title: `New idea to review — ${i.title}`,
+      title: `New idea to review - ${i.title}`,
       detail: `Submitted by ${i.leadName}`,
       href: '/admin/ideas',
       cta: 'Open ideas',
@@ -85,7 +85,7 @@ async function adminTasks(supabase: SupabaseClient): Promise<Task[]> {
     tasks.push({
       id: 'app-' + a.id,
       kind: 'application',
-      title: `New lab application — ${a.name}`,
+      title: `New lab application - ${a.name}`,
       detail: [a.jobStatus, a.expertise].filter(Boolean).join(' · '),
       href: '/admin/applications',
       cta: 'Open applications',
@@ -111,7 +111,7 @@ async function memberTasks(supabase: SupabaseClient, person: Person): Promise<Ta
       tasks.push({
         id: 'stale-' + p.id,
         kind: 'stale',
-        title: `No update in ${p.days_in_stage} days — ${p.ref}`,
+        title: `No update in ${p.days_in_stage} days - ${p.ref}`,
         detail: `Still “${p.stage_label}”. Send the coordinator a status.`,
         href: `/pipeline/projects/${p.id}`,
         cta: 'Request update',
@@ -122,7 +122,7 @@ async function memberTasks(supabase: SupabaseClient, person: Person): Promise<Ta
       tasks.push({
         id: 'due-' + p.id,
         kind: 'overdue',
-        title: `Past its target — ${p.ref}`,
+        title: `Past its target - ${p.ref}`,
         detail: p.next_target ? `Target was ${p.next_target}.` : 'Target date passed.',
         href: `/pipeline/projects/${p.id}`,
         cta: 'Open',
@@ -148,7 +148,7 @@ async function memberTasks(supabase: SupabaseClient, person: Person): Promise<Ta
       tasks.push({
         id: 'dec-' + d.id,
         kind: 'declined',
-        title: `Request declined — ${ref.get(d.project_id) ?? 'a paper'} → “${labelFor(d.from_phase, d.to_stage)}”`,
+        title: `Request declined - ${ref.get(d.project_id) ?? 'a paper'} → “${labelFor(d.from_phase, d.to_stage)}”`,
         detail: d.decide_note ? `Coordinator: “${d.decide_note}”` : 'Re-request once there is real progress.',
         href: `/pipeline/projects/${d.project_id}`,
         cta: 'Open',

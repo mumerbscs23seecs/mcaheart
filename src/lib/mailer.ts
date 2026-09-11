@@ -25,9 +25,9 @@ function renderRows(data: ContactPayload): string {
   const rows: Array<[string, string]> = [
     ['Name', data.fullName],
     ['Email', data.email],
-    ['Phone', data.phone || '—'],
-    ['Location', data.location || '—'],
-    ['Designation', data.designation || '—'],
+    ['Phone', data.phone || '-'],
+    ['Location', data.location || '-'],
+    ['Designation', data.designation || '-'],
     ['Reason', INTENT_LABELS[data.intent]],
   ];
 
@@ -68,7 +68,7 @@ export async function deliverEnquiry(data: ContactPayload): Promise<void> {
     to: TO,
     from: FROM,
     replyTo: data.email,
-    subject: `[MCA Heart] ${INTENT_LABELS[data.intent]} — ${data.fullName}`,
+    subject: `[MCA Heart] ${INTENT_LABELS[data.intent]} - ${data.fullName}`,
     html: renderEmail(data),
   });
   if (!sent.ok) throw new Error(sent.error ?? 'Email delivery failed.');

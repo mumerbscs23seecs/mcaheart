@@ -49,9 +49,9 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ ok: false, error: 'Please check the highlighted fields.', fieldErrors }, 422);
   }
 
-  // Honeypot tripped — accept silently so bots get no signal.
+  // Honeypot tripped - accept silently so bots get no signal.
   if (parsed.data.company) {
-    return json({ ok: true, message: 'Thank you — your enquiry has been received.' });
+    return json({ ok: true, message: 'Thank you - your enquiry has been received.' });
   }
 
   // --- 4. Deliver --------------------------------------------------------
@@ -67,7 +67,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   return json({
     ok: true,
-    message: 'Thank you — your enquiry has been received. We will be in touch shortly.',
+    message: 'Thank you - your enquiry has been received. We will be in touch shortly.',
   });
 };
 

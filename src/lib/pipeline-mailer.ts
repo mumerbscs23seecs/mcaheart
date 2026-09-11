@@ -59,12 +59,12 @@ export async function deliverTransition(opts: {
       lead: `This project has been submitted to <strong>${esc(opts.venue ?? 'a conference')}</strong>. Start the abstract.`,
     },
     abstract_accepted: {
-      subject: `[MCA Pipeline] Abstract accepted — ${opts.ref}`,
+      subject: `[MCA Pipeline] Abstract accepted - ${opts.ref}`,
       lead: `The abstract for this project was <strong>accepted</strong> at ${esc(opts.venue ?? 'the conference')}.`,
     },
     proceeding_full_text: {
       subject: `[MCA Pipeline] ${opts.ref} proceeding to full text`,
-      lead: `This project is moving to the manuscript phase. It now appears under <strong>Ongoing</strong> — attach your draft link and get started.`,
+      lead: `This project is moving to the manuscript phase. It now appears under <strong>Ongoing</strong> - attach your draft link and get started.`,
     },
     not_proceeding_full_text: {
       subject: `[MCA Pipeline] ${opts.ref} not proceeding to full text`,
@@ -75,7 +75,7 @@ export async function deliverTransition(opts: {
       lead: `The manuscript has been submitted to <strong>${esc(opts.venue ?? 'a journal')}</strong>. It now appears under <strong>Submissions</strong>.`,
     },
     published: {
-      subject: `[MCA Pipeline] Published — ${opts.ref}`,
+      subject: `[MCA Pipeline] Published - ${opts.ref}`,
       lead: `This project has been <strong>published</strong>. 🎉`,
     },
   };
@@ -96,7 +96,7 @@ export async function deliverTransition(opts: {
 }
 
 /**
- * The manuscript-stagnation cascade — sent from the daily reminder sweep when
+ * The manuscript-stagnation cascade - sent from the daily reminder sweep when
  * an Ongoing project has had no stage change:
  *   nudge      (7 days)  → member
  *   escalation (12 days) → member + coordinators
@@ -115,16 +115,16 @@ export async function deliverPipelineReminder(opts: {
 
   const copy = {
     nudge: {
-      subject: `[MCA Pipeline] ${opts.ref} — no update in ${opts.daysIdle} days`,
+      subject: `[MCA Pipeline] ${opts.ref} - no update in ${opts.daysIdle} days`,
       lead: `This manuscript has had no status change in <strong>${opts.daysIdle} days</strong>. It's still at "<em>${esc(opts.currentStage)}</em>". Please move it forward and update the stage, or reply with where it stands.`,
     },
     escalation: {
-      subject: `[MCA Pipeline] ${opts.ref} still stalled — ${opts.daysIdle} days`,
+      subject: `[MCA Pipeline] ${opts.ref} still stalled - ${opts.daysIdle} days`,
       lead: `Still no movement on this manuscript after <strong>${opts.daysIdle} days</strong> at "<em>${esc(opts.currentStage)}</em>". The coordinator has been copied on this reminder. If there's a blocker, say so now.`,
     },
     final: {
-      subject: `[MCA Pipeline] ${opts.ref} — reassignment pending`,
-      lead: `This manuscript has had no status change for <strong>${opts.daysIdle} days</strong>. It has been flagged for the coordinator to reassign — you may be taken off this topic and it handed to someone else. If you are still on it, update the stage today and reply to this email.`,
+      subject: `[MCA Pipeline] ${opts.ref} - reassignment pending`,
+      lead: `This manuscript has had no status change for <strong>${opts.daysIdle} days</strong>. It has been flagged for the coordinator to reassign - you may be taken off this topic and it handed to someone else. If you are still on it, update the stage today and reply to this email.`,
     },
   }[opts.stage];
 

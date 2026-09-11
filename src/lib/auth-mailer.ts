@@ -2,7 +2,7 @@ import { sendEmail } from './email';
 
 /**
  * Account-access emails (invite a new member / resend a set-password link).
- * Same transport as everything else — src/lib/email.ts (Gmail primary, Resend
+ * Same transport as everything else - src/lib/email.ts (Gmail primary, Resend
  * fallback). Env: NOTIFY_FROM for the sender display (ignored by Gmail).
  */
 const FROM = import.meta.env.NOTIFY_FROM ?? 'MCA Heart <onboarding@resend.dev>';
@@ -19,7 +19,7 @@ export async function deliverAccessLink(opts: {
 }): Promise<{ ok: boolean; error?: string }> {
   const isInvite = opts.kind === 'invite';
   const subject = isInvite
-    ? '[MCA Heart] You’ve been added — set your password'
+    ? '[MCA Heart] You’ve been added - set your password'
     : '[MCA Heart] Reset your password';
   const lead = isInvite
     ? 'An admin has added you to the MCA Heart members area. Set a password to get started.'

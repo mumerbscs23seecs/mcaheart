@@ -5,7 +5,7 @@
  * One pass:
  *   1. find non-terminal submissions with no activity in N days that have not
  *      been reminded within the cooldown window
- *   2. build ONE digest email (not one email per item — that is what makes
+ *   2. build ONE digest email (not one email per item - that is what makes
  *      people mute it)
  *   3. send it to the coordinators
  *   4. stamp lastRemindedAt on every included record so tomorrow's run skips them
@@ -94,11 +94,11 @@ export async function runReminderSweep(
 
   if (due.length === 0) {
     audit(actor, 'reminder sweep ran', undefined, 'nothing due');
-    return { ranAt: Date.now(), dryRun, dueCount: 0, items, recipients: to, emailStatus: 'skipped — nothing due' };
+    return { ranAt: Date.now(), dryRun, dueCount: 0, items, recipients: to, emailStatus: 'skipped - nothing due' };
   }
 
   if (dryRun) {
-    return { ranAt: Date.now(), dryRun, dueCount: due.length, items, recipients: to, emailStatus: 'dry run — not sent' };
+    return { ranAt: Date.now(), dryRun, dueCount: due.length, items, recipients: to, emailStatus: 'dry run - not sent' };
   }
 
   const sent = await sendEmail({

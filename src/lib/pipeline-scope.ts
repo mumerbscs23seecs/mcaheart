@@ -16,7 +16,7 @@ export const ROLE_COLS = [
 export function scopeProjects<T>(query: T, person: Person): T {
   if (person.role === 'admin') return query;
   const filter = ROLE_COLS.map((c) => `${c}.eq.${person.id}`).join(',');
-  // PostgREST filter builder — `.or()` exists at runtime on every stage of the chain.
+  // PostgREST filter builder - `.or()` exists at runtime on every stage of the chain.
   return (query as { or: (f: string) => T }).or(filter);
 }
 

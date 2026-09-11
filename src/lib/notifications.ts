@@ -38,7 +38,7 @@ export async function getNotifications(email: string): Promise<{ items: Notif[];
     const items = (data ?? []) as Notif[];
     return { items, unread: items.filter((n) => !n.read_at).length };
   } catch {
-    // requests.sql not run yet, or no service key — degrade to no inbox.
+    // requests.sql not run yet, or no service key - degrade to no inbox.
     return { items: [], unread: 0 };
   }
 }

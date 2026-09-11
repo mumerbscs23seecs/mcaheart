@@ -1,5 +1,5 @@
 /**
- * DEMO store for research-idea submissions — in-memory only, no database.
+ * DEMO store for research-idea submissions - in-memory only, no database.
  * Same pattern as auth.ts / submissions.ts.
  *
  * The public /submit-idea form writes here; /admin/ideas reads, and an admin
@@ -139,7 +139,7 @@ export interface DecisionResult {
   idea?: IdeaRecord;
 }
 
-/** Record an accept/decline. Does NOT send email or create a submission —
+/** Record an accept/decline. Does NOT send email or create a submission -
  *  the page orchestrates those so failures surface cleanly. */
 export function decideIdea(
   id: string,

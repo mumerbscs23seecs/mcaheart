@@ -63,7 +63,7 @@ import { INTENT_LABELS } from '../lib/contact-schema';
     <p class="field__error" data-error-for="message" hidden></p>
   </div>
 
-  {/* Honeypot — hidden from people, tempting to bots. */}
+  {/* Honeypot - hidden from people, tempting to bots. */}
   <div class="hp" aria-hidden="true">
     <label for="company">Company</label>
     <input id="company" name="company" type="text" tabindex="-1" autocomplete="off" />
@@ -287,7 +287,7 @@ import { INTENT_LABELS } from '../lib/contact-schema';
 
         if (res.ok && data.ok) {
           form.reset();
-          setStatus(data.message ?? 'Thank you — your enquiry has been received.', 'ok');
+          setStatus(data.message ?? 'Thank you - your enquiry has been received.', 'ok');
           status.scrollIntoView({ block: 'center', behavior: 'smooth' });
         } else {
           setStatus(data.error ?? 'Something went wrong. Please try again.', 'error');

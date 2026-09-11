@@ -26,8 +26,8 @@ export const STAGES = [
   // Phase C mirrors what SNAPP / Wiley actually show the corresponding author,
   // intersected with what the Submissions sheet already tracks. Anything finer
   // (reviewer invited / reviewer accepted) is publisher-side and cannot be kept
-  // accurate by hand — read it in SNAPP, do not retype it here.
-  ['journal',    'submitted',     'Submitted — technical check'],
+  // accurate by hand - read it in SNAPP, do not retype it here.
+  ['journal',    'submitted',     'Submitted - technical check'],
   ['journal',    'with_editor',   'With editor'],
   ['journal',    'under_review',  'Under review'],
   ['journal',    'revision_req',  'Revision requested'],
@@ -56,7 +56,7 @@ export const GATES = {
 /**
  * Can `actor` move `project` to `newStage`?
  * Returns null if allowed, otherwise a string explaining why not.
- * This is the whole authorisation rule for stage edits — do not duplicate it in the UI.
+ * This is the whole authorisation rule for stage edits - do not duplicate it in the UI.
  */
 export function stageChangeError(project, newStage, actor) {
   if (project.archived_at) return 'Project is archived.';
@@ -71,7 +71,7 @@ export function stageChangeError(project, newStage, actor) {
     .filter(Boolean).includes(actor.id);
   if (!isAdmin && !isOwner) return 'Only an admin, the lead, or the analyst can change this stage.';
 
-  // Only admins may set an outcome — it freezes an attempt row.
+  // Only admins may set an outcome - it freezes an attempt row.
   // NOTE: 'accepted' exists in both the conference and journal phases, so this must
   // test the phase too. Testing the stage code alone would let a lead close a
   // conference attempt from the journal screen, and vice versa.
@@ -118,7 +118,7 @@ export function gate1Options(conferences, today = new Date()) {
 const DAY = 86400000;
 const days = (from, to) => Math.floor((new Date(to) - new Date(from)) / DAY);
 
-/** Derived flags. Never store these — recompute on read. */
+/** Derived flags. Never store these - recompute on read. */
 export function flags(project, today = new Date()) {
   const active = !project.archived_at && !project.parked && project.phase !== 'archived';
   const staleDays = days(project.stage_changed_at, today);
@@ -126,7 +126,7 @@ export function flags(project, today = new Date()) {
     active,
     overdue:    active && !!project.next_target && project.next_target < today.toISOString().slice(0, 10),
     overdueBy:  project.next_target ? days(project.next_target, today) : null,
-    stale:      active && staleDays >= 21,   // stage untouched — notes do NOT reset this
+    stale:      active && staleDays >= 21,   // stage untouched - notes do NOT reset this
     daysInStage: staleDays,
   };
 }

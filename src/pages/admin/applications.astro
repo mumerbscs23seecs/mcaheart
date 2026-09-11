@@ -63,7 +63,7 @@ if (Astro.request.method === 'POST') {
       }
       const verb = decision === 'accepted' ? 'Accepted' : 'Declined';
       flash = emailed
-        ? { tone: 'ok', text: `${verb} — email sent to ${app.email}.` }
+        ? { tone: 'ok', text: `${verb} - email sent to ${app.email}.` }
         : { tone: 'error', text: `${verb} and recorded, but the email to ${app.email} could not be sent.` };
     }
   }
@@ -73,7 +73,7 @@ const apps = listApplications();
 const pending = apps.filter((a) => a.status === 'pending').length;
 
 const fmtDate = (t: number | null) =>
-  t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+  t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
 const ago = (t: number) => {
   const d = Math.floor((Date.now() - t) / 86_400_000);
   return d === 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`;
@@ -89,9 +89,9 @@ const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
   ['Profile link', a.profileLink],
   ['Research experience', a.researchExperience],
   ['Letter of interest', a.letterOfInterest],
-  ['Current job / academic status', a.currentStatus || '—'],
-  ['Professional goals', a.professionalGoals || '—'],
-  ['Internal reference / prior collaboration', a.internalRef || '—'],
+  ['Current job / academic status', a.currentStatus || '-'],
+  ['Professional goals', a.professionalGoals || '-'],
+  ['Internal reference / prior collaboration', a.internalRef || '-'],
   ['How they heard about MCA', a.referralSource],
 ];
 ---
@@ -107,7 +107,7 @@ const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
     {preview ? (
       <div class="mailprev">
         <h2 class="mailprev__title">
-          Preview — {preview.decision === 'accepted' ? 'acceptance' : 'decline'} email
+          Preview - {preview.decision === 'accepted' ? 'acceptance' : 'decline'} email
         </h2>
         <dl class="mailprev__head">
           <div><dt>To</dt><dd>{preview.to}</dd></div>
@@ -160,10 +160,10 @@ const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
                 <dt>Documents</dt>
                 <dd class="idea__files">
                   {a.cv
-                    ? <a href={`/admin/applications/${a.id}/cv`} target="_blank" rel="noopener">CV — {a.cv.filename} ({Math.round(a.cv.size / 1024)} KB)</a>
+                    ? <a href={`/admin/applications/${a.id}/cv`} target="_blank" rel="noopener">CV - {a.cv.filename} ({Math.round(a.cv.size / 1024)} KB)</a>
                     : <span class="adm-tag">no CV on file</span>}
                   {a.headshot
-                    ? <a href={`/admin/applications/${a.id}/headshot`} target="_blank" rel="noopener">Headshot — {a.headshot.filename} ({Math.round(a.headshot.size / 1024)} KB)</a>
+                    ? <a href={`/admin/applications/${a.id}/headshot`} target="_blank" rel="noopener">Headshot - {a.headshot.filename} ({Math.round(a.headshot.size / 1024)} KB)</a>
                     : <span class="adm-tag">no headshot on file</span>}
                 </dd>
               </div>

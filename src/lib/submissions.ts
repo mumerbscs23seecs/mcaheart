@@ -1,5 +1,5 @@
 /**
- * DEMO submissions store — in-memory only, no database.
+ * DEMO submissions store - in-memory only, no database.
  *
  * Mirrors src/lib/auth.ts: this exists so the admin dashboard has something to
  * render and can be handed to an engineer as a shape reference. Real build
@@ -8,16 +8,16 @@
  */
 import { audit } from './auth';
 
-/** The lifecycle a project moves through. One record, status changes — it does
+/** The lifecycle a project moves through. One record, status changes - it does
  *  not "move" between tables. */
 export const STATUSES = [
   'Idea',
-  'Abstract — drafting',
-  'Abstract — submitted',
-  'Abstract — accepted',
-  'Abstract — rejected',
-  'Manuscript — drafting',
-  'Manuscript — submitted',
+  'Abstract - drafting',
+  'Abstract - submitted',
+  'Abstract - accepted',
+  'Abstract - rejected',
+  'Manuscript - drafting',
+  'Manuscript - submitted',
   'Under review',
   'Revisions requested',
   'Accepted / in press',
@@ -27,8 +27,8 @@ export const STATUSES = [
 
 export type Status = (typeof STATUSES)[number];
 
-/** Statuses that count as "closed" — no further activity expected. */
-const TERMINAL: Status[] = ['Abstract — rejected', 'Published', 'Withdrawn'];
+/** Statuses that count as "closed" - no further activity expected. */
+const TERMINAL: Status[] = ['Abstract - rejected', 'Published', 'Withdrawn'];
 
 export interface Activity {
   at: number;
@@ -43,7 +43,7 @@ export interface Submission {
   leadEmail: string;
   target: string; // conference or journal
   status: Status;
-  /** Internal coordinator sign-off — distinct from the journal's peer review. */
+  /** Internal coordinator sign-off - distinct from the journal's peer review. */
   reviewed: boolean;
   createdAt: number;
   updatedAt: number;
@@ -71,12 +71,12 @@ function seed() {
       lead: 'Varun Victor',
       leadEmail: 'varun.victor@example.com',
       target: 'ACC 2026',
-      status: 'Abstract — submitted',
+      status: 'Abstract - submitted',
       reviewed: true,
       createdAt: now - 40 * DAY,
       activity: [
         { at: now - 2 * DAY, who: 'Varun Victor', note: 'Abstract submitted to ACC portal.' },
-        { at: now - 9 * DAY, who: 'Jawad (Coordinator)', note: 'Coordinator review complete — approved to submit.' },
+        { at: now - 9 * DAY, who: 'Jawad (Coordinator)', note: 'Coordinator review complete - approved to submit.' },
         { at: now - 20 * DAY, who: 'Varun Victor', note: 'First full draft uploaded to OneDrive.' },
       ],
     },
@@ -100,11 +100,11 @@ function seed() {
       lead: 'Ankit Hanmandlu',
       leadEmail: 'ankit.hanmandlu@example.com',
       target: 'SCAI 2026',
-      status: 'Manuscript — drafting',
+      status: 'Manuscript - drafting',
       reviewed: false,
       createdAt: now - 25 * DAY,
       activity: [
-        { at: now - 11 * DAY, who: 'Ankit Hanmandlu', note: 'Abstract accepted — full manuscript started.' },
+        { at: now - 11 * DAY, who: 'Ankit Hanmandlu', note: 'Abstract accepted - full manuscript started.' },
         { at: now - 24 * DAY, who: 'Ankit Hanmandlu', note: 'Idea logged and data pull requested.' },
       ],
     },
@@ -114,7 +114,7 @@ function seed() {
       lead: 'Amir Behzad Bagheri',
       leadEmail: 'amir.bagheri@example.com',
       target: 'AHA 2026',
-      status: 'Abstract — drafting',
+      status: 'Abstract - drafting',
       reviewed: false,
       createdAt: now - 18 * DAY,
       activity: [
@@ -154,11 +154,11 @@ function seed() {
       lead: 'Mowaffak Alraiyes',
       leadEmail: 'mowaffak.alraiyes@example.com',
       target: 'NCVH 2026',
-      status: 'Manuscript — submitted',
+      status: 'Manuscript - submitted',
       reviewed: false,
       createdAt: now - 60 * DAY,
       activity: [
-        { at: now - 15 * DAY, who: 'Mowaffak Alraiyes', note: 'Manuscript submitted — awaiting coordinator review.' },
+        { at: now - 15 * DAY, who: 'Mowaffak Alraiyes', note: 'Manuscript submitted - awaiting coordinator review.' },
       ],
     },
   ];
@@ -170,7 +170,7 @@ seed();
 
 let seq = 100;
 
-/** Create a pipeline record — used when an idea submission is accepted. */
+/** Create a pipeline record - used when an idea submission is accepted. */
 export function addSubmission(input: {
   title: string;
   lead: string;

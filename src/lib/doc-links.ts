@@ -1,5 +1,5 @@
 /**
- * Document links accepted on pipeline projects — a member's draft link and the
+ * Document links accepted on pipeline projects - a member's draft link and the
  * coordinator's reviewed-copy link. Google Docs / Drive, OneDrive, or
  * SharePoint only, HTTPS only.
  */

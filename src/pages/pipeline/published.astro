@@ -21,13 +21,13 @@ if (q) query = query.ilike('title', `%${q}%`);
 const { data: rows, error } = await query;
 
 const fmt = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+  d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
 ---
 
 <PipelineLayout title="Published" active="published">
   <h1 class="pl-h1">Published</h1>
   <p class="pl-sub">
-    Papers that have appeared in a journal. Nothing here moves — it is the record of what the group has published.
+    Papers that have appeared in a journal. Nothing here moves - it is the record of what the group has published.
   </p>
 
   <form class="pl-filter" method="get">
@@ -60,7 +60,7 @@ const fmt = (d: string | null) =>
                   {p.ref}{p.journals_tried >= 2 ? ` · ${p.journals_tried} journals tried` : ''}
                 </span>
               </td>
-              <td class="pl-t__venue" data-th="Journal">{p.current_journal ?? '—'}</td>
+              <td class="pl-t__venue" data-th="Journal">{p.current_journal ?? '-'}</td>
               <td class="pl-t__date" data-th="Submitted">{fmt(p.created_at)}</td>
               <td class="pl-t__date" data-th="Published">{fmt(p.stage_changed_at)}</td>
               <td data-th="Status"><span class="pl-status">Published</span></td>

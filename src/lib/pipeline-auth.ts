@@ -3,7 +3,7 @@
  *
  * Magic-link sign-in, but the link is generated server-side by Supabase and
  * delivered through this app's own Gmail transport (src/lib/email.ts) instead
- * of Supabase's built-in mailer — so it lands reliably and matches the rest of
+ * of Supabase's built-in mailer - so it lands reliably and matches the rest of
  * the app's email.
  *
  * A person can only sign in if there is an active `people` row with their
@@ -47,7 +47,7 @@ export async function getPipelineSession(
     .maybeSingle();
 
   if (!person) {
-    // First authenticated request for this account — link it to the invited
+    // First authenticated request for this account - link it to the invited
     // person row by email (needs elevated write; people.auth_id is revoked from
     // the authenticated role).
     const admin = supabaseAdmin();
@@ -67,7 +67,7 @@ export async function getPipelineSession(
 
 /**
  * Bridge: if the visitor is signed into the existing admin panel (in-memory
- * session), give them a matching Supabase session transparently — no magic
+ * session), give them a matching Supabase session transparently - no magic
  * link, no second password. Their /admin login is the only one they use; the
  * pipeline "just works" for any admin.
  *
@@ -120,7 +120,7 @@ export async function bridgeAdminSession(
 
 /**
  * Start a magic-link sign-in for `email`. Returns { ok:true } whether or not
- * the email actually has access — never leak which addresses are members.
+ * the email actually has access - never leak which addresses are members.
  * The real link (or the reason it wasn't sent) is only ever in the email.
  */
 export async function requestMagicLink(email: string, origin: string): Promise<{ ok: true }> {

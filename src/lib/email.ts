@@ -90,9 +90,9 @@ export async function sendEmail(mail: Mail): Promise<{ ok: boolean; id?: string;
   const to = Array.isArray(mail.to) ? mail.to : [mail.to];
   const from = mail.from ?? DEFAULT_FROM;
 
-  // No transport configured — log and succeed so local dev / the demo work.
+  // No transport configured - log and succeed so local dev / the demo work.
   if (!hasGmail && !hasResend) {
-    console.info('[email] no transport configured — would send:', {
+    console.info('[email] no transport configured - would send:', {
       to,
       subject: mail.subject,
       attachments: mail.attachments?.map((a) => a.filename) ?? [],
@@ -110,7 +110,7 @@ export async function sendEmail(mail: Mail): Promise<{ ok: boolean; id?: string;
     } catch (err) {
       const msg = `Gmail SMTP: ${(err as Error).message.split('\n')[0]}`;
       errors.push(msg);
-      if (hasResend) console.warn(`[email] ${msg} — falling back to Resend`);
+      if (hasResend) console.warn(`[email] ${msg} - falling back to Resend`);
     }
   }
 
@@ -126,5 +126,5 @@ export async function sendEmail(mail: Mail): Promise<{ ok: boolean; id?: string;
   return { ok: false, error: errors.join(' | ') || 'Email delivery failed.' };
 }
 
-/** Which transport is preferred — handy for logging/health checks. */
+/** Which transport is preferred - handy for logging/health checks. */
 export const mailTransport = hasGmail ? 'gmail' : hasResend ? 'resend' : 'log';

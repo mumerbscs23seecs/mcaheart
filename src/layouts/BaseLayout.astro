@@ -20,7 +20,7 @@ const {
   ogImage = '/assets/brand/heart-anatomical.png',
 } = Astro.props;
 
-const pageTitle = title === 'Home' ? `${site.name} — ${site.tagline}` : `${title} | ${site.name}`;
+const pageTitle = title === 'Home' ? `${site.name} - ${site.tagline}` : `${title} | ${site.name}`;
 const canonical = new URL(Astro.url.pathname, Astro.site ?? site.url).href;
 ---
 

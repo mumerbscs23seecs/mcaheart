@@ -31,9 +31,9 @@ function rows(d: RecruitmentPayload): string {
     ['Profile link', d.profileLink],
     ['Research experience', d.researchExperience],
     ['Letter of interest', d.letterOfInterest],
-    ['Current job/academic status', d.currentStatus || '—'],
-    ['Professional goals', d.professionalGoals || '—'],
-    ['Internal reference / prior collaboration', d.internalRef || '—'],
+    ['Current job/academic status', d.currentStatus || '-'],
+    ['Professional goals', d.professionalGoals || '-'],
+    ['Internal reference / prior collaboration', d.internalRef || '-'],
     ['How they heard about MCA', d.referralSource],
   ];
   return items
@@ -53,7 +53,7 @@ export async function deliverApplication(
 ): Promise<void> {
   const note = opts.filesInPanel.length
     ? `<p style="margin:18px 0 0;color:#92600e;font:13px/1.5 Arial,sans-serif">
-         ${opts.filesInPanel.join(' and ')} too large to attach — download from the admin panel.</p>`
+         ${opts.filesInPanel.join(' and ')} too large to attach - download from the admin panel.</p>`
     : opts.attachments.length
       ? `<p style="margin:18px 0 0;color:#166534;font:600 13px/1.5 Arial,sans-serif">📎 ${opts.attachments
           .map((a) => a.filename)
@@ -73,7 +73,7 @@ export async function deliverApplication(
     to: TO,
     from: FROM,
     replyTo: data.email,
-    subject: `[MCA Lab] Application — ${data.name}`,
+    subject: `[MCA Lab] Application - ${data.name}`,
     html,
     attachments: opts.attachments.length ? opts.attachments : undefined,
   });
@@ -92,9 +92,9 @@ export function renderApplicationDecisionEmail(
   opts: ApplicationDecisionOpts,
 ): { subject: string; html: string } {
   const accepted = opts.decision === 'accepted';
-  const subject = `[MCA Research Lab] Your application — ${accepted ? 'accepted' : 'outcome'}`;
+  const subject = `[MCA Research Lab] Your application - ${accepted ? 'accepted' : 'outcome'}`;
   const lead = accepted
-    ? 'Congratulations — your application to join the MCA Research Lab has been accepted. Someone from research operations will be in touch shortly with onboarding details.'
+    ? 'Congratulations - your application to join the MCA Research Lab has been accepted. Someone from research operations will be in touch shortly with onboarding details.'
     : 'Thank you for applying to the MCA Research Lab. After review, we are not able to take your application forward at this time. We wish you the best and welcome a future application.';
   const noteBlock = opts.note
     ? `<p style="margin:16px 0 0;padding:12px 14px;background:#f1f5f9;border-radius:8px;color:#1e293b;font:14px/1.6 Arial,sans-serif;white-space:pre-wrap"><strong>Note:</strong> ${esc(opts.note)}</p>`

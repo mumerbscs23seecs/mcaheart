@@ -14,7 +14,7 @@ type Flash = { tone: 'ok' | 'error'; text: string };
 let flash: Flash | null = null;
 let pipelineSweep: PipelineSweepResult | null = null;
 
-// The admin dashboard has its own in-memory login, not a Supabase session — bridge
+// The admin dashboard has its own in-memory login, not a Supabase session - bridge
 // one transparently (same trick /pipeline uses) so every number below comes from
 // the real database, not a placeholder store.
 let session = await getPipelineSession(Astro.request, Astro.cookies);
@@ -33,7 +33,7 @@ if (Astro.request.method === 'POST' && supabase) {
     ].filter(Boolean);
     flash = pipelineSweep.error
       ? { tone: 'error', text: pipelineSweep.error }
-      : { tone: 'ok', text: (dry ? 'Preview — ' : 'Sweep complete — ') + (parts.join(', ') || 'nothing due') };
+      : { tone: 'ok', text: (dry ? 'Preview - ' : 'Sweep complete - ') + (parts.join(', ') || 'nothing due') };
   }
 }
 
@@ -348,7 +348,7 @@ const fmtDay = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('
           </p>
           {pipelineSweep.sent.length > 0 && (
             <ul class="adash-sweep__list">
-              {pipelineSweep.sent.map((s) => <li>{s.ref} — level {s.level} → {s.recipients.join(', ')}</li>)}
+              {pipelineSweep.sent.map((s) => <li>{s.ref} - level {s.level} → {s.recipients.join(', ')}</li>)}
             </ul>
           )}
         </div>
@@ -356,7 +356,7 @@ const fmtDay = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('
         <p class="adash-hint">
           Manuscript-phase projects idle 7+ days get an email nudge (escalating at 12 and 20 days,
           then flagged for reassignment). Runs automatically once a day via
-          <span class="adash-mono"> /api/cron/reminders</span> — “Run sweep now” fires it immediately.
+          <span class="adash-mono"> /api/cron/reminders</span> - “Run sweep now” fires it immediately.
         </p>
       )}
     </section>

@@ -200,7 +200,7 @@ import { director, stats, societies } from '../data/site';
       const start = performance.now();
       const tick = (now: number) => {
         const t = Math.min((now - start) / DURATION, 1);
-        // easeOutExpo — fast then settling, reads as precise rather than bouncy
+        // easeOutExpo - fast then settling, reads as precise rather than bouncy
         const eased = t === 1 ? 1 : 1 - Math.pow(2, -10 * t);
         el.textContent = Math.round(target * eased) + suffix;
         if (t < 1) requestAnimationFrame(tick);
@@ -293,7 +293,7 @@ import { director, stats, societies } from '../data/site';
     16%  { transform: scale(0.998); }
     24%  { transform: scale(1.028); }   /* dub */
     36%  { transform: scale(1); }
-    100% { transform: scale(1); }        /* rest — ~64% of the cycle */
+    100% { transform: scale(1); }        /* rest - ~64% of the cycle */
   }
 
   .hero__scroll {

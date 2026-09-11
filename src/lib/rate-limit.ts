@@ -2,7 +2,7 @@
  * Fixed-window rate limiter, in-process.
  *
  * Adequate for a single-instance Node deployment. If this is ever run across
- * multiple instances, swap the Map for Redis/Upstash — the interface stays the
+ * multiple instances, swap the Map for Redis/Upstash - the interface stays the
  * same.
  */
 

@@ -8,7 +8,7 @@ export const site = {
   name: 'MCA Heart',
   tagline: 'Charting New Paths in Cardiology',
   description:
-    'MCA Heart is a cardiovascular research collective led by Dr Chadi Alraies — over 100 researchers publishing, presenting and teaching at the frontier of cardiology.',
+    'MCA Heart is a cardiovascular research collective led by Dr Chadi Alraies - over 100 researchers publishing, presenting and teaching at the frontier of cardiology.',
   url: 'https://www.mcaheart.com',
   youtube: 'https://www.youtube.com/channel/UCR1U9EROhLsdeuCB4hlAw4w',
 } as const;
@@ -56,13 +56,13 @@ export const stats = [
 ] as const;
 
 export const societies = [
-  { name: 'SCAI — Society for Cardiovascular Angiography & Interventions', logo: '/assets/home/logo-scai.png' },
-  { name: 'ACC — American College of Cardiology', logo: '/assets/home/logo-acc.jpg' },
-  { name: 'AHA — American Heart Association', logo: '/assets/home/logo-aha.jpg' },
+  { name: 'SCAI - Society for Cardiovascular Angiography & Interventions', logo: '/assets/home/logo-scai.png' },
+  { name: 'ACC - American College of Cardiology', logo: '/assets/home/logo-acc.jpg' },
+  { name: 'AHA - American Heart Association', logo: '/assets/home/logo-aha.jpg' },
 ] as const;
 
 /* -------------------------------------------------------------------------- */
-/* Heart Trending — video series                                              */
+/* Heart Trending - video series                                              */
 /* -------------------------------------------------------------------------- */
 
 export type Video = {
@@ -218,7 +218,7 @@ export const education = {
     image: '/assets/education/webinar.jpg',
     partner: 'FACET',
     partnerNote: 'in association with facet.org',
-    body: 'Discussing recent publications highlighting new techniques and science related to interventional, endovascular and structural cardiology — and much more.',
+    body: 'Discussing recent publications highlighting new techniques and science related to interventional, endovascular and structural cardiology - and much more.',
   },
 } as const;
 

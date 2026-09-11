@@ -25,10 +25,10 @@ export const CONFERENCES = ['TCT', 'SCAI', 'ACC', 'flexible', 'none'] as const;
 export type Conference = (typeof CONFERENCES)[number];
 
 export const CONFERENCE_LABELS: Record<Conference, string> = {
-  TCT: 'TCT — Transcatheter Cardiovascular Therapeutics',
-  SCAI: 'SCAI — Society for Cardiovascular Angiography and Interventions',
-  ACC: 'ACC — American College of Cardiology',
-  flexible: 'No specific conference — submit to whichever is nearest',
+  TCT: 'TCT - Transcatheter Cardiovascular Therapeutics',
+  SCAI: 'SCAI - Society for Cardiovascular Angiography and Interventions',
+  ACC: 'ACC - American College of Cardiology',
+  flexible: 'No specific conference - submit to whichever is nearest',
   none: 'Not aiming to present at a conference',
 };
 
@@ -41,18 +41,18 @@ export const COMMITMENT_LABELS: Record<ResearchType, Record<Commitment, string>>
     agree:
       'I can complete the manuscript draft within one month of receiving the analysis, and accept that I may be removed and the topic reassigned if I do not.',
     'abstract-only':
-      'The topic may not suit a full-length paper — I intend to present the abstract only.',
+      'The topic may not suit a full-length paper - I intend to present the abstract only.',
   },
   'Meta-analysis': {
     agree:
       'I can complete the manuscript draft within two months, and accept that the topic may be reassigned to another lead if I do not.',
     'abstract-only':
-      'The idea may not be amenable to a paper — I intend to do the abstract only.',
+      'The idea may not be amenable to a paper - I intend to do the abstract only.',
   },
 };
 
 const longText = (min: number, label: string, max = 3000) =>
-  z.string().trim().min(min, `${label} — please add a little more detail.`).max(max, `${label} is too long.`);
+  z.string().trim().min(min, `${label} - please add a little more detail.`).max(max, `${label} is too long.`);
 const optText = (max: number) => z.string().trim().max(max).optional().default('');
 
 export const ideaSchema = z
@@ -89,7 +89,7 @@ export const ideaSchema = z
     newStudies: optText(3000),
     sampleSizeIncrease: optText(120),
 
-    // Honeypot — must pass; the route checks it after parsing.
+    // Honeypot - must pass; the route checks it after parsing.
     company: z.string().max(200).optional(),
   })
   .superRefine((d, ctx) => {

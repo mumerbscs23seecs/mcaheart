@@ -6,13 +6,13 @@ import { useEffect, useRef, useState, useCallback } from "react"
 // WHEREVER YOU RUN
 // A looping running video sits inside a square, floating "screen"
 // that tilts toward the cursor. Behind it, a real immersive
-// background image (not CSS blobs) sets the palette — deep navy,
-// bright cyan glow, warm amber accent — sampled directly from
+// background image (not CSS blobs) sets the palette - deep navy,
+// bright cyan glow, warm amber accent - sampled directly from
 // that image and reused across every UI color. The track list has
 // real momentum physics (flick-and-settle, not 1:1 drag) and a
 // wide-angle "coverflow" lean. Prev/play/next controls are real
 // and functional. On touch devices the whole composition changes:
-// no background, no card chrome — just the video filling a
+// no background, no card chrome - just the video filling a
 // phone-shaped frame with the player overlaid directly on it, like
 // a native mobile app. Zero dependencies, synthesized sound only.
 // ─────────────────────────────────────────────────────────────
@@ -61,17 +61,17 @@ const SANS = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, 
 const CYAN = "#74b9f1"
 const AMBER = "#f3724c"
 // shadcn-style CSS variables, read with a fallback that matches this
-// component's own dark palette — a host app's real theme (light or
+// component's own dark palette - a host app's real theme (light or
 // dark, whichever is ambient) is picked up automatically if defined;
 // otherwise these fallbacks keep the intended look unchanged. Brand
-// accents (CYAN/AMBER) stay fixed regardless — only structural
+// accents (CYAN/AMBER) stay fixed regardless - only structural
 // background/text colors follow the host theme.
 const bgVar = "hsl(var(--background, 220 25% 4%))"
 const fgVar = "hsl(var(--foreground, 210 40% 98%))"
 const fgMutedVar = (a: number) => `hsl(var(--foreground, 210 40% 98%) / ${a})`
 const cardVar = (a = 1) => `hsl(var(--card, 220 20% 10%) / ${a})`
 const ROW_HEIGHT = 60
-// The video's ambient volume slider is capped here — even at max, it
+// The video's ambient volume slider is capped here - even at max, it
 // stays under the scroll click's perceived loudness, on purpose.
 const MAX_VIDEO_VOLUME = 0.32
 
@@ -82,7 +82,7 @@ function mod(n: number, m: number) {
     return ((n % m) + m) % m
 }
 
-// ── synthesized mouse-wheel click — tight double-transient,
+// ── synthesized mouse-wheel click - tight double-transient,
 // closer to a real encoder detent than a single soft tick ──
 function playWheelClick(ctx: AudioContext, velocity: number) {
     const now = ctx.currentTime
@@ -136,7 +136,7 @@ export default function MusicHero({
     const lastDragYRef = useRef(0)
     const lastDragTRef = useRef(0)
     const rowRefs = useRef<(HTMLDivElement | null)[]>([])
-    // The scroll click is always on — it's the signature detail and
+    // The scroll click is always on - it's the signature detail and
     // stays loud no matter what. This toggle/slider pair now controls
     // only the video's own ambient audio, decoupled entirely from the
     // click. MAX_VIDEO_VOLUME caps the slider so it can never be turned
@@ -149,7 +149,7 @@ export default function MusicHero({
     const [isPlaying, setIsPlaying] = useState(true)
     const [isFullscreen, setIsFullscreen] = useState(true)
     // "video" = the full experience (video + immersive background).
-    // "minimal" = a clean, flat player skin with no video/photo at all —
+    // "minimal" = a clean, flat player skin with no video/photo at all -
     // starts on "video" always; switching to minimal naturally drops the
     // video's own ambient sound option, since there's no video playing.
     const [theme, setTheme] = useState<"video" | "minimal">("video")
@@ -160,7 +160,7 @@ export default function MusicHero({
     const n = tracks.length
 
     useEffect(() => {
-        // Real touch devices AND a narrow browser window both count — the
+        // Real touch devices AND a narrow browser window both count - the
         // latter matters because testing "responsive" by shrinking a
         // desktop browser doesn't actually change pointer type, so
         // relying on that alone left the desktop layout (and its scale)
@@ -175,7 +175,7 @@ export default function MusicHero({
         return () => window.removeEventListener("resize", check)
     }, [])
 
-    // Screen-reader announcements — debounced on track change so a fast
+    // Screen-reader announcements - debounced on track change so a fast
     // flick through the list doesn't fire an announcement per row, only
     // once it actually settles; play/pause announces immediately since
     // that's a single discrete action, not continuous motion.
@@ -213,7 +213,7 @@ export default function MusicHero({
     }
 
     // Unlock on the very first real gesture the browser accepts for this
-    // purpose (click/touch/key/wheel) — this both resumes the click's
+    // purpose (click/touch/key/wheel) - this both resumes the click's
     // audio context and turns the video's own quiet ambient audio on,
     // so the two turn on together as soon as it's physically possible.
     useEffect(() => {
@@ -262,7 +262,7 @@ export default function MusicHero({
                 el.style.zIndex = String(1000 - Math.round(absD * 10))
             })
 
-            // Round first, then wrap — rounding a value already near n (e.g.
+            // Round first, then wrap - rounding a value already near n (e.g.
             // 11.999) can hit exactly n, one past the last valid index.
             // Wrapping after the round avoids that out-of-range case.
             const nearest = mod(Math.round(centerIndexFloat), n)
@@ -308,7 +308,7 @@ export default function MusicHero({
             snapTargetRef.current = null
             velocityRef.current += e.deltaY * 0.045
             velocityRef.current = clamp(velocityRef.current, -14, 14)
-            // Some browsers do treat wheel as a valid unlock gesture — try
+            // Some browsers do treat wheel as a valid unlock gesture - try
             // it here too, in addition to the dedicated unlock listener below.
             const ctx = getCtx()
             if (ctx && ctx.state === "suspended") ctx.resume().catch(() => { })
@@ -348,7 +348,7 @@ export default function MusicHero({
     }, [])
 
     // A fixed diagonal lean at rest, in compact mode only. While actively
-    // hovering, the tilt is a clean, symmetric swing around zero — not
+    // hovering, the tilt is a clean, symmetric swing around zero - not
     // offset by that resting baseline, which was the bug: adding the
     // baseline inside the live range made it swing from -28° to +2°,
     // never symmetric, always biased toward one side.
@@ -413,7 +413,7 @@ export default function MusicHero({
         setIsPlaying((p) => !p)
     }
     // Keyboard equivalent of scrolling/dragging the list and pressing
-    // play — Up/Down (and Left/Right) step one track, exactly like the
+    // play - Up/Down (and Left/Right) step one track, exactly like the
     // prev/next buttons; Space/Enter toggles play, like the play button.
     function handlePlayerKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
         if (e.key === "ArrowDown" || e.key === "ArrowRight") {
@@ -430,7 +430,7 @@ export default function MusicHero({
 
     const activeTrack = tracks[activeIndex]
 
-    // ── MOBILE: entirely different, simplified composition —
+    // ── MOBILE: entirely different, simplified composition -
     // no background image, no floating card, just the video filling
     // a phone-shaped frame with the player overlaid directly on it ──
     if (isCoarsePointer) {
@@ -610,7 +610,7 @@ export default function MusicHero({
 
             {theme === "video" ? (
                 <>
-                    {/* real immersive background image, slowly drifting — not CSS
+                    {/* real immersive background image, slowly drifting - not CSS
               blobs. A rich fallback gradient sits behind it always, so if
               the image path is ever wrong you still get color, not black,
               which makes a broken path obvious versus other bugs. */}
@@ -767,7 +767,7 @@ export default function MusicHero({
                         textAlign: "center",
                         textShadow: "0 4px 30px rgba(0,10,40,0.6)",
                         // Fullscreen makes the card position:fixed and cover the
-                        // whole viewport — the title has to float on top of it as
+                        // whole viewport - the title has to float on top of it as
                         // its own overlay there, exactly like the mobile layout,
                         // instead of sitting in normal flow where it'd be covered.
                         position: effectiveFullscreen ? "fixed" : "static",
@@ -803,7 +803,7 @@ export default function MusicHero({
                     </a>
                 )}
 
-                {/* the wide-angle "lens" wrapper — the whole screen breathes
+                {/* the wide-angle "lens" wrapper - the whole screen breathes
             and tilts, not just the list inside it */}
                 <div style={{ position: "relative" }}>
                     <div
@@ -852,7 +852,7 @@ export default function MusicHero({
                         </span>
                         {theme === "video" ? (
                             <>
-                                {/* the frame above always stays clipped at its own bounds —
+                                {/* the frame above always stays clipped at its own bounds -
                     in fullscreen that's the full viewport edge, so no
                     background is ever revealed. Only this inner layer,
                     oversized, actually tilts in 3D. */}
@@ -869,7 +869,7 @@ export default function MusicHero({
                                 >
                                     <SeamlessLoopVideo src={videoSrc} muted={!videoSoundOn} volume={videoVolume} playing={isPlaying} />
                                 </div>
-                                {/* lens vignette — the "wide angle" read on the screen itself */}
+                                {/* lens vignette - the "wide angle" read on the screen itself */}
                                 <div
                                     style={{
                                         position: "absolute",
@@ -905,7 +905,7 @@ export default function MusicHero({
                                 perspectiveOrigin: "50% 30%",
                                 touchAction: "none",
                                 // Barely-there wash, just enough to keep the very bottom
-                                // (near the controls) from fighting with bright video —
+                                // (near the controls) from fighting with bright video -
                                 // the video should read through, not sit behind a panel.
                                 background: "linear-gradient(180deg, rgba(4,6,14,0) 0%, rgba(4,6,14,0) 55%, rgba(4,6,14,0.35) 100%)",
                             }}
@@ -936,15 +936,15 @@ export default function MusicHero({
     )
 }
 
-// Minimal theme's backdrop — clean, geometric, Apple-style, but
+// Minimal theme's backdrop - clean, geometric, Apple-style, but
 // genuinely in motion: the two soft circles drift and breathe, the
 // two rings spin slowly in opposite directions, and a few small
-// broken-off fragments float independently — pieces of the same
+// broken-off fragments float independently - pieces of the same
 // language, scattered. Keyframes are self-contained here so the
 // component works wherever it's rendered.
 // Two stacked video elements, crossfading into each other right
 // before the loop point, instead of relying on the native `loop`
-// attribute's hard seek-and-restart — which is what actually causes
+// attribute's hard seek-and-restart - which is what actually causes
 // the little stutter, regardless of how well the file itself loops.
 // The inactive video is started and faded in during the last second
 // of the active one; once the fade completes, they swap roles.
@@ -1092,7 +1092,7 @@ function MinimalBackdrop() {
                     animation: "mh-geo-drift-b 18s ease-in-out infinite 1s",
                 }}
             />
-            {/* two rings, spinning opposite ways — the deliberate, structured
+            {/* two rings, spinning opposite ways - the deliberate, structured
           Apple-style line-art touch, now actually alive */}
             <div
                 style={{
@@ -1120,7 +1120,7 @@ function MinimalBackdrop() {
                     animation: "mh-geo-spin-ccw 28s linear infinite",
                 }}
             />
-            {/* broken-off fragments — small pieces of the same shapes,
+            {/* broken-off fragments - small pieces of the same shapes,
           floating on their own, independent little drifts */}
             <div
                 style={{
@@ -1202,8 +1202,8 @@ function TrackRow({
                 gap: 12,
                 padding: "0 10px",
                 borderRadius: 14,
-                // Only the centered, active track gets any backing at all —
-                // a soft glass pill plus a colored glow — everything else sits
+                // Only the centered, active track gets any backing at all -
+                // a soft glass pill plus a colored glow - everything else sits
                 // directly on the video with just a text-shadow for legibility.
                 background: isActive ? "rgba(255,255,255,0.1)" : "transparent",
                 backdropFilter: isActive ? "blur(14px)" : "none",

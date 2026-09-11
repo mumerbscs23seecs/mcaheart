@@ -65,7 +65,7 @@ import {
     <div class="ifield" data-when="Database">
       <span class="ifield__label">Proposed database(s) <b>*</b></span>
       <p class="ifield__help">
-        If unsure, choose <em>Not sure</em> — we'll assess which database best fits the idea.
+        If unsure, choose <em>Not sure</em> - we'll assess which database best fits the idea.
         The <strong>DMC PCI Database</strong> is only open to people with a WSU IRB; propose it only if that applies to you.
       </p>
       <div class="ichoices">
@@ -101,7 +101,7 @@ import {
 
     <div class="ifield">
       <label class="ifield__label" for="rationale">Rationale <b>*</b></label>
-      <p class="ifield__help">Clinical significance and the gap this addresses. Be brief — two lines is fine.</p>
+      <p class="ifield__help">Clinical significance and the gap this addresses. Be brief - two lines is fine.</p>
       <textarea class="ifield__input ifield__area" id="rationale" name="rationale" rows="2" required maxlength="600"></textarea>
       <p class="ifield__err" data-err-for="rationale" hidden></p>
     </div>
@@ -121,7 +121,7 @@ import {
     <div class="ifield" data-when="Database">
       <label class="ifield__label" for="priorStudies">Similar studies previously published on this exact topic? <b>*</b></label>
       <p class="ifield__help">
-        Key citations or titles. The publication value of the idea can hinge on this — please do a proper literature review.
+        Key citations or titles. The publication value of the idea can hinge on this - please do a proper literature review.
       </p>
       <textarea class="ifield__input ifield__area" id="priorStudies" name="priorStudies" rows="3" maxlength="3000"></textarea>
       <p class="ifield__err" data-err-for="priorStudies" hidden></p>
@@ -174,7 +174,7 @@ import {
 
     <div class="ifield">
       <label class="ifield__label" for="supportingDoc">Supporting document</label>
-      <p class="ifield__help">Optional — protocol draft, feasibility checks, etc. One file, max 10 MB ({UPLOAD.extensions.join(', ')}).</p>
+      <p class="ifield__help">Optional - protocol draft, feasibility checks, etc. One file, max 10 MB ({UPLOAD.extensions.join(', ')}).</p>
       <input class="ifield__file" id="supportingDoc" name="supportingDoc" type="file" accept={UPLOAD.extensions.join(',')} />
       <p class="ifield__err" data-err-for="supportingDoc" hidden></p>
     </div>
@@ -278,7 +278,7 @@ import {
         if (res.ok && data.ok) {
           form.reset();
           applyType();
-          setStatus(data.message ?? 'Thank you — your research idea has been submitted.', 'ok');
+          setStatus(data.message ?? 'Thank you - your research idea has been submitted.', 'ok');
         } else {
           setStatus(data.error ?? 'Something went wrong. Please try again.', 'error');
           if (data.fieldErrors) showErrors(data.fieldErrors);

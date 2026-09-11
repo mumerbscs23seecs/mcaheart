@@ -27,7 +27,7 @@ let preview: Preview | null = null;
 
 /** Short pipeline "target" label for an accepted idea. */
 const targetFor = (c: Conference) =>
-  c === 'flexible' ? 'Conference — flexible' : c === 'none' ? 'Manuscript only' : c;
+  c === 'flexible' ? 'Conference - flexible' : c === 'none' ? 'Manuscript only' : c;
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
@@ -56,7 +56,7 @@ if (Astro.request.method === 'POST') {
     }
   }
 
-  // --- Phase 2: confirmed — record + send --------------------------------
+  // --- Phase 2: confirmed - record + send --------------------------------
   if (action === 'confirm') {
     const result = decideIdea(ideaId, decision, me.name, note);
     if (!result.ok || !result.idea) {
@@ -70,7 +70,7 @@ if (Astro.request.method === 'POST') {
           leadEmail: idea.leadEmail,
           target: targetFor(idea.conference),
           actor: me.name,
-          note: `Accepted from the idea submission form${note.trim() ? ` — ${note.trim()}` : ''}.`,
+          note: `Accepted from the idea submission form${note.trim() ? ` - ${note.trim()}` : ''}.`,
         });
       }
       let emailed = true;
@@ -92,8 +92,8 @@ if (Astro.request.method === 'POST') {
             tone: 'ok',
             text:
               decision === 'accepted'
-                ? `Accepted — added to Submissions, email sent to ${idea.leadEmail}.`
-                : `Declined — email sent to ${idea.leadEmail}.`,
+                ? `Accepted - added to Submissions, email sent to ${idea.leadEmail}.`
+                : `Declined - email sent to ${idea.leadEmail}.`,
           }
         : {
             tone: 'error',
@@ -107,7 +107,7 @@ const ideas = listIdeas();
 const pending = ideas.filter((i) => i.status === 'pending').length;
 
 const fmtDate = (t: number | null) =>
-  t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '—';
+  t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
 const ago = (t: number) => {
   const d = Math.floor((Date.now() - t) / 86_400_000);
   if (d === 0) return 'today';
@@ -142,7 +142,7 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
       ]) as Array<[string, string]>),
   ['Target conference', CONFERENCE_LABELS[i.conference]],
   ['Manuscript commitment', COMMITMENT_LABELS[i.researchType][i.commitment]],
-  ['Supporting document', i.attachmentName ?? '— none —'],
+  ['Supporting document', i.attachmentName ?? '- none -'],
 ];
 ---
 
@@ -157,7 +157,7 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
     {preview ? (
       <div class="mailprev">
         <h2 class="mailprev__title">
-          Preview — {preview.decision === 'accepted' ? 'acceptance' : 'decline'} email
+          Preview - {preview.decision === 'accepted' ? 'acceptance' : 'decline'} email
         </h2>
         <dl class="mailprev__head">
           <div><dt>To</dt><dd>{preview.to}</dd></div>

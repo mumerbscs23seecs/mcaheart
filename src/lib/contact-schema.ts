@@ -41,11 +41,11 @@ export const contactSchema = z.object({
   message: z
     .string()
     .trim()
-    .min(10, 'Please tell us a little more — at least 10 characters.')
+    .min(10, 'Please tell us a little more - at least 10 characters.')
     .max(4000, 'Please keep your message under 4000 characters.'),
 
   // Honeypot: real users never see or fill this field. It must *pass*
-  // validation so bots get a 200 rather than a hint that they were caught —
+  // validation so bots get a 200 rather than a hint that they were caught -
   // the route checks it after parsing.
   company: z.string().max(200).optional(),
 });

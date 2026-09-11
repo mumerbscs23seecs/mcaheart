@@ -1,5 +1,5 @@
 /**
- * GENERATED FILE — do not edit by hand.
+ * GENERATED FILE - do not edit by hand.
  * Regenerate with:  node scripts/fetch-publications.mjs [count]
  * Last generated:   2026-08-29
  */

@@ -68,7 +68,7 @@ const canRequest = !isAdmin && !p.archived_at && ['conference', 'manuscript'].in
 const canLink = !p.archived_at && p.phase !== 'idea';
 
 const fmtDate = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+  d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
 const overdue = p.days_overdue != null && p.days_overdue > 0;
 const stale = p.days_in_stage != null && p.days_in_stage >= 21;
 const phaseTab =
@@ -100,7 +100,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
     {p.current_conference && <span>{p.current_conference}</span>}
     {p.current_journal && <span>Journal: {p.current_journal}</span>}
     {p.parked && <span>parked</span>}
-    {p.archived_at && <span class="pl-warn">archived — {p.archive_reason}</span>}
+    {p.archived_at && <span class="pl-warn">archived - {p.archive_reason}</span>}
     {overdue && <span class="pl-warn">overdue {p.days_overdue}d</span>}
     {stale && !overdue && <span class="pl-warn">stale</span>}
     {p.needs_reassignment && <span class="pl-warn">needs reassignment</span>}
@@ -135,7 +135,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
                 <p class="pl-reqcard__line">
                   <b>{reqName.get(r.requested_by) ?? 'A member'}</b> asks to set status to{' '}
                   <b>{STAGE_LABEL(r.from_phase ?? p.phase, r.to_stage)}</b>
-                  {r.note && <span class="pl-muted"> — “{r.note}”</span>}
+                  {r.note && <span class="pl-muted"> - “{r.note}”</span>}
                   {r.review_url && (
                     <span class="pl-muted"> · <a href={r.review_url} target="_blank" rel="noopener">reviewed copy →</a></span>
                   )}
@@ -153,7 +153,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
         </div>
       )}
 
-      {/* Stage — within the current phase */}
+      {/* Stage - within the current phase */}
       {['idea', 'manuscript', 'journal'].includes(p.phase) && (
         <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-actrow" data-stage-form>
           <input type="hidden" name="gate" value="stage" />
@@ -188,7 +188,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
         </form>
       )}
 
-      {/* GATE 1 — idea/conference -> a conference */}
+      {/* GATE 1 - idea/conference -> a conference */}
       {['idea', 'conference'].includes(p.phase) && (
         <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-actrow">
           <input type="hidden" name="gate" value="1" />
@@ -201,7 +201,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
         </form>
       )}
 
-      {/* GATE 2 — conference -> manuscript / archive */}
+      {/* GATE 2 - conference -> manuscript / archive */}
       {p.phase === 'conference' && (
         <div class="pl-actrow">
           <label class="pl-actlbl">Gate 2</label>
@@ -225,13 +225,13 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
                 <option value="other">Other</option>
               </select>
               <input name="review_url" placeholder="Reviewed copy link (optional)" title={DOC_LINK_HINT} />
-              <button class="pl-btn pl-btn--danger" type="submit">Not proceeding — close out</button>
+              <button class="pl-btn pl-btn--danger" type="submit">Not proceeding - close out</button>
             </form>
           </details>
         </div>
       )}
 
-      {/* GATE 3 — manuscript -> journal */}
+      {/* GATE 3 - manuscript -> journal */}
       {p.phase === 'manuscript' && (
         <div class="pl-actrow">
           <label class="pl-actlbl">Gate 3</label>
@@ -251,7 +251,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
         </div>
       )}
 
-      {/* Journal outcome — submissions phase */}
+      {/* Journal outcome - submissions phase */}
       {p.phase === 'journal' && openJournalAttempt && (
         <div class="pl-actrow">
           <label class="pl-actlbl">Journal outcome</label>
@@ -260,7 +260,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
             <input type="hidden" name="attempt" value={openJournalAttempt.id} />
             <span class="pl-muted pl-small">Deciding: <b>{openJournalAttempt.journal}</b></span>
             <input name="review_url" placeholder="Reviewer report / decision letter link (optional)" title={DOC_LINK_HINT} />
-            <input name="next_journal" placeholder="Next journal (only if rejected — reopens at Submitted)" />
+            <input name="next_journal" placeholder="Next journal (only if rejected - reopens at Submitted)" />
             <div class="pl-mini">
               <button class="pl-btn" name="outcome" value="accepted" type="submit">Accepted</button>
               <button class="pl-btn pl-btn--danger" name="outcome" value="rejected" type="submit">Rejected</button>
@@ -279,7 +279,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
       )}
       {p.phase === 'journal' && (
         <p class="pl-actrow pl-muted pl-small">
-          This paper is with a journal — the coordinator manages its status. Every change shows in the history below.
+          This paper is with a journal - the coordinator manages its status. Every change shows in the history below.
         </p>
       )}
 
@@ -287,7 +287,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
         <>
           {myPending && (
             <p class="pl-actrow pl-reqcard pl-reqcard--wait">
-              Requested: <b>{STAGE_LABEL(p.phase, myPending.to_stage)}</b> — waiting for the coordinator to approve.
+              Requested: <b>{STAGE_LABEL(p.phase, myPending.to_stage)}</b> - waiting for the coordinator to approve.
               {myPending.note && <span class="pl-muted"> “{myPending.note}”</span>}
             </p>
           )}
@@ -315,7 +315,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
     </section>
   )}
   {!isAdmin && p.archived_at && (
-    <p class="pl-muted pl-small" style="margin:14px 0">This project is archived — no further status changes.</p>
+    <p class="pl-muted pl-small" style="margin:14px 0">This project is archived - no further status changes.</p>
   )}
 
   {canLink && (
@@ -343,7 +343,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
     <div>
       <h2 class="pl-sech">History</h2>
       {(!history || history.length === 0) && (
-        <p class="pl-muted pl-small">No recorded events yet — they accumulate as the project moves.</p>
+        <p class="pl-muted pl-small">No recorded events yet - they accumulate as the project moves.</p>
       )}
       <ul class="pl-history">
         {(history ?? []).map((h: any) => (
@@ -358,9 +358,9 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
     <aside class="pl-rail">
       <h3>People</h3>
       <dl>
-        <dt>Lead</dt><dd>{who.get(p.lead_id)?.full_name ?? '—'}</dd>
+        <dt>Lead</dt><dd>{who.get(p.lead_id)?.full_name ?? '-'}</dd>
         {p.colead_id && <><dt>Co-lead</dt><dd>{who.get(p.colead_id)?.full_name}</dd></>}
-        <dt>Analyst</dt><dd>{who.get(p.analyst_id)?.full_name ?? '—'}</dd>
+        <dt>Analyst</dt><dd>{who.get(p.analyst_id)?.full_name ?? '-'}</dd>
         {p.presenter_id && <><dt>Presenter</dt><dd>{who.get(p.presenter_id)?.full_name}</dd></>}
         <dt>Corresponding author</dt><dd>{who.get(p.corresponding_id)?.full_name ?? <span class="pl-muted">not set</span>}</dd>
       </dl>

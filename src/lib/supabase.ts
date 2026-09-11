@@ -1,11 +1,11 @@
 /**
- * MCA Pipeline (SPEC.md) — Supabase clients. Appendix A, verbatim intent:
+ * MCA Pipeline (SPEC.md) - Supabase clients. Appendix A, verbatim intent:
  *
  *   "two clients: an anon client bound to the request's session for reads,
  *    and a service-role client used ONLY by the nightly job. Never expose
  *    the service key to the browser; it bypasses every policy in schema.sql."
  *
- * Neither client carries any authorization logic itself — schema.sql's RLS
+ * Neither client carries any authorization logic itself - schema.sql's RLS
  * policies, revoked grants, and `security definer` functions are the only
  * authority. This file just gets requests connected to Postgres correctly.
  */
@@ -25,7 +25,7 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 
 /**
  * Request-scoped client bound to the visitor's own session cookie. Use this in
- * every pipeline page and API route — reads and writes both go through it, and
+ * every pipeline page and API route - reads and writes both go through it, and
  * what it's actually allowed to do is entirely decided by RLS + the RPC
  * functions in schema.sql. This client itself holds no elevated privilege.
  */
@@ -47,7 +47,7 @@ export function supabaseForRequest(request: Request, cookies: AstroCookies): Sup
 /**
  * Browser-side client for the one bit of client JS the stage dropdowns need
  * (Appendix A: "a small amount of client JS ... no React needed"). Only the
- * anon key, same as the server client — never the service key.
+ * anon key, same as the server client - never the service key.
  */
 export function supabaseBrowser(): SupabaseClient {
   return createBrowserClient(SUPABASE_URL!, SUPABASE_ANON_KEY!);
@@ -65,7 +65,7 @@ let _admin: SupabaseClient | null = null;
 export function supabaseAdmin(): SupabaseClient {
   if (!SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error(
-      'SUPABASE_SERVICE_ROLE_KEY is not set. Required for the nightly job / import only — ' +
+      'SUPABASE_SERVICE_ROLE_KEY is not set. Required for the nightly job / import only - ' +
         'normal request handling should use supabaseForRequest() instead.',
     );
   }

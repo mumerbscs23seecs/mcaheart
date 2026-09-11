@@ -214,7 +214,7 @@ const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
         const data = await res.json();
         if (res.ok && data.ok) {
           form.reset();
-          setStatus(data.message ?? 'Thank you — your application has been submitted.', 'ok');
+          setStatus(data.message ?? 'Thank you - your application has been submitted.', 'ok');
         } else {
           setStatus(data.error ?? 'Something went wrong. Please try again.', 'error');
           if (data.fieldErrors) showErrors(data.fieldErrors);
