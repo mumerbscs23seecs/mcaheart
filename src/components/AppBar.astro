@@ -2,6 +2,7 @@
 import { pendingIdeaCount } from '../lib/ideas';
 import { pendingApplicationCount } from '../lib/applications';
 import { getNotifications } from '../lib/notifications';
+import ThemeToggle from './ThemeToggle.astro';
 
 interface Props {
   active?: 'dashboard' | 'ideas' | 'applicants' | 'pipeline' | 'access';
@@ -79,6 +80,7 @@ const navItems = isAdmin
       <form method="post" action="/logout">
         <button class="appbar__logout" type="submit">Log out</button>
       </form>
+      <ThemeToggle />
     </div>
   </div>
 </header>
@@ -237,7 +239,7 @@ const navItems = isAdmin
     white-space: nowrap;
     transition: background 0.15s var(--ease), color 0.15s var(--ease);
   }
-  .appbar__logout:hover { background: var(--ink); color: #fff; }
+  .appbar__logout:hover { background: var(--ink); color: var(--bg); }
 
   @media (max-width: 720px) {
     .appbar__inner { height: auto; flex-wrap: wrap; gap: 0.5rem; padding-block: 0.5rem; }

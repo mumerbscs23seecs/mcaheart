@@ -84,9 +84,9 @@ import { contactIntents } from '../data/site';
     inset: 0;
     background: linear-gradient(
       to top,
-      rgba(252, 252, 251, 1) 0%,
-      rgba(252, 252, 251, 0.92) 45%,
-      rgba(252, 252, 251, 0.8) 100%
+      color-mix(in srgb, var(--bg) 100%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 92%, transparent) 45%,
+      color-mix(in srgb, var(--bg) 80%, transparent) 100%
     );
   }
   .chero__inner { padding-bottom: var(--space-xl); }

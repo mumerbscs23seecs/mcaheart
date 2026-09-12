@@ -26,6 +26,24 @@
   --font-serif: var(--pl-serif);
 }
 
+/* Dark mode: --pl-accent/--pl-danger/--pl-warn/--pl-good/--pl-navy* all alias
+   global.css tokens (--blue/--red/--warn/--ok/--dark), so they re-light on
+   their own. Only the hardcoded portal-blue/red need their own dark step. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --pl-link: #6ba3e0;
+    --pl-link-deep: #8fb9e8;
+    --pl-link-wash: rgba(107, 163, 224, 0.12);
+    --pl-action: #e2685a;
+  }
+}
+:root[data-theme='dark'] {
+  --pl-link: #6ba3e0;
+  --pl-link-deep: #8fb9e8;
+  --pl-link-wash: rgba(107, 163, 224, 0.12);
+  --pl-action: #e2685a;
+}
+
 .pl-body {
   margin: 0;
   min-height: 100vh;
@@ -147,7 +165,7 @@
   text-transform: uppercase;
 }
 .pl-chip:hover { border-color: var(--ink); color: var(--text-strong); }
-.pl-chip.is-active { background: var(--ink); color: #fff; border-color: var(--ink); }
+.pl-chip.is-active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .pl-count {
   color: var(--text-faint);
   font-size: 0.7rem;

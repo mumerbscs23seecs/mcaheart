@@ -2,6 +2,7 @@
 import '../../styles/global.css';
 import '../../styles/pipeline.css';
 import FontLinks from '../../components/FontLinks.astro';
+import ThemeInit from '../../components/ThemeInit.astro';
 import { requestMagicLink } from '../../lib/pipeline-auth';
 
 export const prerender = false;
@@ -25,8 +26,11 @@ if (Astro.request.method === 'POST') {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <ThemeInit />
     <title>Sign in · MCA Research Pipeline</title>
     <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141412" media="(prefers-color-scheme: dark)" />
     <FontLinks />
   </head>
   <body class="pl-authbody">

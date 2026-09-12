@@ -1,0 +1,16 @@
+---
+// Blocking script for <head> — must run before first paint or the page
+// flashes the wrong theme for a frame. Reads the saved choice (localStorage),
+// falls back to the OS preference. Include once per layout, before <FontLinks/>.
+---
+<script is:inline>
+  (() => {
+    try {
+      var saved = localStorage.getItem('mca-theme');
+      var theme = saved === 'dark' || saved === 'light'
+        ? saved
+        : (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      document.documentElement.dataset.theme = theme;
+    } catch (e) {}
+  })();
+</script>

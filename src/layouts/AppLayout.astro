@@ -1,6 +1,7 @@
 ---
 import '../styles/global.css';
 import FontLinks from '../components/FontLinks.astro';
+import ThemeInit from '../components/ThemeInit.astro';
 import AppBar from '../components/AppBar.astro';
 import { site } from '../data/site';
 import type { User } from '../lib/auth';
@@ -20,10 +21,12 @@ const { title, heading, user, active } = Astro.props;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <ThemeInit />
     <title>{title} | {site.name}</title>
     <meta name="robots" content="noindex" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#ffffff" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141412" media="(prefers-color-scheme: dark)" />
     <FontLinks />
   </head>
 

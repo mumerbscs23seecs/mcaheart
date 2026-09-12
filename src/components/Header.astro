@@ -1,6 +1,7 @@
 ---
 import { nav } from '../data/site';
 import type { NavItem } from '../data/site';
+import ThemeToggle from './ThemeToggle.astro';
 
 interface Props { transparent?: boolean }
 const { transparent = false } = Astro.props;
@@ -75,6 +76,7 @@ const isActive = (item: NavItem) =>
           </form>
         </span>
       </div>
+      <ThemeToggle />
     </nav>
 
     <button class="burger" type="button" aria-expanded="false" aria-controls="mobile-nav" data-burger>
@@ -125,6 +127,11 @@ const isActive = (item: NavItem) =>
           <button class="drawer__link drawer__logout" type="submit">Log out</button>
         </form>
       </span>
+    </div>
+
+    <div class="drawer__theme">
+      <span>Dark mode</span>
+      <ThemeToggle />
     </div>
   </div>
 </header>
@@ -268,7 +275,7 @@ const isActive = (item: NavItem) =>
     white-space: nowrap;
     transition: background 0.12s var(--ease), color 0.12s var(--ease);
   }
-  .nav__sublink:hover { background: var(--ink); color: #fff; }
+  .nav__sublink:hover { background: var(--ink); color: var(--bg); }
   .nav__sublink.is-current { color: var(--blue); }
 
   /* --- Burger --- */
@@ -360,10 +367,10 @@ const isActive = (item: NavItem) =>
     border-radius: 0;
   }
   .authbar__account .nav__link { font-weight: 700; font-size: 0.82rem; }
-  .authbar__account .nav__link { color: rgba(255, 255, 255, 0.82); }
-  .authbar__account .nav__link:hover { color: #fff; }
-  .authbar__account .nav__link::after { background: #fff; }
-  .authbar__account .nav__link.is-current { color: #fff; }
+  .authbar__account .nav__link { color: color-mix(in srgb, var(--bg) 82%, transparent); }
+  .authbar__account .nav__link:hover { color: var(--bg); }
+  .authbar__account .nav__link::after { background: var(--bg); }
+  .authbar__account .nav__link.is-current { color: var(--bg); }
   .authbar__logout { display: flex; margin: 0; }
   .authbar__logout button {
     cursor: pointer;
@@ -376,6 +383,18 @@ const isActive = (item: NavItem) =>
 
   /* --- Auth block (mobile drawer) --- */
   .drawer__auth { margin-top: var(--space-m); display: grid; gap: 0.25rem; }
+  .drawer__theme {
+    margin-top: var(--space-m);
+    padding-top: var(--space-s);
+    border-top: 1px solid var(--border-soft);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+  }
   .drawer__member {
     display: grid;
     gap: 0.15rem;
@@ -384,9 +403,9 @@ const isActive = (item: NavItem) =>
     background: var(--ink);
     border-radius: 0;
   }
-  .drawer__member .drawer__link { color: #fff; border-bottom-color: rgba(255, 255, 255, 0.16); }
-  .drawer__member .drawer__link.is-current { color: #fff; }
-  .drawer__member .drawer__num { color: rgba(255, 255, 255, 0.7); }
+  .drawer__member .drawer__link { color: var(--bg); border-bottom-color: color-mix(in srgb, var(--bg) 16%, transparent); }
+  .drawer__member .drawer__link.is-current { color: var(--bg); }
+  .drawer__member .drawer__num { color: color-mix(in srgb, var(--bg) 70%, transparent); }
   .drawer__logout {
     width: 100%;
     text-align: left;

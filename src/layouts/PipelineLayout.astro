@@ -2,6 +2,7 @@
 import '../styles/global.css';
 import '../styles/pipeline.css';
 import FontLinks from '../components/FontLinks.astro';
+import ThemeInit from '../components/ThemeInit.astro';
 import AppBar from '../components/AppBar.astro';
 import { scopeProjects } from '../lib/pipeline-scope';
 import { getPipelineTasks } from '../lib/pipeline-tasks';
@@ -72,9 +73,12 @@ const tabs: Tab[] = [
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <ThemeInit />
     <title>{title} · MCA Research Pipeline</title>
     <meta name="robots" content="noindex" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#141412" media="(prefers-color-scheme: dark)" />
     <FontLinks />
     {/* Pipeline area runs on Open Sans - the journal-portal look. */}
     <link

@@ -110,6 +110,107 @@
 
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  color-scheme: light;
+}
+
+/* ---------- 1b. Dark mode ------------------------------------------------
+   Same tokens, re-lit — not a second design. The palette is exactly what the
+   site's own .dark-ground sections already use (--dark / --on-dark-*), now
+   promoted to the whole page. Two selectors so both directions win: the media
+   query covers "OS says dark, no explicit choice"; the [data-theme] scope
+   covers the toggle and beats OS in both directions via :not()/specificity. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg:          #141412;
+    --bg-tint:     #232320;
+    --surface:     #1e1e1b;
+    --on-dark:     #f4f3f0;
+
+    --text-strong: #f5f4f1;
+    --text:        rgba(245, 244, 241, 0.82);
+    --text-muted:  rgba(245, 244, 241, 0.60);
+    --text-faint:  rgba(245, 244, 241, 0.42);
+    --text-hint:   rgba(245, 244, 241, 0.55);
+
+    --blue:        #e2685a;
+    --blue-deep:   #c94f3e;
+    --blue-light:  #ec8a7d;
+    --accent-wash:        rgba(226, 104, 90, 0.14);
+    --accent-wash-strong: rgba(226, 104, 90, 0.24);
+
+    --red:         #e2685a;
+    --red-deep:    #c94f3e;
+    --red-wash:    rgba(226, 104, 90, 0.14);
+    --red-border:  rgba(226, 104, 90, 0.38);
+
+    --dark:        #0c0c0b;
+    --dark-2:      #171715;
+
+    --on-dark-strong: #ffffff;
+    --on-dark-muted:  rgba(255, 255, 255, 0.72);
+    --on-dark-faint:  rgba(255, 255, 255, 0.48);
+    --on-dark-border: rgba(255, 255, 255, 0.18);
+    --on-dark-accent: #e79a8f;
+
+    --ok:          #4ade80;
+    --ok-bg:       rgba(74, 222, 128, 0.13);
+    --ok-border:   rgba(74, 222, 128, 0.35);
+    --warn:        #eab659;
+    --warn-bg:     rgba(234, 182, 89, 0.14);
+    --warn-border: rgba(234, 182, 89, 0.38);
+
+    --ink:           #f5f4f1;
+    --border:        rgba(245, 244, 241, 0.16);
+    --border-soft:   rgba(245, 244, 241, 0.09);
+    --border-strong: rgba(245, 244, 241, 0.4);
+  }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg:          #141412;
+  --bg-tint:     #232320;
+  --surface:     #1e1e1b;
+  --on-dark:     #f4f3f0;
+
+  --text-strong: #f5f4f1;
+  --text:        rgba(245, 244, 241, 0.82);
+  --text-muted:  rgba(245, 244, 241, 0.60);
+  --text-faint:  rgba(245, 244, 241, 0.42);
+  --text-hint:   rgba(245, 244, 241, 0.55);
+
+  --blue:        #e2685a;
+  --blue-deep:   #c94f3e;
+  --blue-light:  #ec8a7d;
+  --accent-wash:        rgba(226, 104, 90, 0.14);
+  --accent-wash-strong: rgba(226, 104, 90, 0.24);
+
+  --red:         #e2685a;
+  --red-deep:    #c94f3e;
+  --red-wash:    rgba(226, 104, 90, 0.14);
+  --red-border:  rgba(226, 104, 90, 0.38);
+
+  --dark:        #0c0c0b;
+  --dark-2:      #171715;
+
+  --on-dark-strong: #ffffff;
+  --on-dark-muted:  rgba(255, 255, 255, 0.72);
+  --on-dark-faint:  rgba(255, 255, 255, 0.48);
+  --on-dark-border: rgba(255, 255, 255, 0.18);
+  --on-dark-accent: #e79a8f;
+
+  --ok:          #4ade80;
+  --ok-bg:       rgba(74, 222, 128, 0.13);
+  --ok-border:   rgba(74, 222, 128, 0.35);
+  --warn:        #eab659;
+  --warn-bg:     rgba(234, 182, 89, 0.14);
+  --warn-border: rgba(234, 182, 89, 0.38);
+
+  --ink:           #f5f4f1;
+  --border:        rgba(245, 244, 241, 0.16);
+  --border-soft:   rgba(245, 244, 241, 0.09);
+  --border-strong: rgba(245, 244, 241, 0.4);
 }
 
 /* ---------- 2. Reset ----------------------------------------------------- */
@@ -134,6 +235,10 @@ body {
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
   overflow-x: hidden;
+  transition: background-color 0.25s var(--ease), color 0.25s var(--ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  body { transition: none; }
 }
 
 img, svg, video { display: block; max-width: 100%; height: auto; }
@@ -340,7 +445,7 @@ p { text-wrap: pretty; }
   --btn-fg: var(--ink);
   --btn-bd: var(--ink);
 }
-.btn--ghost:hover { --btn-bg: var(--ink); --btn-fg: #fff; --btn-bd: var(--ink); }
+.btn--ghost:hover { --btn-bg: var(--ink); --btn-fg: var(--bg); --btn-bd: var(--ink); }
 
 .btn--red { --btn-bg: var(--red); --btn-bd: var(--red); }
 .btn--red:hover { --btn-bg: var(--red-deep); --btn-bd: var(--red-deep); }

@@ -42,7 +42,11 @@ const { eyebrow, title, body, ctaLabel, ctaHref, image } = Astro.props;
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(18, 18, 18, 0.86), rgba(18, 18, 18, 0.95));
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--dark) 86%, transparent),
+      color-mix(in srgb, var(--dark) 95%, transparent)
+    );
   }
 
   .cta__title {
