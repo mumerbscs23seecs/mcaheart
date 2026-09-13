@@ -1,0 +1,26 @@
+---
+import PipelineLayout from '../../layouts/PipelineLayout.astro';
+import IdeaForm from '../../components/IdeaForm.astro';
+
+export const prerender = false;
+const { person } = Astro.locals;
+---
+
+<PipelineLayout title="Submit a new idea" active="idea">
+  <h1 class="pl-h1">Submit a new research idea</h1>
+  <p class="pl-sub">
+    Same review process as the public form - the coordinators will get back to you. Since you're
+    signed in, we've filled in your name and email already.
+  </p>
+
+  <div class="pl-idea-form">
+    <IdeaForm prefill={{ name: person.full_name, email: person.email }} />
+  </div>
+</PipelineLayout>
+
+<style>
+  .pl-idea-form {
+    max-width: 760px;
+    margin-top: 28px;
+  }
+</style>

@@ -9,6 +9,12 @@ import {
   COMMITMENT_LABELS,
   UPLOAD,
 } from '../lib/idea-schema';
+
+interface Props {
+  /** Signed-in pipeline members already have a name/email on file - skip asking again. */
+  prefill?: { name: string; email: string };
+}
+const { prefill } = Astro.props;
 ---
 
 <form class="iform" action="/api/idea-submission" method="post" enctype="multipart/form-data" novalidate data-idea-form>
@@ -16,18 +22,27 @@ import {
   <fieldset class="iform__group">
     <legend class="iform__legend"><span>1</span> Lead investigator</legend>
 
-    <div class="ifrow">
+    {prefill ? (
       <div class="ifield">
-        <label class="ifield__label" for="leadName">Full name <b>*</b></label>
-        <input class="ifield__input" id="leadName" name="leadName" type="text" autocomplete="name" required maxlength="120" />
-        <p class="ifield__err" data-err-for="leadName" hidden></p>
+        <span class="ifield__label">Submitting as</span>
+        <p class="iform__prefill">{prefill.name} &lt;{prefill.email}&gt;</p>
+        <input type="hidden" name="leadName" value={prefill.name} />
+        <input type="hidden" name="leadEmail" value={prefill.email} />
       </div>
-      <div class="ifield">
-        <label class="ifield__label" for="leadEmail">Primary email <b>*</b></label>
-        <input class="ifield__input" id="leadEmail" name="leadEmail" type="email" autocomplete="email" required maxlength="200" />
-        <p class="ifield__err" data-err-for="leadEmail" hidden></p>
+    ) : (
+      <div class="ifrow">
+        <div class="ifield">
+          <label class="ifield__label" for="leadName">Full name <b>*</b></label>
+          <input class="ifield__input" id="leadName" name="leadName" type="text" autocomplete="name" required maxlength="120" />
+          <p class="ifield__err" data-err-for="leadName" hidden></p>
+        </div>
+        <div class="ifield">
+          <label class="ifield__label" for="leadEmail">Primary email <b>*</b></label>
+          <input class="ifield__input" id="leadEmail" name="leadEmail" type="email" autocomplete="email" required maxlength="200" />
+          <p class="ifield__err" data-err-for="leadEmail" hidden></p>
+        </div>
       </div>
-    </div>
+    )}
 
     <div class="ifield ifield--half">
       <label class="ifield__label" for="contactNumber">Contact number <b>*</b></label>

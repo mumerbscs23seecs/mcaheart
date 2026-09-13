@@ -9,7 +9,7 @@ import { getPipelineTasks } from '../lib/pipeline-tasks';
 
 interface Props {
   title: string;
-  active?: 'conferences' | 'ongoing' | 'submissions' | 'published' | 'tasks';
+  active?: 'conferences' | 'ongoing' | 'submissions' | 'published' | 'idea' | 'tasks';
 }
 const { title, active } = Astro.props;
 const { supabase, person } = Astro.locals;
@@ -64,6 +64,7 @@ const tabs: Tab[] = [
   ...(isAdmin
     ? [{ key: 'published', label: 'Published', href: '/pipeline/published', count: pubN.count ?? null }]
     : []),
+  { key: 'idea', label: 'New idea', href: '/pipeline/submit-idea', count: null },
   taskTab,
 ];
 ---

@@ -2,16 +2,33 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
+import { getPipelineSession, bridgeAdminSession } from '../../lib/pipeline-auth';
 import { listIdeas, getIdea, decideIdea } from '../../lib/ideas';
-import { addSubmission } from '../../lib/submissions';
 import { deliverIdeaDecision, renderIdeaDecisionEmail } from '../../lib/idea-mailer';
 import { CONFERENCE_LABELS, COMMITMENT_LABELS, type Conference } from '../../lib/idea-schema';
+import type { IdeaRecord } from '../../lib/ideas';
 
 export const prerender = false;
 
 const me = currentUser(Astro.cookies);
 if (!me) return Astro.redirect('/login', 302);
 if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+// An accepted idea becomes a real Supabase project - bridge a session the
+// same way /admin's dashboard does, transparently, from the in-memory login.
+let session = await getPipelineSession(Astro.request, Astro.cookies);
+session = session ?? (await bridgeAdminSession(Astro.request, Astro.cookies));
+const supabase = session?.supabase ?? null;
+
+/** idea.researchType/databases -> the pipeline's fixed study_type enum. */
+function studyTypeFor(idea: IdeaRecord): string {
+  if (idea.researchType === 'Meta-analysis') return 'SRMA';
+  const dbs = idea.databases ?? [];
+  if (dbs.includes('DMC PCI Database')) return 'DMC PCI';
+  if (dbs.includes('National Inpatient Sample (NIS)')) return 'NIS';
+  if (dbs.includes('TriNetX')) return 'TriNetX';
+  return 'Other';
+}
 
 type Flash = { tone: 'ok' | 'error'; text: string };
 type Preview = {
@@ -63,15 +80,28 @@ if (Astro.request.method === 'POST') {
       flash = { tone: 'error', text: result.error ?? 'Could not record that decision.' };
     } else {
       const idea = result.idea;
+      let pipelineNote = '';
       if (decision === 'accepted') {
-        addSubmission({
-          title: idea.title,
-          lead: idea.leadName,
-          leadEmail: idea.leadEmail,
-          target: targetFor(idea.conference),
-          actor: me.name,
-          note: `Accepted from the idea submission form${note.trim() ? ` - ${note.trim()}` : ''}.`,
-        });
+        if (!supabase) {
+          pipelineNote = ' (could not reach the pipeline database - add the project by hand)';
+        } else {
+          const { data: person } = await supabase
+            .from('people')
+            .select('id')
+            .ilike('email', idea.leadEmail)
+            .maybeSingle();
+          const { error: createErr } = await supabase.rpc('create_project_from_idea', {
+            p_title: idea.title,
+            p_study_type: studyTypeFor(idea),
+            p_lead_id: person?.id ?? null,
+            p_submitter_label: `${idea.leadName} <${idea.leadEmail}>`,
+          });
+          pipelineNote = createErr
+            ? ` (pipeline project not created: ${createErr.message})`
+            : person?.id
+              ? ' - added to the pipeline as the lead'
+              : ' - added to the pipeline, but no lead was assigned (no pipeline account for that email yet)';
+        }
       }
       let emailed = true;
       try {
@@ -92,12 +122,12 @@ if (Astro.request.method === 'POST') {
             tone: 'ok',
             text:
               decision === 'accepted'
-                ? `Accepted - added to Submissions, email sent to ${idea.leadEmail}.`
+                ? `Accepted${pipelineNote}, email sent to ${idea.leadEmail}.`
                 : `Declined - email sent to ${idea.leadEmail}.`,
           }
         : {
             tone: 'error',
-            text: `${verb} and recorded${decision === 'accepted' ? ' (added to Submissions)' : ''}, but the email to ${idea.leadEmail} could not be sent.`,
+            text: `${verb} and recorded${decision === 'accepted' ? pipelineNote : ''}, but the email to ${idea.leadEmail} could not be sent.`,
           };
     }
   }
