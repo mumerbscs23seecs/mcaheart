@@ -1,0 +1,220 @@
+---
+// Every project action that changes status lands here first. An Astro page
+// (not a bare API route) on purpose - wrapping the preview in <PipelineLayout>
+// gives it the real nav bar, notification bell, and dark/light toggle for
+// free instead of a hand-rolled orphan page. Nothing is written to the
+// database and no email sends until step=confirm ("Send email & apply").
+import PipelineLayout from '../../../../layouts/PipelineLayout.astro';
+import { renderTransitionEmail, type TransitionTemplate } from '../../../../lib/pipeline-mailer';
+import { sendEmail } from '../../../../lib/email';
+import { isDocLink, DOC_LINK_HINT } from '../../../../lib/doc-links';
+import { stagesFor } from '../../../../lib/lifecycle.mjs';
+
+export const prerender = false;
+
+const { supabase, person } = Astro.locals;
+const projectId = Astro.params.id!;
+const back = `/pipeline/projects/${projectId}`;
+
+if (Astro.request.method !== 'POST') return Astro.redirect(back);
+if (person.role !== 'admin') return Astro.redirect(`${back}?err=${encodeURIComponent('Admins only.')}`);
+
+const REAL = (e: string | null | undefined) => !!e && !e.endsWith('@import.invalid');
+async function recipientsFor(ids: (string | null)[]) {
+  const clean = [...new Set(ids.filter(Boolean))] as string[];
+  if (!clean.length) return [] as string[];
+  const { data } = await supabase.from('people').select('email').in('id', clean);
+  return (data ?? []).map((r: any) => r.email).filter(REAL);
+}
+
+const form = await Astro.request.formData();
+const gate = String(form.get('gate') ?? '');
+const step = String(form.get('step') ?? 'preview'); // every action previews first
+const ret = String(form.get('return') ?? '');
+const dest = /^\/pipeline\/[\w/-]*(\?[\w=&%-]*)?$/.test(ret) ? ret : back;
+const note = String(form.get('note') ?? '').trim() || undefined;
+// Optional coordinator "reviewed copy" link, attached alongside a decision.
+const reviewUrl = String(form.get('review_url') ?? '').trim();
+if (reviewUrl && !isDocLink(reviewUrl)) {
+  return Astro.redirect(`${back}?err=${encodeURIComponent(DOC_LINK_HINT)}`);
+}
+
+const { data: p0 } = await supabase.from('projects').select('*').eq('id', projectId).maybeSingle();
+if (!p0) return Astro.redirect('/pipeline/conferences');
+
+let rpc: { fn: string; args: Record<string, unknown> } | null = null;
+let mail: null | {
+  template: TransitionTemplate;
+  venue?: string;
+  stageLabel?: string;
+  to: (string | null)[];
+} = null;
+let actionLabel = 'Update';
+
+if (gate === '1') {
+  const conference = String(form.get('conference') ?? '');
+  rpc = { fn: 'gate1_send_to_conference', args: { p_project: projectId, p_conference: conference, p_recycled_from: null } };
+  mail = { template: 'conference_assigned', venue: conference, to: [p0.lead_id, p0.analyst_id] };
+  actionLabel = `Send to ${conference || 'conference'}`;
+} else if (gate === '2') {
+  const proceed = String(form.get('proceed') ?? 'yes') === 'yes';
+  rpc = {
+    fn: 'gate2_proceed',
+    args: { p_project: projectId, p_proceed: proceed, p_archive_reason: proceed ? null : String(form.get('archive_reason') ?? 'other') },
+  };
+  mail = {
+    template: proceed ? 'proceeding_full_text' : 'not_proceeding_full_text',
+    to: [p0.lead_id, p0.analyst_id, p0.colead_id],
+  };
+  actionLabel = proceed ? 'Proceed to full text' : 'Not proceeding - close out';
+} else if (gate === 'journal-outcome') {
+  const attempt = String(form.get('attempt') ?? '');
+  const outcome = String(form.get('outcome') ?? '');
+  const nextJournal = String(form.get('next_journal') ?? '').trim() || null;
+  rpc = { fn: 'record_journal_outcome', args: { p_attempt: attempt, p_outcome: outcome, p_next_journal: nextJournal } };
+  const template: TransitionTemplate =
+    outcome === 'accepted' ? 'journal_accepted' : outcome === 'withdrawn' ? 'journal_withdrawn' : 'journal_rejected';
+  mail = { template, venue: p0.current_journal ?? undefined, to: [p0.lead_id, p0.analyst_id] };
+  actionLabel = `Journal outcome - ${outcome}`;
+} else if (gate === '3') {
+  const journal = String(form.get('journal') ?? '');
+  const murl = String(form.get('manuscript_url') ?? '').trim() || null;
+  rpc = { fn: 'gate3_submit_to_journal', args: { p_project: projectId, p_journal: journal, p_url: murl } };
+  mail = { template: 'submitted_to_journal', venue: journal, to: [p0.lead_id, p0.analyst_id] };
+  actionLabel = `Submit to ${journal || 'journal'}`;
+} else if (gate === 'abstract') {
+  const outcome = String(form.get('outcome') ?? '');
+  const attempt = String(form.get('attempt') ?? '');
+  rpc = { fn: 'record_abstract_outcome', args: { p_attempt: attempt, p_outcome: outcome, p_presenter: null } };
+  mail = {
+    template: outcome === 'accepted' ? 'abstract_accepted' : 'abstract_rejected',
+    venue: p0.current_conference ?? undefined,
+    to: [p0.lead_id, p0.analyst_id, p0.presenter_id],
+  };
+  actionLabel = `Abstract outcome - ${outcome}`;
+} else if (gate === 'stage') {
+  const stage = String(form.get('stage') ?? '');
+  const journal = String(form.get('journal') ?? '').trim();
+  const stageLabel = stagesFor(p0.phase).find((s: any) => s.code === stage)?.label ?? stage;
+  if (p0.phase === 'journal' && stage === 'submitted') {
+    // A journal-phase "Submitted - technical check" also records which journal.
+    if (!journal) return Astro.redirect(`${back}?err=${encodeURIComponent('Enter the journal name.')}`);
+    rpc = { fn: 'set_submitted_journal', args: { p_project: projectId, p_journal: journal } };
+    mail = { template: 'stage_update', venue: journal, stageLabel, to: [p0.lead_id, p0.analyst_id] };
+  } else {
+    rpc = { fn: 'advance_stage', args: { p_project: projectId, p_stage: stage } };
+    mail = { template: 'stage_update', stageLabel, to: [p0.lead_id, p0.analyst_id, p0.colead_id] };
+  }
+  actionLabel = `Set status to ${stageLabel}`;
+} else if (gate === 'clear-reassignment') {
+  // Administrative housekeeping, not a status change - applies directly, no email/preview.
+  const { error } = await supabase.rpc('clear_reassignment_flag', { p_project: projectId });
+  const sep = dest.includes('?') ? '&' : '?';
+  if (error) return Astro.redirect(`${dest}${sep}err=${encodeURIComponent(error.message)}`);
+  return Astro.redirect(`${dest}${sep}ok=${encodeURIComponent('Flag cleared.')}`);
+} else if (gate === 'request-decide') {
+  const requestId = String(form.get('request') ?? '');
+  const approve = String(form.get('approve') ?? '') === 'yes';
+  rpc = { fn: 'decide_stage_change', args: { p_request: requestId, p_approve: approve, p_note: note ?? null } };
+  const { data: reqRow } = await supabase
+    .from('stage_change_requests')
+    .select('requested_by,from_phase,to_stage')
+    .eq('id', requestId)
+    .maybeSingle();
+  const stageLabel = reqRow ? stagesFor(reqRow.from_phase).find((s: any) => s.code === reqRow.to_stage)?.label ?? reqRow.to_stage : '';
+  mail = {
+    template: approve ? 'request_approved' : 'request_declined',
+    stageLabel,
+    to: [reqRow?.requested_by ?? null],
+  };
+  actionLabel = `${approve ? 'Approve' : 'Decline'} status request`;
+} else {
+  return Astro.redirect(`${back}?err=unknown+action`);
+}
+
+const to = await recipientsFor(mail.to);
+const subjectOverride = String(form.get('email_subject') ?? '').trim();
+const rendered = renderTransitionEmail({
+  to,
+  template: mail.template,
+  projectTitle: p0.title,
+  ref: p0.ref,
+  venue: mail.venue,
+  stageLabel: mail.stageLabel,
+  actor: person.full_name,
+  note,
+  link: `${Astro.url.origin}${back}`,
+});
+const subject = subjectOverride || rendered.subject;
+
+if (step === 'confirm') {
+  const { error } = await supabase.rpc(rpc.fn, rpc.args);
+  if (error) {
+    const sep = dest.includes('?') ? '&' : '?';
+    return Astro.redirect(`${dest}${sep}err=${encodeURIComponent(error.message)}`);
+  }
+
+  // A reviewed-copy link travels with the abstract / gate-2 / journal decision.
+  if (reviewUrl && ['abstract', '2', 'journal-outcome'].includes(gate)) {
+    await supabase.rpc('attach_review_link', { p_project: projectId, p_url: reviewUrl });
+  }
+
+  let emailNote = '';
+  if (to.length) {
+    const sent = await sendEmail({ to, subject, html: rendered.html }).catch((e) => ({ ok: false, error: String(e) }));
+    emailNote = sent.ok ? ` · emailed ${to.length}` : ' · email failed';
+  } else {
+    emailNote = ' · no recipients with a real email';
+  }
+
+  const sep = dest.includes('?') ? '&' : '?';
+  return Astro.redirect(`${dest}${sep}ok=${encodeURIComponent('Done' + emailNote)}`);
+}
+
+// step !== 'confirm' → show the preview. Carry every original field forward
+// as a hidden input so "confirm" (or "refresh preview") rebuilds the exact
+// same rpc/mail plan above.
+const hidden: Record<string, string> = {};
+for (const [k, v] of form.entries()) {
+  if (k === 'step' || k === 'email_subject' || k === 'note') continue;
+  hidden[k] = String(v);
+}
+---
+
+<PipelineLayout title="Preview email">
+  <p class="pl-crumb"><a class="pl-link" href={back}>&larr; Back to project</a></p>
+  <h1 class="pl-h1">Preview: {actionLabel}</h1>
+  <p class="pl-sub">Nothing has changed yet. Review the email below, edit the subject or note if you like, then send.</p>
+
+  <section class="pl-actions">
+    <h2>Recipients</h2>
+    <p class="pl-muted" style="padding:14px 0 4px">
+      {to.length
+        ? to.join(', ')
+        : 'No recipients with a real email on file - the change will still apply, just nothing will send.'}
+    </p>
+  </section>
+
+  <form method="post" style="margin-top:18px">
+    {Object.entries(hidden).map(([k, v]) => <input type="hidden" name={k} value={v} />)}
+    <div class="pl-actions">
+      <h2>Email</h2>
+      <label class="pl-field"><span>Subject</span><input name="email_subject" value={subject} /></label>
+      <label class="pl-field"><span>Note (optional - appears in the email)</span><textarea name="note" rows="3">{note ?? ''}</textarea></label>
+      <div class="pl-field">
+        <span>Preview</span>
+        <iframe
+          title="Email preview"
+          style="width:100%;height:360px;border:1px solid var(--border);background:#fff"
+          srcdoc={rendered.html}
+        />
+      </div>
+    </div>
+
+    <div class="pl-mini" style="margin-top:18px">
+      <button class="pl-btn pl-btn--ghost" type="submit" name="step" value="preview">Refresh preview</button>
+      <button class="pl-btn" type="submit" name="step" value="confirm">Send email &amp; apply</button>
+      <a class="pl-btn pl-btn--ghost" href={back}>Cancel</a>
+    </div>
+  </form>
+</PipelineLayout>
