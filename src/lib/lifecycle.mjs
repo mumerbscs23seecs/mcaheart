@@ -34,6 +34,7 @@ export const STAGES = [
   ['journal',    'revision_wip',  'Working on revision'],
   ['journal',    'revision_review','Revision under review'],
   ['journal',    'rejected_comments','Rejected with comments'],
+  ['journal',    'rejected_no_comments','Rejected with no comments'],
   ['journal',    'accepted',      'Accepted'],
   ['journal',    'published',     'Published'],
 ].map(([phase, code, label]) => ({ phase, code, label }));
@@ -77,7 +78,7 @@ export function stageChangeError(project, newStage, actor) {
   // conference attempt from the journal screen, and vice versa.
   const OUTCOMES = {
     conference: ['accepted', 'rejected'],
-    journal:    ['accepted', 'published', 'rejected_comments'],
+    journal:    ['accepted', 'published', 'rejected_comments', 'rejected_no_comments'],
   };
   if ((OUTCOMES[target.phase] ?? []).includes(newStage) && !isAdmin)
     return `Only an admin can record a ${target.phase} outcome.`;
@@ -176,7 +177,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   a.equal(flags({ ...p, parked: true }, new Date('2026-09-05')).overdue, false, 'parked never chases');
 
   a.equal(stagesFor('manuscript').length, 6);
-  a.equal(stagesFor('journal').length, 9);
+  a.equal(stagesFor('journal').length, 10);
   a.equal(nextRevisionRound({ revision_round: 1 }, 'revision_req'), 2, 'round increments on request');
   a.equal(nextRevisionRound({ revision_round: 1 }, 'revision_review'), 1, 'and only then');
   a.equal(refOf(142), 'MCA-0142');

@@ -14,6 +14,29 @@ const activeSeries = SERIES.includes(active as any) ? active : null;
 const fmtDate = (d: string | null) =>
   d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
 
+let flash: { tone: 'ok' | 'error'; text: string } | null = null;
+let newNameDraft = '';
+
+if (isAdmin && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  if (String(form.get('action') ?? '') === 'add-conference') {
+    const name = String(form.get('name') ?? '').trim();
+    const deadline = String(form.get('abstract_deadline') ?? '').trim();
+    newNameDraft = name;
+    if (!name || !deadline) {
+      flash = { tone: 'error', text: 'Name and abstract deadline are both required.' };
+    } else {
+      const { error } = await supabase.rpc('add_conference', { p_name: name, p_abstract_deadline: deadline });
+      if (error) {
+        flash = { tone: 'error', text: error.message };
+      } else {
+        flash = { tone: 'ok', text: `Added "${name}".` };
+        newNameDraft = '';
+      }
+    }
+  }
+}
+
 // ---- Members: their own conference-phase papers, as a table.
 let mine: any[] = [];
 if (!isAdmin) {
@@ -49,12 +72,36 @@ if (isAdmin) {
     <>
       <p class="pl-sub">Every abstract submission, permanent once the meeting is over.</p>
 
+      {flash && <p class:list={['pl-flash', flash.tone === 'ok' ? 'pl-flash--ok' : 'pl-flash--err']}>{flash.text}</p>}
+
       <div class="pl-filter">
         <a class:list={['pl-chip', !activeSeries && 'is-active']} href="/pipeline/conferences">All</a>
         {SERIES.map((s) => (
           <a class:list={['pl-chip', activeSeries === s && 'is-active']} href={`/pipeline/conferences?series=${s}`}>{s}</a>
         ))}
       </div>
+
+      <details class="pl-inline-details" style="margin:14px 0 0">
+        <summary>+ Add {activeSeries ?? 'a'} conference</summary>
+        <form method="post" class="pl-mini pl-mini--col" style="margin-top:10px">
+          <input type="hidden" name="action" value="add-conference" />
+          {activeSeries && <input type="hidden" name="series" value={activeSeries} />}
+          <label class="pl-field">
+            <span>Name</span>
+            <input
+              name="name"
+              required
+              placeholder="e.g. ACC 2028"
+              value={newNameDraft || (activeSeries ? `${activeSeries} ` : '')}
+            />
+          </label>
+          <label class="pl-field">
+            <span>Abstract deadline</span>
+            <input type="date" name="abstract_deadline" required />
+          </label>
+          <button class="pl-btn" type="submit">Add conference</button>
+        </form>
+      </details>
 
       {rows.length === 0 && <p class="pl-muted" style="margin-top:20px">No conferences match.</p>}
 

@@ -14,7 +14,7 @@ const returnTo = Astro.url.pathname + Astro.url.search;
 // those stay on the detail page. Inline editing is plain within-phase progress.
 const OUTCOME_CODES: Record<string, string[]> = {
   conference: ['accepted', 'rejected'],
-  journal: ['accepted', 'published', 'rejected_comments', 'submitted'],
+  journal: ['accepted', 'published', 'rejected_comments', 'rejected_no_comments', 'submitted'],
 };
 const blocked = OUTCOME_CODES[p.phase] ?? [];
 const options = stagesFor(p.phase).filter((s: any) => !blocked.includes(s.code));
