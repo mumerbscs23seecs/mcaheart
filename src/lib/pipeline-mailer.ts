@@ -34,26 +34,40 @@ export async function deliverMagicLink(to: string, link: string) {
 const linkBtn = (href: string, label: string) =>
   `<a href="${href}" style="display:inline-block;padding:10px 20px;background:#a51c30;color:#fff;font:600 13px/1 Arial,sans-serif;text-decoration:none;border-radius:4px">${label}</a>`;
 
-/** SPEC.md §7 transition templates. `to` is already resolved to real addresses. */
-export async function deliverTransition(opts: {
+export type TransitionTemplate =
+  | 'conference_assigned'
+  | 'abstract_accepted'
+  | 'abstract_rejected'
+  | 'proceeding_full_text'
+  | 'not_proceeding_full_text'
+  | 'submitted_to_journal'
+  | 'stage_update'
+  | 'journal_accepted'
+  | 'journal_rejected'
+  | 'journal_withdrawn'
+  | 'published'
+  | 'request_approved'
+  | 'request_declined';
+
+export interface TransitionOpts {
   to: string[];
-  template:
-    | 'conference_assigned'
-    | 'abstract_accepted'
-    | 'proceeding_full_text'
-    | 'not_proceeding_full_text'
-    | 'submitted_to_journal'
-    | 'published';
+  template: TransitionTemplate;
   projectTitle: string;
   ref: string;
+  /** Conference / journal name, where relevant. */
   venue?: string;
+  /** Human-readable target-stage label, for generic stage bumps and request decisions. */
+  stageLabel?: string;
   actor: string;
   note?: string;
   link: string;
-}) {
-  if (!opts.to.length) return { ok: false, error: 'no recipients with a real email' };
+}
 
-  const lines: Record<typeof opts.template, { subject: string; lead: string }> = {
+/** SPEC.md §7 transition templates, every project status change routes through
+ *  one of these. Pure render — call sendEmail yourself (deliverTransition does
+ *  that), or use this directly to show a preview before sending. */
+export function renderTransitionEmail(opts: TransitionOpts): { subject: string; html: string } {
+  const lines: Record<TransitionTemplate, { subject: string; lead: string }> = {
     conference_assigned: {
       subject: `[MCA Pipeline] ${opts.ref} sent to ${opts.venue}`,
       lead: `This project has been submitted to <strong>${esc(opts.venue ?? 'a conference')}</strong>. Start the abstract.`,
@@ -61,6 +75,10 @@ export async function deliverTransition(opts: {
     abstract_accepted: {
       subject: `[MCA Pipeline] Abstract accepted - ${opts.ref}`,
       lead: `The abstract for this project was <strong>accepted</strong> at ${esc(opts.venue ?? 'the conference')}.`,
+    },
+    abstract_rejected: {
+      subject: `[MCA Pipeline] Abstract rejected - ${opts.ref}`,
+      lead: `The abstract for this project was <strong>rejected</strong> at ${esc(opts.venue ?? 'the conference')}.`,
     },
     proceeding_full_text: {
       subject: `[MCA Pipeline] ${opts.ref} proceeding to full text`,
@@ -74,9 +92,33 @@ export async function deliverTransition(opts: {
       subject: `[MCA Pipeline] ${opts.ref} submitted to ${opts.venue}`,
       lead: `The manuscript has been submitted to <strong>${esc(opts.venue ?? 'a journal')}</strong>. It now appears under <strong>Submissions</strong>.`,
     },
+    stage_update: {
+      subject: `[MCA Pipeline] ${opts.ref} status updated`,
+      lead: `Status updated to <strong>${esc(opts.stageLabel ?? 'a new stage')}</strong>.`,
+    },
+    journal_accepted: {
+      subject: `[MCA Pipeline] Accepted - ${opts.ref}`,
+      lead: `The manuscript was <strong>accepted</strong> by ${esc(opts.venue ?? 'the journal')}. 🎉`,
+    },
+    journal_rejected: {
+      subject: `[MCA Pipeline] Rejected - ${opts.ref}`,
+      lead: `The manuscript was <strong>rejected</strong> by ${esc(opts.venue ?? 'the journal')}.`,
+    },
+    journal_withdrawn: {
+      subject: `[MCA Pipeline] Withdrawn - ${opts.ref}`,
+      lead: `This journal attempt was marked <strong>withdrawn</strong> for ${esc(opts.venue ?? 'the journal')}.`,
+    },
     published: {
       subject: `[MCA Pipeline] Published - ${opts.ref}`,
       lead: `This project has been <strong>published</strong>. 🎉`,
+    },
+    request_approved: {
+      subject: `[MCA Pipeline] Status change approved - ${opts.ref}`,
+      lead: `Your requested status change to <strong>${esc(opts.stageLabel ?? 'the new status')}</strong> was <strong>approved</strong>.`,
+    },
+    request_declined: {
+      subject: `[MCA Pipeline] Status change declined - ${opts.ref}`,
+      lead: `Your requested status change to <strong>${esc(opts.stageLabel ?? 'the new status')}</strong> was <strong>declined</strong>.`,
     },
   };
   const t = lines[opts.template];
@@ -92,7 +134,41 @@ export async function deliverTransition(opts: {
     <p style="margin:14px 0 0;color:#94a3b8;font:12px/1.5 Arial,sans-serif">
       Reply here rather than on WhatsApp so it stays on the record.
     </p>`;
-  return sendEmail({ to: opts.to, from: FROM, subject: t.subject, html: shell(t.subject.replace('[MCA Pipeline] ', ''), body) });
+  return { subject: t.subject, html: shell(t.subject.replace('[MCA Pipeline] ', ''), body) };
+}
+
+/** Render + send in one call. Prefer renderTransitionEmail() + sendEmail() directly
+ *  where a preview/edit step sits in between (every pipeline action now has one). */
+export async function deliverTransition(opts: TransitionOpts) {
+  if (!opts.to.length) return { ok: false, error: 'no recipients with a real email' };
+  const { subject, html } = renderTransitionEmail(opts);
+  return sendEmail({ to: opts.to, from: FROM, subject, html });
+}
+
+/** A member proposed a status change - notify the admins. No preview: this is a
+ *  system nudge, not an authored message, so it always goes out immediately. */
+export async function deliverRequestSubmitted(opts: {
+  to: string[];
+  projectTitle: string;
+  ref: string;
+  requester: string;
+  stageLabel: string;
+  note?: string;
+  link: string;
+}) {
+  if (!opts.to.length) return { ok: false, error: 'no recipients' };
+  const noteBlock = opts.note
+    ? `<p style="margin:14px 0 0;padding:11px 13px;background:#f1f5f9;border-radius:5px;color:#1e293b;font:14px/1.6 Arial,sans-serif;white-space:pre-wrap"><strong>Note:</strong> ${esc(opts.note)}</p>`
+    : '';
+  const body = `
+    <p style="margin:0 0 6px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
+      <strong>${esc(opts.requester)}</strong> proposed setting the status to <strong>${esc(opts.stageLabel)}</strong>.
+    </p>
+    <p style="margin:0 0 16px;color:#94a3b8;font:12px/1.6 Arial,sans-serif">${esc(opts.ref)} · <em>${esc(opts.projectTitle)}</em></p>
+    ${noteBlock}
+    <p style="margin:16px 0 0">${linkBtn(opts.link, 'Review the request')}</p>`;
+  const subject = `[MCA Pipeline] ${opts.ref} - status change requested`;
+  return sendEmail({ to: opts.to, from: FROM, subject, html: shell('Status change requested', body) });
 }
 
 /**
