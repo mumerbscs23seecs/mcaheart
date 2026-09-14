@@ -141,12 +141,18 @@
 .iform__small b { color: var(--blue); }
 
 .iform__status {
-  padding: 0.95rem 1.1rem;
+  padding: 1.2rem 1.4rem;
   border-radius: var(--radius);
-  font-size: 0.9rem;
-  font-weight: 600;
-  line-height: 1.55;
   border: 1px solid;
+  font-family: var(--font-display);
+  font-size: var(--step-1);
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
 }
-.iform__status[data-tone='ok'] { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-border); }
+/* The confirmation is the payoff of the form - it gets the same bold black
+   display type as a headline (e.g. the director's name on the homepage),
+   not a quiet green aside. */
+.iform__status[data-tone='ok'] { color: var(--text-strong); background: var(--ok-bg); border-color: var(--ok-border); }
 .iform__status[data-tone='error'] { color: var(--red); background: var(--red-wash); border-color: var(--red-border); }
