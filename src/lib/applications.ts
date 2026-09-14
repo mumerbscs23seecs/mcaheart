@@ -12,7 +12,7 @@ import { randomBytes } from 'node:crypto';
 import { audit } from './auth';
 import type { RecruitmentPayload } from './recruitment-schema';
 
-export type ApplicationStatus = 'pending' | 'accepted' | 'declined';
+export type ApplicationStatus = 'pending' | 'approved' | 'withheld' | 'declined';
 
 export interface StoredFile {
   filename: string;
@@ -117,7 +117,7 @@ export interface DecisionResult {
 
 export function decideApplication(
   id: string,
-  decision: 'accepted' | 'declined',
+  decision: 'approved' | 'withheld' | 'declined',
   reviewer: string,
   note: string,
 ): DecisionResult {

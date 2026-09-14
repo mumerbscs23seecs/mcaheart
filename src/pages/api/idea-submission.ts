@@ -101,14 +101,14 @@ export const POST: APIRoute = async ({ request }) => {
     attachment = { filename: file.name, content: buf.toString('base64') };
   }
 
-  // --- 5. Save + deliver ------------------------------------------------
+  // --- 5. Save, then deliver in the background ---------------------------
+  // The record is saved either way, so the confirmation message shouldn't
+  // wait on SMTP (Gmail's auth failure + Resend fallback can take several
+  // seconds) - fire the email and respond immediately.
   addIdea(parsed.data, attachment?.filename ?? null);
-  try {
-    await deliverIdea(parsed.data, attachment);
-  } catch (err) {
-    // The record is saved; a mail failure shouldn't lose the submission.
+  deliverIdea(parsed.data, attachment).catch((err) => {
     console.error('[idea] email delivery failed (record kept):', err);
-  }
+  });
 
   return json({
     ok: true,

@@ -3,14 +3,14 @@
  * Same pattern as auth.ts / submissions.ts.
  *
  * The public /submit-idea form writes here; /admin/ideas reads, and an admin
- * accepts (→ creates a pipeline submission) or declines. Both decisions email
- * the submitter.
+ * approves (→ creates a pipeline submission), withholds (held for later, not
+ * a final answer), or declines. All three decisions email the submitter.
  */
 import { randomBytes } from 'node:crypto';
 import { audit } from './auth';
 import type { IdeaPayload, Database } from './idea-schema';
 
-export type IdeaStatus = 'pending' | 'accepted' | 'declined';
+export type IdeaStatus = 'pending' | 'approved' | 'withheld' | 'declined';
 
 export interface IdeaRecord extends IdeaPayload {
   id: string;
@@ -139,11 +139,11 @@ export interface DecisionResult {
   idea?: IdeaRecord;
 }
 
-/** Record an accept/decline. Does NOT send email or create a submission -
- *  the page orchestrates those so failures surface cleanly. */
+/** Record an approve/withhold/decline. Does NOT send email or create a
+ *  submission - the page orchestrates those so failures surface cleanly. */
 export function decideIdea(
   id: string,
-  decision: 'accepted' | 'declined',
+  decision: 'approved' | 'withheld' | 'declined',
   reviewer: string,
   note: string,
 ): DecisionResult {

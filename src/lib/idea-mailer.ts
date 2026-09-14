@@ -83,14 +83,24 @@ export interface IdeaDecisionOpts {
   to: string;
   leadName: string;
   title: string;
-  decision: 'accepted' | 'declined';
+  decision: 'approved' | 'withheld' | 'declined';
   note: string | null;
 }
 
-/** Build the accept/decline email (template + reviewer note) without sending. */
+const OUTCOME_LABEL: Record<IdeaDecisionOpts['decision'], string> = {
+  approved: 'Approved',
+  withheld: 'On hold',
+  declined: 'Rejected',
+};
+const OUTCOME_COLOR: Record<IdeaDecisionOpts['decision'], string> = {
+  approved: '#166534',
+  withheld: '#92600e',
+  declined: '#a51c30',
+};
+
+/** Build the approve/withhold/decline email (template + reviewer note) without sending. */
 export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: string; html: string } {
-  const accepted = opts.decision === 'accepted';
-  const subject = `[MCA Heart] Idea submission outcome - ${accepted ? 'Accepted' : 'Rejected'}`;
+  const subject = `[MCA Heart] Idea submission outcome - ${OUTCOME_LABEL[opts.decision]}`;
   const comments = opts.note ? esc(opts.note) : '-';
 
   const html = `<div style="background:#f8fafc;padding:28px">
@@ -113,7 +123,7 @@ export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: stri
         <td style="padding:16px 0 4px;color:#64748b;font:600 12px/1.4 Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em">Outcome</td>
       </tr>
       <tr>
-        <td style="padding:0 0 14px;color:${accepted ? '#166534' : '#a51c30'};font:700 15px/1.5 Arial,sans-serif">${accepted ? 'Accepted' : 'Rejected'}</td>
+        <td style="padding:0 0 14px;color:${OUTCOME_COLOR[opts.decision]};font:700 15px/1.5 Arial,sans-serif">${OUTCOME_LABEL[opts.decision]}</td>
       </tr>
       <tr>
         <td style="padding:0 0 4px;color:#64748b;font:600 12px/1.4 Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em">Comments</td>
@@ -123,12 +133,22 @@ export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: stri
       </tr>
     </table>
 
-    <p style="margin:24px 0 0;padding:12px 14px;background:#f1f5f9;border-radius:8px;color:#1e293b;font:13px/1.6 Arial,sans-serif">
-      <strong>Important instructions:</strong> If your idea is accepted for further processing, the lead
+    ${
+      opts.decision === 'approved'
+        ? `<p style="margin:24px 0 0;padding:12px 14px;background:#f1f5f9;border-radius:8px;color:#1e293b;font:13px/1.6 Arial,sans-serif">
+      <strong>Important instructions:</strong> Now that your idea is approved for further processing, the lead
       author must complete and provide the full manuscript within 1 month from the date the analysis is
       provided. Failure to follow this timeline may result in the lead author's demotion from first
       authorship, and the lab will appoint a new lead.
-    </p>
+    </p>`
+        : opts.decision === 'withheld'
+          ? `<p style="margin:24px 0 0;padding:12px 14px;background:#f1f5f9;border-radius:8px;color:#1e293b;font:13px/1.6 Arial,sans-serif">
+      <strong>What "on hold" means:</strong> this is not a final decision. The lab is holding your idea for
+      further review - this may be to request more information, check for overlap with ongoing work, or
+      wait for capacity to open up. We will follow up with a final outcome in due course.
+    </p>`
+          : ''
+    }
   </div>
 </div>`;
 

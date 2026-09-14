@@ -109,11 +109,11 @@ export const POST: APIRoute = async ({ request }) => {
       filesInPanel.push(f.filename);
     }
   }
-  try {
-    await deliverApplication(parsed.data, { attachments, filesInPanel });
-  } catch (err) {
+  // Record is saved above either way - don't make the confirmation message
+  // wait on SMTP (Gmail auth failure + Resend fallback can take seconds).
+  deliverApplication(parsed.data, { attachments, filesInPanel }).catch((err) => {
     console.error('[recruitment] email failed (record kept):', err);
-  }
+  });
 
   return json({
     ok: true,

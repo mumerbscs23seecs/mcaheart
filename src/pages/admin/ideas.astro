@@ -31,9 +31,10 @@ function studyTypeFor(idea: IdeaRecord): string {
 }
 
 type Flash = { tone: 'ok' | 'error'; text: string };
+type Decision = 'approved' | 'withheld' | 'declined';
 type Preview = {
   ideaId: string;
-  decision: 'accepted' | 'declined';
+  decision: Decision;
   note: string;
   to: string;
   subject: string;
@@ -42,22 +43,24 @@ type Preview = {
 let flash: Flash | null = null;
 let preview: Preview | null = null;
 
-/** Short pipeline "target" label for an accepted idea. */
+/** Short pipeline "target" label for an approved idea. */
 const targetFor = (c: Conference) =>
   c === 'flexible' ? 'Conference - flexible' : c === 'none' ? 'Manuscript only' : c;
+
+const decisionFromAction = (action: string): Decision =>
+  action.includes('approve') ? 'approved' : action.includes('withhold') ? 'withheld' : 'declined';
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const action = String(form.get('action') ?? '');
   const ideaId = String(form.get('ideaId') ?? '');
   const note = String(form.get('note') ?? '');
-  const decision: 'accepted' | 'declined' =
-    String(form.get('decision') ?? (action.includes('accept') ? 'accepted' : 'declined')) === 'accepted'
-      ? 'accepted'
-      : 'declined';
+  const decision: Decision =
+    (['approved', 'withheld', 'declined'] as const).find((d) => d === form.get('decision')) ??
+    decisionFromAction(action);
 
   // --- Phase 1: build the preview -------------------------------------------
-  if (action === 'preview-accept' || action === 'preview-decline') {
+  if (action === 'preview-approve' || action === 'preview-withhold' || action === 'preview-decline') {
     const idea = getIdea(ideaId);
     if (!idea) flash = { tone: 'error', text: 'Idea not found.' };
     else if (idea.status !== 'pending') flash = { tone: 'error', text: `That idea was already ${idea.status}.` };
@@ -81,7 +84,7 @@ if (Astro.request.method === 'POST') {
     } else {
       const idea = result.idea;
       let pipelineNote = '';
-      if (decision === 'accepted') {
+      if (decision === 'approved') {
         if (!supabase) {
           pipelineNote = ' (could not reach the pipeline database - add the project by hand)';
         } else {
@@ -116,18 +119,15 @@ if (Astro.request.method === 'POST') {
         emailed = false;
         console.error('[ideas] decision email failed:', err);
       }
-      const verb = decision === 'accepted' ? 'Accepted' : 'Declined';
+      const verb = decision === 'approved' ? 'Approved' : decision === 'withheld' ? 'Withheld' : 'Declined';
       flash = emailed
         ? {
             tone: 'ok',
-            text:
-              decision === 'accepted'
-                ? `Accepted${pipelineNote}, email sent to ${idea.leadEmail}.`
-                : `Declined - email sent to ${idea.leadEmail}.`,
+            text: `${verb}${decision === 'approved' ? pipelineNote : ''} - email sent to ${idea.leadEmail}.`,
           }
         : {
             tone: 'error',
-            text: `${verb} and recorded${decision === 'accepted' ? pipelineNote : ''}, but the email to ${idea.leadEmail} could not be sent.`,
+            text: `${verb} and recorded${decision === 'approved' ? pipelineNote : ''}, but the email to ${idea.leadEmail} could not be sent.`,
           };
     }
   }
@@ -187,7 +187,7 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
     {preview ? (
       <div class="mailprev">
         <h2 class="mailprev__title">
-          Preview - {preview.decision === 'accepted' ? 'acceptance' : 'decline'} email
+          Preview - {preview.decision === 'approved' ? 'approval' : preview.decision === 'withheld' ? 'hold' : 'decline'} email
         </h2>
         <dl class="mailprev__head">
           <div><dt>To</dt><dd>{preview.to}</dd></div>
@@ -204,12 +204,13 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
             placeholder="Add or edit comments, then refresh the preview.">{preview.note}</textarea>
           <div class="mailprev__actions">
             <button class="adm-btn" type="submit"
-              name="action" value={preview.decision === 'accepted' ? 'preview-accept' : 'preview-decline'}>
+              name="action" value={`preview-${preview.decision === 'approved' ? 'approve' : preview.decision === 'withheld' ? 'withhold' : 'decline'}`}>
               Refresh preview
             </button>
-            <button class:list={['btn', preview.decision === 'accepted' ? 'idea__accept' : 'btn--red']}
+            <button
+              class:list={['btn', preview.decision === 'approved' ? 'idea__approve' : preview.decision === 'withheld' ? 'idea__withhold' : 'btn--red']}
               type="submit" name="action" value="confirm">
-              Send email &amp; {preview.decision === 'accepted' ? 'accept' : 'decline'}
+              Send email &amp; {preview.decision === 'approved' ? 'approve' : preview.decision === 'withheld' ? 'withhold' : 'decline'}
             </button>
             <a class="mailprev__cancel" href="/admin/ideas">Cancel</a>
           </div>
@@ -252,14 +253,15 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
                 <textarea class="idea__note" id={`note-${i.id}`} name="note" rows="2"
                   placeholder="e.g. which database to use, or why it wasn't taken forward. You'll see the full email before it sends."></textarea>
                 <div class="idea__actions">
-                  <button class="btn idea__accept" name="action" value="preview-accept" type="submit">Accept &amp; add to Submissions…</button>
+                  <button class="btn idea__approve" name="action" value="preview-approve" type="submit">Approve &amp; add to pipeline…</button>
+                  <button class="btn idea__withhold" name="action" value="preview-withhold" type="submit">Withhold…</button>
                   <button class="btn btn--red" name="action" value="preview-decline" type="submit">Decline…</button>
                 </div>
                 <p class="idea__hint-inline">Next step shows the email to review before it's sent.</p>
               </form>
             ) : (
               <div class:list={['idea__decision', `idea__decision--${i.status}`]}>
-                <p><strong>{i.status === 'accepted' ? 'Accepted' : 'Declined'}</strong> by {i.reviewedBy} · {fmtDate(i.reviewedAt)}</p>
+                <p><strong>{i.status === 'approved' ? 'Approved' : i.status === 'withheld' ? 'Withheld' : 'Declined'}</strong> by {i.reviewedBy} · {fmtDate(i.reviewedAt)}</p>
                 {i.decisionNote && <p class="idea__decision-note">“{i.decisionNote}”</p>}
               </div>
             )}
@@ -310,7 +312,8 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
     border-radius: 0;
   }
   .idea__pill--pending { color: var(--warn); background: var(--warn-bg); }
-  .idea__pill--accepted { color: var(--ok); background: var(--ok-bg); }
+  .idea__pill--approved { color: var(--ok); background: var(--ok-bg); }
+  .idea__pill--withheld { color: var(--warn); background: var(--warn-bg); }
   .idea__pill--declined { color: var(--red); background: var(--red-wash); }
 
   .idea__title { grid-area: title; font-weight: 600; color: var(--text-strong); font-size: 0.95rem; line-height: 1.35; }
@@ -352,7 +355,8 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
   }
   .idea__note:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--accent-wash-strong); }
   .idea__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.2rem; }
-  .idea__accept { --btn-bg: var(--ok); --btn-bd: var(--ok); }
+  .idea__approve { --btn-bg: var(--ok); --btn-bd: var(--ok); }
+  .idea__withhold { --btn-bg: var(--warn); --btn-bd: var(--warn); }
 
   .idea__decision {
     margin-top: var(--space-m);
@@ -361,7 +365,8 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
     font-size: 0.85rem;
     line-height: 1.5;
   }
-  .idea__decision--accepted { background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok); }
+  .idea__decision--approved { background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok); }
+  .idea__decision--withheld { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn); }
   .idea__decision--declined { background: var(--red-wash); border: 1px solid var(--red-border); color: var(--red); }
   .idea__decision-note { margin-top: 0.3rem; font-style: italic; color: var(--text); }
 </style>
