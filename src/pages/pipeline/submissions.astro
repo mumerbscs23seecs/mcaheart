@@ -62,16 +62,11 @@ const fmt = (d: string | null) => {
             <tr>
               <td class="pl-t__title" data-th="Submission title">
                 <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a>
-                <span class="pl-t__ref">
-                  {p.ref}
-                  {p.revision_round ? ` · revision ${p.revision_round}` : ''}
-                  {p.journals_tried >= 4 ? ` · ${p.journals_tried} journals tried` : ''}
-                </span>
               </td>
               <td class="pl-t__venue" data-th="Journal">{p.current_journal ?? '-'}</td>
               <td class="pl-t__date" data-th="Submitted">{fmt(p.created_at)}</td>
               <td class="pl-t__date" data-th="Last updated">{fmt(p.stage_changed_at)}</td>
-              <td data-th="Status"><PipelineStatusCell project={p} isAdmin={isAdmin} /></td>
+              <td class="pl-t__status" data-th="Status"><PipelineStatusCell project={p} isAdmin={isAdmin} /></td>
               <td class="pl-t__actions" data-th="Actions">
                 <a href={`/pipeline/projects/${p.id}`}>Check progress &nearr;</a>
               </td>

@@ -70,7 +70,7 @@
   border-bottom: 1px solid var(--border-soft);
 }
 .pl-tabs__row {
-  max-width: 1120px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 0 32px;
   display: flex;
@@ -114,7 +114,7 @@
 }
 
 /* ---------- page shell ---------- */
-.pl-main { max-width: 1120px; margin: 0 auto; padding: 40px 32px 80px; }
+.pl-main { max-width: 1400px; margin: 0 auto; padding: 40px 32px 80px; }
 @media (max-width: 640px) { .pl-main, .pl-tabs__row { padding-left: 20px; padding-right: 20px; } }
 
 .pl-h1 {
@@ -232,6 +232,12 @@
 .pl-table tbody tr:hover td { background: var(--pl-link-wash); }
 
 .pl-t__title { max-width: 64ch; }
+/* Submissions specifically: the journal-name and revision-history columns
+   already say plenty, so give the title even more room and let the status
+   column shrink back down instead of stretching to match it. */
+.pl-t__status { width: 1%; }
+.pl-t__status .pl-status,
+.pl-t__status select.pl-status { min-width: 150px; max-width: 190px; }
 .pl-t__title a {
   color: var(--pl-link);
   font-weight: 600;
