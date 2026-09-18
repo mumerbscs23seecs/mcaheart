@@ -1,0 +1,44 @@
+services:
+  - type: web
+    name: mca-heart-site
+    runtime: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node ./dist/server/entry.mjs
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      # Supabase (pipeline backend) - set the real values in the Render dashboard.
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Contact form delivery
+      - key: RESEND_API_KEY
+        sync: false
+      - key: CONTACT_TO
+        sync: false
+      - key: CONTACT_FROM
+        sync: false
+      # Gmail SMTP fallback (optional - leave unset to skip)
+      - key: GMAIL_USER
+        sync: false
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+      # Recruitment / ideas notification routing (optional)
+      - key: IDEAS_TO
+        sync: false
+      - key: IDEAS_FROM
+        sync: false
+      - key: NOTIFY_FROM
+        sync: false
+      - key: COORDINATOR_EMAILS
+        sync: false
+      - key: ALWAYS_BCC
+        sync: false
