@@ -78,21 +78,26 @@ import { testimonials, missionVision, director, societies } from '../data/site';
   {/* ------------------------------------------------------------------ PubMed */}
   <section class="section--tight pub">
     <div class="shell shell--wide">
-      <a
-        class="pub__main"
-        href="https://pubmed.ncbi.nlm.nih.gov/?term=chadi+alraies&sort=date&size=200"
-        target="_blank"
-        rel="noopener noreferrer"
-        data-reveal
-      >
-        <span class="pub__logo">
+      <div class="pub__main" data-reveal>
+        <a
+          class="pub__logo"
+          href="https://pubmed.ncbi.nlm.nih.gov/?term=chadi+alraies&sort=date&size=200"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="View our publications on PubMed"
+        >
           <img src="/assets/research/pubmed-logo-blue.svg" alt="PubMed" loading="lazy" decoding="async" />
-        </span>
-        <span class="pub__title">Our Publications on PubMed</span>
-        <span class="pub__cta">
+        </a>
+        <p class="pub__title">Our Publications on PubMed</p>
+        <a
+          class="pub__cta"
+          href="https://pubmed.ncbi.nlm.nih.gov/?term=chadi+alraies&sort=date&size=200"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
           View Our Publications <span class="pub__cta-arrow" aria-hidden="true">&rarr;</span>
-        </span>
-      </a>
+        </a>
+      </div>
 
       <dl class="pub__stats" data-reveal style="--reveal-delay:120ms">
         <div class="pub__stat">
@@ -309,17 +314,22 @@ import { testimonials, missionVision, director, societies } from '../data/site';
     align-items: center;
     gap: var(--space-s);
     text-align: center;
-    text-decoration: none;
   }
   .pub__logo {
     display: grid;
     place-items: center;
     width: clamp(150px, 110px + 10vw, 220px);
     padding: 0.8rem 1.2rem;
-    background: #fff;
-    border: 1px solid var(--border-soft);
   }
-  .pub__logo img { width: 100%; height: auto; display: block; }
+  .pub__logo img {
+    width: 100%;
+    height: auto;
+    display: block;
+    transition: opacity 0.25s var(--ease);
+  }
+  .pub__logo:hover img,
+  .pub__logo:focus-visible img { opacity: 0.75; }
+  .pub__logo:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
   .pub__title {
     font-family: var(--font-display);
     font-size: var(--step-2);
@@ -338,14 +348,17 @@ import { testimonials, missionVision, director, societies } from '../data/site';
     background: var(--blue);
     color: #fff;
     border-radius: var(--radius-pill);
+    text-decoration: none;
     font-family: var(--font-sans);
     font-size: 0.95rem;
     font-weight: 700;
     transition: background 0.25s var(--ease);
   }
-  .pub__main:hover .pub__cta { background: var(--blue-deep); }
+  .pub__cta:hover,
+  .pub__cta:focus-visible { background: var(--blue-deep); }
   .pub__cta-arrow { transition: transform 0.25s var(--ease-out); }
-  .pub__main:hover .pub__cta-arrow { transform: translateX(4px); }
+  .pub__cta:hover .pub__cta-arrow,
+  .pub__cta:focus-visible .pub__cta-arrow { transform: translateX(4px); }
 
   .pub__stats {
     display: grid;
