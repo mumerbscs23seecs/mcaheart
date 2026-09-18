@@ -224,7 +224,7 @@
 .pl-table tbody tr:last-child td { border-bottom: 0; }
 .pl-table tbody tr:hover td { background: var(--pl-link-wash); }
 
-.pl-t__title { width: 100%; max-width: 64ch; }
+.pl-t__title { max-width: 64ch; }
 .pl-t__title a {
   color: var(--pl-link);
   font-weight: 600;
@@ -270,6 +270,7 @@
 select.pl-status {
   display: inline-block;
   width: 100%;
+  min-width: 130px;
   max-width: 250px;
   overflow: hidden;
   text-overflow: ellipsis;
