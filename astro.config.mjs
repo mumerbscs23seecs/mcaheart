@@ -11,6 +11,18 @@ export default defineConfig({
   // `export const prerender = false` (the contact API) run on demand.
   output: 'static',
   adapter: node({ mode: 'standalone' }),
+  security: {
+    // Astro's built-in CSRF check compares the browser's Origin header
+    // against the URL it thinks the request arrived on - and @astrojs/node
+    // always assumes plain http:// for that, since it has no idea a proxy
+    // (Render, Railway, any host that terminates TLS in front of the app)
+    // is the one doing https. That protocol mismatch makes every POST
+    // (login, contact form, pipeline actions) get rejected as "cross-site"
+    // once deployed behind such a proxy, even though it's the real site
+    // making the request. Login/session auth is still enforced separately
+    // in each route - this only turns off the extra Origin-header check.
+    checkOrigin: false,
+  },
   integrations: [sitemap(), react()],
   image: {
     // Assets are pre-optimised in /public, so skip the sharp pipeline.
