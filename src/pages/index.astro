@@ -52,7 +52,9 @@ import { director, stats, societies } from '../data/site';
       <ul class="societies__list">
         {societies.map((s) => (
           <li class="societies__item">
-            <img src={s.logo} alt={s.name} loading="lazy" decoding="async" height="60" />
+            <a href={s.url} target="_blank" rel="noopener noreferrer" aria-label={`${s.name} - view M Chadi Alraies' work indexed here`}>
+              <img src={s.logo} alt={s.name} loading="lazy" decoding="async" height="60" />
+            </a>
           </li>
         ))}
       </ul>
@@ -75,8 +77,9 @@ import { director, stats, societies } from '../data/site';
 
       <div class="director__copy" data-reveal style="--reveal-delay:120ms">
         <p class="section-head__meta"><span class="section-head__num">01</span> Led by</p>
-        <h2 class="director__name">{director.name}, {director.credentials}</h2>
-        <p class="director__creds">{director.credentialsExtra}</p>
+        <h2 class="director__name">
+          {director.name}<span class="director__creds">, {director.credentialsFull}</span>
+        </h2>
         <ul class="director__roles">
           {director.roles.map((r) => <li>{r}</li>)}
         </ul>
@@ -342,6 +345,7 @@ import { director, stats, societies } from '../data/site';
     gap: clamp(2rem, 1rem + 5vw, 5.5rem);
     margin-top: var(--space-m);
   }
+  .societies__item a { display: block; line-height: 0; }
   .societies__item img {
     height: clamp(52px, 40px + 2vw, 76px);
     width: auto;
@@ -350,7 +354,9 @@ import { director, stats, societies } from '../data/site';
     mix-blend-mode: multiply;
     transition: opacity 0.4s var(--ease), filter 0.4s var(--ease);
   }
-  .societies__item img:hover { opacity: 1; filter: grayscale(0); }
+  .societies__item a:hover img,
+  .societies__item a:focus-visible img { opacity: 1; filter: grayscale(0); }
+  .societies__item a:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
 
   /* ------------------------------------------------------------ Director */
   .director__grid {
@@ -374,12 +380,9 @@ import { director, stats, societies } from '../data/site';
     font-size: var(--step-3);
   }
   .director__creds {
-    margin-top: 0.35rem;
-    font-family: var(--font-sans);
-    font-size: var(--step--1);
+    font-family: var(--font-display);
+    font-size: var(--step-1);
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.2em;
     color: var(--blue);
   }
 

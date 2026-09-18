@@ -8,7 +8,7 @@ export const site = {
   name: 'MCA Heart',
   tagline: 'Charting New Paths in Cardiology',
   description:
-    'MCA Heart is a cardiovascular research collective led by M Chadi Alraies, MD, MPH - over 300 researchers publishing, presenting and teaching at the frontier of cardiology.',
+    'MCA Heart is a cardiovascular research collective led by M Chadi Alraies, MD MPH - over 300 researchers publishing, presenting and teaching at the frontier of cardiology.',
   url: 'https://www.mcaheart.com',
   youtube: 'https://www.youtube.com/channel/UCR1U9EROhLsdeuCB4hlAw4w',
 } as const;
@@ -33,10 +33,10 @@ export const nav: NavItem[] = [
 
 export const director = {
   name: 'M Chadi Alraies',
-  /** Short form - sits inline with the name everywhere, including the homepage headline. */
-  credentials: 'MD, MPH',
-  /** The extra fellowships - homepage only, shown as a secondary line under the name. */
-  credentialsExtra: 'FACC, FSCAI',
+  /** Short form - sits inline with the name everywhere except the homepage headline. No commas between the letters, by request. */
+  credentials: 'MD MPH',
+  /** Full form - homepage only. */
+  credentialsFull: 'MD MPH FACC FSCAI',
   /** Full title list - homepage only (research-group.astro shows just name + credentials). */
   roles: [
     'Head and Principal Investigator, MCA Heart Research Lab',
@@ -57,9 +57,21 @@ export const stats = [
 ] as const;
 
 export const societies = [
-  { name: 'SCAI - Society for Cardiovascular Angiography & Interventions', logo: '/assets/home/logo-scai.png' },
-  { name: 'ACC - American College of Cardiology', logo: '/assets/home/logo-acc.jpg' },
-  { name: 'TCT - Transcatheter Cardiovascular Therapeutics', logo: '/assets/home/logo-tct.png' },
+  {
+    name: 'SCAI - Society for Cardiovascular Angiography & Interventions',
+    logo: '/assets/home/logo-scai.png',
+    url: 'https://www.jscai.org/action/doSearch?type=quicksearch&text1=chadi+alraies&field1=AllField&startPage=&ContentItemType=abs',
+  },
+  {
+    name: 'ACC - American College of Cardiology',
+    logo: '/assets/home/logo-acc.jpg',
+    url: 'https://www.jacc.org/action/doSearch?AllField=%28chadi+alraies%29+AND+%28ACC%29',
+  },
+  {
+    name: 'TCT - Transcatheter Cardiovascular Therapeutics',
+    logo: '/assets/home/logo-tct.png',
+    url: 'https://www.jacc.org/action/doSearch?AllField=%28chadi+alraies%29+AND+%28TCT%29',
+  },
 ] as const;
 
 /* -------------------------------------------------------------------------- */
@@ -139,7 +151,7 @@ export type Testimonial = {
 export const testimonials: Testimonial[] = [
   {
     quote:
-      "I've been part of the MCA Heart Research Lab since 2021, joining after meeting Dr. Yasar Sattar at ACC that year. This group and the mentorship provided by M Chadi Alraies, MD, MPH has been one of the most important reasons I matched into cardiology fellowship in the first attempt. The collegiality that exists here and the opportunities in research for trainees of all levels is unparalleled. Privileged to be a part of MCA.",
+      "I've been part of the MCA Heart Research Lab since 2021, joining after meeting Dr. Yasar Sattar at ACC that year. This group and the mentorship provided by M Chadi Alraies, MD MPH has been one of the most important reasons I matched into cardiology fellowship in the first attempt. The collegiality that exists here and the opportunities in research for trainees of all levels is unparalleled. Privileged to be a part of MCA.",
     name: 'Varun Victor',
     affiliation: 'Aultman Hospital / Canton Medical Education Foundation / NEOMED University',
     future: 'Interventional Cardiology fellowship',
@@ -155,7 +167,7 @@ export const testimonials: Testimonial[] = [
   },
   {
     quote:
-      'This group has allowed me to connect with other passionate professionals interested in Cardiology. The mentorship I’ve received from M Chadi Alraies, MD, MPH is invaluable and has really expanded my personal and professional growth.',
+      'This group has allowed me to connect with other passionate professionals interested in Cardiology. The mentorship I’ve received from M Chadi Alraies, MD MPH is invaluable and has really expanded my personal and professional growth.',
     name: 'Ankit Hanmandlu',
     affiliation: 'Wayne State University / Detroit Medical Center',
     future: 'Cardiology',
