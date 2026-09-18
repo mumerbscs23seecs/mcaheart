@@ -77,7 +77,7 @@ import { testimonials, missionVision, director, societies } from '../data/site';
 
   {/* ------------------------------------------------------------------ PubMed */}
   <section class="section--tight pub">
-    <div class="shell shell--wide pub__grid">
+    <div class="shell shell--wide">
       <a
         class="pub__main"
         href="https://pubmed.ncbi.nlm.nih.gov/?term=chadi+alraies&sort=date&size=200"
@@ -89,8 +89,8 @@ import { testimonials, missionVision, director, societies } from '../data/site';
           <img src="/assets/research/pubmed-logo-blue.svg" alt="PubMed" loading="lazy" decoding="async" />
         </span>
         <span class="pub__title">Our Publications on PubMed</span>
-        <span class="btn btn--red pub__cta">
-          View Our Publications <span class="btn__arrow" aria-hidden="true">&rarr;</span>
+        <span class="pub__cta">
+          View Our Publications <span class="pub__cta-arrow" aria-hidden="true">&rarr;</span>
         </span>
       </a>
 
@@ -302,12 +302,6 @@ import { testimonials, missionVision, director, societies } from '../data/site';
 
   /* ------------------------------------------------------------------ PubMed */
   .pub { padding-block: var(--space-xl); background: var(--bg-tint); border-block: 1px solid var(--border-soft); }
-  .pub__grid {
-    display: grid;
-    grid-template-columns: 1.1fr 1fr;
-    align-items: center;
-    gap: clamp(2rem, 1rem + 4vw, 4rem);
-  }
 
   .pub__main {
     display: flex;
@@ -320,8 +314,8 @@ import { testimonials, missionVision, director, societies } from '../data/site';
   .pub__logo {
     display: grid;
     place-items: center;
-    width: clamp(140px, 110px + 8vw, 190px);
-    padding: 0.7rem 1rem;
+    width: clamp(150px, 110px + 10vw, 220px);
+    padding: 0.8rem 1.2rem;
     background: #fff;
     border: 1px solid var(--border-soft);
   }
@@ -334,12 +328,29 @@ import { testimonials, missionVision, director, societies } from '../data/site';
     letter-spacing: -0.012em;
     margin-top: var(--space-xs);
   }
-  .pub__cta { margin-top: var(--space-s); }
-  .pub__main:hover .btn__arrow { transform: translateX(4px); }
+
+  .pub__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7em;
+    margin-top: var(--space-s);
+    padding: 0.95em 1.8em;
+    background: var(--blue);
+    color: #fff;
+    border-radius: var(--radius-pill);
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    font-weight: 700;
+    transition: background 0.25s var(--ease);
+  }
+  .pub__main:hover .pub__cta { background: var(--blue-deep); }
+  .pub__cta-arrow { transition: transform 0.25s var(--ease-out); }
+  .pub__main:hover .pub__cta-arrow { transform: translateX(4px); }
 
   .pub__stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
+    margin-top: var(--space-xl);
     border-left: 1px solid var(--border-soft);
   }
   .pub__stat {
@@ -355,20 +366,19 @@ import { testimonials, missionVision, director, societies } from '../data/site';
   .pub__stat:last-child { border-right: 0; }
   .pub__stat dt {
     font-family: var(--font-serif);
-    font-size: var(--step-3);
-    font-weight: 600;
+    font-size: var(--step-4);
+    font-weight: 700;
     color: var(--blue);
     line-height: 1;
   }
   .pub__stat dd {
-    margin-top: 0.5rem;
+    margin-top: 0.6rem;
     font-size: var(--step--1);
     line-height: 1.35;
     color: var(--text-muted);
   }
 
-  @media (max-width: 880px) {
-    .pub__grid { grid-template-columns: 1fr; }
+  @media (max-width: 760px) {
     .pub__stats { grid-template-columns: 1fr; border-left: 0; border-top: 1px solid var(--border-soft); }
     .pub__stat { border-right: 0; border-bottom: 1px solid var(--border-soft); min-height: auto; padding-block: var(--space-m); }
     .pub__stat:last-child { border-bottom: 0; }
