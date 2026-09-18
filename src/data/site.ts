@@ -17,7 +17,6 @@ export type NavLink = { label: string; href: string };
 export type NavItem = { label: string; href?: string; children?: NavLink[] };
 
 export const nav: NavItem[] = [
-  { label: 'Heart Trending', href: '/heart-trending' },
   {
     label: 'Research',
     href: '/research-group',
@@ -26,16 +25,17 @@ export const nav: NavItem[] = [
       { label: 'Publications', href: '/publications' },
     ],
   },
+  { label: 'Heart Trending', href: '/heart-trending' },
+  { label: 'Education', href: '/education' },
   {
     label: 'Get Involved',
     href: '/submit-idea',
     children: [
       { label: 'Submit an Idea', href: '/submit-idea' },
       { label: 'Join the Lab', href: '/join-lab' },
+      { label: 'Contact Us', href: '/contact' },
     ],
   },
-  { label: 'Education', href: '/education' },
-  { label: 'Contact', href: '/contact' },
 ];
 
 export const director = {
