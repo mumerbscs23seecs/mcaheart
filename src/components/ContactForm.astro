@@ -1,8 +1,18 @@
 ---
-import { INTENT_LABELS } from '../lib/contact-schema';
+import { INTENT_LABELS, VISA_OPTIONS, OBS_CV } from '../lib/contact-schema';
+
+const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
+const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, string][];
 ---
 
-<form class="cform" action="/api/contact" method="post" novalidate data-contact-form>
+<form
+  class="cform"
+  action="/api/contact"
+  method="post"
+  enctype="multipart/form-data"
+  novalidate
+  data-contact-form
+>
   <div class="cform__row">
     <div class="field">
       <label class="field__label" for="fullName">Full name <span aria-hidden="true">*</span></label>
@@ -45,9 +55,9 @@ import { INTENT_LABELS } from '../lib/contact-schema';
 
   <fieldset class="field choices">
     <legend class="field__label">Why are you getting in touch? <span aria-hidden="true">*</span></legend>
-    {Object.entries(INTENT_LABELS).map(([value, label], i) => (
+    {intents.map(([value, label], i) => (
       <label class="choice">
-        <input type="radio" name="intent" value={value} required checked={i === 0} />
+        <input type="radio" name="intent" value={value} required checked={i === 0} data-intent-radio />
         <span class="choice__mark" aria-hidden="true"></span>
         <span class="choice__text">{label}</span>
       </label>
@@ -55,12 +65,117 @@ import { INTENT_LABELS } from '../lib/contact-schema';
     <p class="field__error" data-error-for="intent" hidden></p>
   </fieldset>
 
-  <div class="field">
-    <label class="field__label" for="message">How can we help? <span aria-hidden="true">*</span></label>
-    <textarea class="field__input field__input--area" id="message" name="message"
-              rows="6" required minlength="10" maxlength="4000"
-              placeholder="Example: I am a PGY-2 IM resident interested in joining the MCA Heart Research Lab."></textarea>
-    <p class="field__error" data-error-for="message" hidden></p>
+  {/* ------------------------------------------------------- Collaboration */}
+  <div class="cform__panel" data-intent-panel="collaborate">
+    <div class="field">
+      <label class="field__label" for="message">How can we help? <span aria-hidden="true">*</span></label>
+      <textarea class="field__input field__input--area" id="message" name="message"
+                rows="6" maxlength="4000"
+                placeholder="Example: I am a PGY-2 IM resident interested in joining the MCA Heart Research Lab."></textarea>
+      <p class="field__error" data-error-for="message" hidden></p>
+    </div>
+  </div>
+
+  {/* --------------------------------------------------- Recommendation */}
+  <div class="cform__panel" data-intent-panel="recommendation" hidden>
+    <div class="field">
+      <label class="field__label" for="recName">Full name <span aria-hidden="true">*</span></label>
+      <p class="field__help">We'll add a few more questions here soon - for now, your name is enough to get started.</p>
+      <input class="field__input" id="recName" name="recName" type="text" maxlength="120" />
+      <p class="field__error" data-error-for="recName" hidden></p>
+    </div>
+  </div>
+
+  {/* ---------------------------------------------------- Observership */}
+  <div class="cform__panel" data-intent-panel="observership" hidden>
+    <div class="field">
+      <label class="field__label" for="obsName">What is your name? <span aria-hidden="true">*</span></label>
+      <input class="field__input" id="obsName" name="obsName" type="text" maxlength="120" />
+      <p class="field__error" data-error-for="obsName" hidden></p>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="obsApplyDate">
+        When do you plan to apply for Internal Medicine match? <span aria-hidden="true">*</span>
+      </label>
+      <p class="field__help">Mention the year, e.g. Sept 2027.</p>
+      <input class="field__input" id="obsApplyDate" name="obsApplyDate" type="text" maxlength="60" placeholder="e.g. Sept 2027" />
+      <p class="field__error" data-error-for="obsApplyDate" hidden></p>
+    </div>
+
+    <fieldset class="field choices">
+      <legend class="field__label">Would you be needing a letter confirming the rotation? <span aria-hidden="true">*</span></legend>
+      <label class="choice">
+        <input type="radio" name="obsNeedsLetter" value="yes" />
+        <span class="choice__mark" aria-hidden="true"></span>
+        <span class="choice__text">Yes</span>
+      </label>
+      <label class="choice">
+        <input type="radio" name="obsNeedsLetter" value="no" />
+        <span class="choice__mark" aria-hidden="true"></span>
+        <span class="choice__text">No</span>
+      </label>
+      <p class="field__error" data-error-for="obsNeedsLetter" hidden></p>
+    </fieldset>
+
+    <div class="field">
+      <label class="field__label" for="obsStatus">
+        Please tell your exact professional status <span aria-hidden="true">*</span>
+      </label>
+      <p class="field__help">E.g. Graduate from XYZ school planning to apply for IM residency.</p>
+      <textarea class="field__input field__input--area" id="obsStatus" name="obsStatus" rows="3" maxlength="2000"></textarea>
+      <p class="field__error" data-error-for="obsStatus" hidden></p>
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="obsUsmle">Have you completed any USMLEs?</label>
+      <p class="field__help">If so, please mention the ones taken. Mentioning scores is not compulsory though encouraged.</p>
+      <textarea class="field__input field__input--area" id="obsUsmle" name="obsUsmle" rows="3" maxlength="2000"></textarea>
+      <p class="field__error" data-error-for="obsUsmle" hidden></p>
+    </div>
+
+    <fieldset class="field choices">
+      <legend class="field__label">Please choose what best suits you <span aria-hidden="true">*</span></legend>
+      {VISA_OPTIONS.map((v) => (
+        <label class="choice">
+          <input type="radio" name="obsVisa" value={v} />
+          <span class="choice__mark" aria-hidden="true"></span>
+          <span class="choice__text">{v}</span>
+        </label>
+      ))}
+      <p class="field__error" data-error-for="obsVisa" hidden></p>
+    </fieldset>
+
+    <div class="field">
+      <label class="field__label" for="obsGradYear">What is your Year of graduation? <span aria-hidden="true">*</span></label>
+      <input class="field__input" id="obsGradYear" name="obsGradYear" type="text" maxlength="40" />
+      <p class="field__error" data-error-for="obsGradYear" hidden></p>
+    </div>
+
+    <div class="cform__row">
+      <div class="field">
+        <label class="field__label" for="obsStart">Intended rotation start <span aria-hidden="true">*</span></label>
+        <input class="field__input" id="obsStart" name="obsStart" type="date" />
+        <p class="field__error" data-error-for="obsStart" hidden></p>
+      </div>
+      <div class="field">
+        <label class="field__label" for="obsEnd">Intended rotation end <span aria-hidden="true">*</span></label>
+        <input class="field__input" id="obsEnd" name="obsEnd" type="date" />
+        <p class="field__error" data-error-for="obsEnd" hidden></p>
+      </div>
+    </div>
+    <p class="field__help">
+      Please be advised that while we will try our best to give you the rotation at the intended
+      dates, we may reach out to you with alternative dates in case the requested dates are not
+      available.
+    </p>
+
+    <div class="field">
+      <label class="field__label" for="obsCv">Please attach your CV</label>
+      <p class="field__help">PDF or Word, up to {mb(OBS_CV.maxBytes)}.</p>
+      <input class="field__file" id="obsCv" name="obsCv" type="file" accept={OBS_CV.extensions.join(',')} />
+      <p class="field__error" data-error-for="obsCv" hidden></p>
+    </div>
   </div>
 
   {/* Honeypot - hidden from people, tempting to bots. */}
@@ -108,6 +223,7 @@ import { INTENT_LABELS } from '../lib/contact-schema';
     padding: 0;
   }
   .field__label span { color: var(--blue); }
+  .field__help { font-size: 0.82rem; line-height: 1.5; color: var(--text-muted); margin: -0.15rem 0 0; }
 
   .field__input {
     width: 100%;
@@ -134,11 +250,26 @@ import { INTENT_LABELS } from '../lib/contact-schema';
     background: var(--red-wash);
   }
 
+  .field__file {
+    width: 100%;
+    padding: 0.7rem 0.9rem;
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    font-size: var(--step--1);
+    color: var(--text-strong);
+  }
+  .field__file[aria-invalid='true'] { border-color: var(--red); background: var(--red-wash); }
+
   .field__error {
     font-size: 0.8rem;
     font-weight: 600;
     color: var(--red);
   }
+
+  /* --- Conditional intent panels --- */
+  .cform__panel { display: grid; gap: var(--space-m); }
+  .cform__panel[hidden] { display: none; }
 
   /* --- Radio choices --- */
   .choices { display: grid; gap: 0.6rem; }
@@ -233,6 +364,17 @@ import { INTENT_LABELS } from '../lib/contact-schema';
     const label = form.querySelector<HTMLElement>('[data-submit-label]')!;
     const original = label.textContent;
 
+    // Show only the panel matching the selected reason for getting in touch.
+    const panels = Array.from(form.querySelectorAll<HTMLElement>('[data-intent-panel]'));
+    const syncPanels = () => {
+      const picked = form.querySelector<HTMLInputElement>('[data-intent-radio]:checked')?.value;
+      for (const panel of panels) panel.hidden = panel.dataset.intentPanel !== picked;
+    };
+    form.querySelectorAll<HTMLInputElement>('[data-intent-radio]').forEach((r) =>
+      r.addEventListener('change', syncPanels),
+    );
+    syncPanels();
+
     const clearErrors = () => {
       form.querySelectorAll<HTMLElement>('[data-error-for]').forEach((el) => {
         el.hidden = true;
@@ -275,18 +417,17 @@ import { INTENT_LABELS } from '../lib/contact-schema';
       submit.disabled = true;
       label.textContent = 'Sending…';
 
-      const payload = Object.fromEntries(new FormData(form));
-
       try {
         const res = await fetch(form.action, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-          body: JSON.stringify(payload),
+          headers: { Accept: 'application/json' },
+          body: new FormData(form),
         });
         const data = await res.json();
 
         if (res.ok && data.ok) {
           form.reset();
+          syncPanels();
           setStatus(data.message ?? 'Thank you - your enquiry has been received.', 'ok');
           status.scrollIntoView({ block: 'center', behavior: 'smooth' });
         } else {

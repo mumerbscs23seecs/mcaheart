@@ -1,10 +1,14 @@
 import type { APIRoute } from 'astro';
-import { contactSchema } from '../../lib/contact-schema';
+import { contactSchema, OBS_CV } from '../../lib/contact-schema';
 import { clientIp, rateLimit } from '../../lib/rate-limit';
 import { deliverEnquiry } from '../../lib/mailer';
+import type { Attachment } from '../../lib/email';
 
 // Runs on demand rather than being prerendered with the rest of the site.
 export const prerender = false;
+
+/** Attach to the notification email only when comfortably under Gmail's 25 MB. */
+const EMAIL_ATTACH_MAX = 8 * 1024 * 1024;
 
 const json = (body: unknown, status = 200, headers: HeadersInit = {}) =>
   new Response(JSON.stringify(body), {
@@ -23,16 +27,21 @@ export const POST: APIRoute = async ({ request }) => {
     );
   }
 
-  // --- 2. Parse ----------------------------------------------------------
-  let raw: unknown;
+  // --- 2. Parse ------------------------------------------------------------
+  // Always multipart now (the observership panel can carry a CV), with a
+  // JSON fallback kept for any non-browser caller that still posts JSON.
+  let form: FormData | null = null;
+  let raw: Record<string, unknown>;
   const contentType = request.headers.get('content-type') ?? '';
 
   try {
     if (contentType.includes('application/json')) {
       raw = await request.json();
     } else {
-      // Fallback for a no-JS native form POST.
-      raw = Object.fromEntries(await request.formData());
+      form = await request.formData();
+      raw = Object.fromEntries(
+        Array.from(form.entries()).filter(([, v]) => typeof v === 'string'),
+      );
     }
   } catch {
     return json({ ok: false, error: 'Could not read that request.' }, 400);
@@ -54,9 +63,46 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ ok: true, message: 'Thank you - your enquiry has been received.' });
   }
 
-  // --- 4. Deliver --------------------------------------------------------
+  // --- 4. Optional CV (observership only) ---------------------------------
+  let cv: { filename: string; mime: string; bytes: Buffer } | null = null;
+  if (form) {
+    const f = form.get(OBS_CV.field);
+    if (f instanceof File && f.size > 0) {
+      if (f.size > OBS_CV.maxBytes) {
+        return json(
+          {
+            ok: false,
+            error: 'Please check the highlighted fields.',
+            fieldErrors: { obsCv: `That file is over ${Math.round(OBS_CV.maxBytes / 1024 / 1024)} MB.` },
+          },
+          422,
+        );
+      }
+      const ext = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
+      if (!OBS_CV.extensions.includes(ext as never)) {
+        return json(
+          {
+            ok: false,
+            error: 'Please check the highlighted fields.',
+            fieldErrors: { obsCv: `Accepted types: ${OBS_CV.extensions.join(', ')}` },
+          },
+          422,
+        );
+      }
+      cv = { filename: f.name, mime: f.type || 'application/octet-stream', bytes: Buffer.from(await f.arrayBuffer()) };
+    }
+  }
+
+  // --- 5. Deliver --------------------------------------------------------
+  const attachments: Attachment[] | undefined = cv
+    ? cv.bytes.byteLength <= EMAIL_ATTACH_MAX
+      ? [{ filename: cv.filename, content: cv.bytes.toString('base64') }]
+      : undefined
+    : undefined;
+  const cvTooLarge = !!cv && !attachments;
+
   try {
-    await deliverEnquiry(parsed.data);
+    await deliverEnquiry(parsed.data, { attachments, cvFilename: cv?.filename, cvTooLarge });
   } catch (err) {
     console.error('[contact] delivery failed:', err);
     return json(
