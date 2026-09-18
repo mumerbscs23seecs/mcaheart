@@ -8,8 +8,11 @@ interface Props {
   align?: 'left' | 'center';
   /** Slim band for utility pages (login, dashboards) - no tall empty hero. */
   compact?: boolean;
+  /** The hero image already carries the title as artwork - keep the <h1>
+   *  for SEO/accessibility but don't render it visibly over the image. */
+  hideTitle?: boolean;
 }
-const { eyebrow, title, subtitle, image, align = 'left', compact = false } = Astro.props;
+const { eyebrow, title, subtitle, image, align = 'left', compact = false, hideTitle = false } = Astro.props;
 ---
 
 <section class:list={['phero', align === 'center' && 'phero--center', compact && 'phero--compact']}>
@@ -21,7 +24,7 @@ const { eyebrow, title, subtitle, image, align = 'left', compact = false } = Ast
 
   <div class="shell shell--wide phero__inner">
     {eyebrow && <p class:list={['eyebrow', align === 'center' && 'eyebrow--center']}>{eyebrow}</p>}
-    <h1 class="display phero__title">{title}</h1>
+    <h1 class:list={['display phero__title', hideTitle && 'visually-hidden']}>{title}</h1>
     {subtitle && <p class="lede phero__sub">{subtitle}</p>}
     <slot />
   </div>
