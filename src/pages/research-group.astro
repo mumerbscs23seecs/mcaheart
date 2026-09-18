@@ -2,7 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
 import CTABanner from '../components/CTABanner.astro';
-import { testimonials, missionVision, director } from '../data/site';
+import { testimonials, missionVision, director, societies } from '../data/site';
 ---
 
 <BaseLayout
@@ -53,12 +53,6 @@ import { testimonials, missionVision, director } from '../data/site';
             to cardiology&rsquo;s progress while advancing their careers.
           </p>
         </div>
-
-        <dl class="about__figures">
-          <div><dt>75+</dt><dd>manuscripts a year</dd></div>
-          <div><dt>150+</dt><dd>abstracts presented</dd></div>
-          <div><dt>300+</dt><dd>active members</dd></div>
-        </dl>
       </div>
     </div>
   </section>
@@ -78,21 +72,55 @@ import { testimonials, missionVision, director } from '../data/site';
         </article>
       ))}
 
+    </div>
+  </section>
+
+  {/* ------------------------------------------------------------------ PubMed */}
+  <section class="section--tight pub">
+    <div class="shell shell--wide pub__grid">
       <a
-        class="mv__pubmed"
+        class="pub__main"
         href="https://pubmed.ncbi.nlm.nih.gov/?term=chadi+alraies&sort=date&size=200"
         target="_blank"
         rel="noopener noreferrer"
         data-reveal
-        style="--reveal-delay:240ms"
       >
-        <span class="mv__pubmed-logo">
+        <span class="pub__logo">
           <img src="/assets/research/pubmed-logo-blue.svg" alt="PubMed" loading="lazy" decoding="async" />
         </span>
-        <span class="mv__pubmed-title">
-          Our Publications on PubMed <span class="mv__pubmed-arrow" aria-hidden="true">&rarr;</span>
+        <span class="pub__title">Our Publications on PubMed</span>
+        <span class="btn btn--red pub__cta">
+          View Our Publications <span class="btn__arrow" aria-hidden="true">&rarr;</span>
         </span>
       </a>
+
+      <dl class="pub__stats" data-reveal style="--reveal-delay:120ms">
+        <div class="pub__stat pub__stat--reserved" aria-hidden="true"></div>
+        <div class="pub__stat">
+          <dt>150+</dt>
+          <dd>abstracts presented a year</dd>
+        </div>
+        <div class="pub__stat">
+          <dt>300+</dt>
+          <dd>active researchers &amp; trainees</dd>
+        </div>
+      </dl>
+    </div>
+  </section>
+
+  {/* --------------------------------------------------------------- Societies */}
+  <section class="section--tight societies">
+    <div class="shell shell--wide">
+      <p class="societies__label">Our work has been presented at</p>
+      <ul class="societies__list">
+        {societies.map((s) => (
+          <li class="societies__item">
+            <a href={s.url} target="_blank" rel="noopener noreferrer" aria-label={`${s.name} - view M Chadi Alraies' work indexed here`}>
+              <img src={s.logo} alt={s.name} loading="lazy" decoding="async" height="60" />
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   </section>
 
@@ -207,27 +235,6 @@ import { testimonials, missionVision, director } from '../data/site';
   .about__title { font-size: var(--step-3); margin-top: var(--space-s); max-width: 16ch; }
   .about__body { margin-top: var(--space-m); }
 
-  .about__figures {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--space-s);
-    margin-top: var(--space-l);
-    padding-top: var(--space-m);
-    border-top: 1px solid var(--border-soft);
-  }
-  .about__figures dt {
-    font-family: var(--font-serif);
-    font-size: var(--step-2);
-    font-weight: 600;
-    color: var(--blue);
-    line-height: 1;
-  }
-  .about__figures dd {
-    margin-top: 0.3rem;
-    font-size: var(--step--1);
-    color: var(--text-muted);
-  }
-
   @media (max-width: 880px) {
     .about__grid { grid-template-columns: 1fr; }
     .about__portrait { max-width: 400px; }
@@ -290,25 +297,24 @@ import { testimonials, missionVision, director } from '../data/site';
     .mv__card { grid-template-columns: 1fr; align-items: start; }
   }
 
-  .mv__pubmed {
-    grid-column: 1 / -1;
+  /* ------------------------------------------------------------------ PubMed */
+  .pub { padding-block: var(--space-xl); background: var(--bg-tint); border-block: 1px solid var(--border-soft); }
+  .pub__grid {
+    display: grid;
+    grid-template-columns: 1.1fr 1fr;
+    align-items: center;
+    gap: clamp(2rem, 1rem + 4vw, 4rem);
+  }
+
+  .pub__main {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--space-s);
-    padding: var(--space-xl) var(--space-m);
     text-align: center;
-    background: var(--surface);
-    border: 1px solid var(--border-soft);
-    border-top: 2px solid var(--blue);
-    border-radius: var(--radius);
     text-decoration: none;
-    transition: border-color 0.25s var(--ease), background 0.25s var(--ease);
   }
-  .mv__pubmed:hover { border-color: var(--border); background: var(--bg-tint); }
-  .mv__pubmed:hover .mv__pubmed-arrow { transform: translateX(4px); }
-
-  .mv__pubmed-logo {
+  .pub__logo {
     display: grid;
     place-items: center;
     width: clamp(140px, 110px + 8vw, 190px);
@@ -316,23 +322,87 @@ import { testimonials, missionVision, director } from '../data/site';
     background: #fff;
     border: 1px solid var(--border-soft);
   }
-  .mv__pubmed-logo img { width: 100%; height: auto; display: block; }
-
-  .mv__pubmed-title {
+  .pub__logo img { width: 100%; height: auto; display: block; }
+  .pub__title {
     font-family: var(--font-display);
-    font-size: var(--step-1);
+    font-size: var(--step-2);
     font-weight: 800;
     color: var(--text-strong);
     letter-spacing: -0.012em;
-    display: inline-flex;
+    margin-top: var(--space-xs);
+  }
+  .pub__cta { margin-top: var(--space-s); }
+  .pub__main:hover .btn__arrow { transform: translateX(4px); }
+
+  .pub__stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border-left: 1px solid var(--border-soft);
+  }
+  .pub__stat {
+    min-height: 148px;
+    padding: var(--space-s);
+    border-right: 1px solid var(--border-soft);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 0.5rem;
+    justify-content: center;
+  }
+  .pub__stat:last-child { border-right: 0; }
+  .pub__stat--reserved { color: var(--text-faint); }
+  .pub__stat dt {
+    font-family: var(--font-serif);
+    font-size: var(--step-3);
+    font-weight: 600;
+    color: var(--blue);
+    line-height: 1;
+  }
+  .pub__stat dd {
+    margin-top: 0.5rem;
+    font-size: var(--step--1);
+    line-height: 1.35;
+    color: var(--text-muted);
   }
 
-  .mv__pubmed-arrow {
-    color: var(--blue);
-    transition: transform 0.25s var(--ease-out);
+  @media (max-width: 880px) {
+    .pub__grid { grid-template-columns: 1fr; }
+    .pub__stats { grid-template-columns: 1fr; border-left: 0; border-top: 1px solid var(--border-soft); }
+    .pub__stat { border-right: 0; border-bottom: 1px solid var(--border-soft); min-height: auto; padding-block: var(--space-m); }
+    .pub__stat:last-child { border-bottom: 0; }
+    .pub__stat--reserved { display: none; }
   }
+
+  /* --------------------------------------------------------------- Societies */
+  .societies { padding-block: var(--space-l); border-bottom: 1px solid var(--border-soft); }
+  .societies__label {
+    text-align: center;
+    font-size: var(--step--1);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--text-faint);
+  }
+  .societies__list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(2rem, 1rem + 5vw, 5.5rem);
+    margin-top: var(--space-m);
+  }
+  .societies__item a { display: block; line-height: 0; }
+  .societies__item img {
+    height: clamp(52px, 40px + 2vw, 76px);
+    width: auto;
+    filter: grayscale(1) contrast(1.1);
+    opacity: 0.8;
+    mix-blend-mode: multiply;
+    transition: opacity 0.4s var(--ease), filter 0.4s var(--ease);
+  }
+  .societies__item a:hover img,
+  .societies__item a:focus-visible img { opacity: 1; filter: grayscale(0); }
+  .societies__item a:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
 
   /* ------------------------------------------------------------ Testimonials */
   .voices__title { font-size: var(--step-3); margin-top: var(--space-s); }
