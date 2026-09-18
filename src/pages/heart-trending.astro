@@ -1,9 +1,17 @@
 ---
+export const prerender = false;
+
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
 import VideoCard from '../components/VideoCard.astro';
 import VideoLightbox from '../components/VideoLightbox.astro';
 import { videos, site } from '../data/site';
+import { fetchLatestVideos } from '../lib/youtube-feed';
+
+// Pulled live from the channel's public RSS feed - no API key, cached for
+// 20 minutes server-side so it stays fresh without hammering YouTube.
+const channelId = site.youtube.split('/').filter(Boolean).pop()!;
+const latestVideos = await fetchLatestVideos(channelId, 8);
 ---
 
 <BaseLayout
@@ -22,12 +30,32 @@ import { videos, site } from '../data/site';
     </a>
   </PageHero>
 
+  {/* ------------------------------------------------------------- Just in */}
+  {latestVideos.length > 0 && (
+    <section class="section justin">
+      <div class="shell shell--wide">
+        <header class="library__head" data-reveal>
+          <p class="eyebrow">Straight from YouTube</p>
+          <h2 class="display library__title">Just uploaded</h2>
+          <p class="prose library__note">
+            Pulled automatically from the channel - no editing needed on our end
+            when a new episode goes up.
+          </p>
+        </header>
+
+        <div class="library__grid">
+          {latestVideos.map((v, i) => <VideoCard video={v} index={i} />)}
+        </div>
+      </div>
+    </section>
+  )}
+
   {/* --------------------------------------------------------------- Library */}
   <section class="section library">
     <div class="shell shell--wide">
       <header class="library__head" data-reveal>
         <p class="eyebrow">The library</p>
-        <h2 class="display library__title">Watch the latest</h2>
+        <h2 class="display library__title">Fan favourites</h2>
         <p class="prose library__note">
           Every episode plays here without leaving the page. Nothing loads from
           YouTube until you press play.
