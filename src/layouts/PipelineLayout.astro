@@ -208,13 +208,18 @@ const tabs: Tab[] = [
             row('Manuscript', d.manuscript_url ? '<a href="' + esc(d.manuscript_url) + '" target="_blank" rel="noopener">open</a>' : '');
 
           const cAtt = (d.conference_attempts || [])
-            .map((a) => '<li>' + esc(a.name || '-') + ' <span class="pl-muted">' + esc(a.outcome || 'pending') + '</span></li>')
+            .map(
+              (a) =>
+                '<li>' + esc(a.name || '-') + ' <span class="pl-muted">' + esc(a.outcome || 'pending') +
+                ' · ' + fmt(a.submitted_on) + '</span></li>',
+            )
             .join('');
           const jAtt = (d.journal_attempts || [])
             .map(
               (a) =>
                 '<li>' + esc(a.journal) + ' <span class="pl-muted">' + esc(a.outcome || 'open') +
-                (a.revision_round ? ' · rev ' + a.revision_round : '') + '</span></li>',
+                (a.revision_round ? ' · rev ' + a.revision_round : '') +
+                ' · ' + fmt(a.submitted_on) + '</span></li>',
             )
             .join('');
 

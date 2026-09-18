@@ -28,14 +28,14 @@ export const GET: APIRoute = async ({ params, locals }) => {
       .from('conference_attempts')
       .select('outcome,submitted_on,conference:conferences(name)')
       .eq('project_id', id)
-      .order('submitted_on', { ascending: true })
-      .order('id', { ascending: true }),
+      .order('submitted_on', { ascending: false })
+      .order('id', { ascending: false }),
     supabase
       .from('journal_attempts')
       .select('journal,outcome,revision_round,submitted_on')
       .eq('project_id', id)
-      .order('submitted_on', { ascending: true })
-      .order('id', { ascending: true }),
+      .order('submitted_on', { ascending: false })
+      .order('id', { ascending: false }),
     supabase
       .from('project_history')
       .select('at,label,actor')
@@ -73,11 +73,13 @@ export const GET: APIRoute = async ({ params, locals }) => {
     conference_attempts: (confRes.data ?? []).map((a: any) => ({
       name: a.conference?.name ?? null,
       outcome: a.outcome,
+      submitted_on: a.submitted_on,
     })),
     journal_attempts: (jrnlRes.data ?? []).map((a: any) => ({
       journal: a.journal,
       outcome: a.outcome,
       revision_round: a.revision_round,
+      submitted_on: a.submitted_on,
     })),
     history: (histRes.data ?? []).map((h: any) => ({ at: h.at, label: h.label, actor: h.actor })),
   });

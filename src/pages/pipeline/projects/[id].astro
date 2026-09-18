@@ -28,17 +28,18 @@ const { data: confAttempts } = await supabase
   .from('conference_attempts')
   .select('id,outcome,submitted_on,conference:conferences(name)')
   .eq('project_id', id)
-  .order('submitted_on', { ascending: true })
-  .order('id', { ascending: true });
+  .order('submitted_on', { ascending: false })
+  .order('id', { ascending: false });
 const pendingAttempt = (confAttempts ?? []).find((a: any) => a.outcome == null);
 
 const { data: journalAttempts } = await supabase
   .from('journal_attempts')
   .select('id,journal,outcome,submitted_on,revision_round')
   .eq('project_id', id)
-  .order('submitted_on', { ascending: true })
-  .order('id', { ascending: true });
-const openJournalAttempt = [...(journalAttempts ?? [])].reverse().find((a: any) => a.outcome == null);
+  .order('submitted_on', { ascending: false })
+  .order('id', { ascending: false });
+// journalAttempts is newest-first now, so the first open one is the current attempt.
+const openJournalAttempt = (journalAttempts ?? []).find((a: any) => a.outcome == null);
 
 const { data: history } = await supabase
   .from('project_history')
@@ -375,16 +376,29 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
       {confAttempts && confAttempts.length > 0 && (
         <>
           <h3>Conference attempts</h3>
-          <dl>{confAttempts.map((a: any) => <><dt>{a.conference?.name}</dt><dd>{a.outcome ?? 'pending'}</dd></>)}</dl>
+          <dl>
+            {confAttempts.map((a: any) => (
+              <>
+                <dt>{a.conference?.name}</dt>
+                <dd>{a.outcome ?? 'pending'} · {a.submitted_on ? fmtDate(a.submitted_on) : 'date unknown'}</dd>
+              </>
+            ))}
+          </dl>
         </>
       )}
 
       {journalAttempts && journalAttempts.length > 0 && (
         <>
-          <h3>Journal attempts ({journalAttempts.length})</h3>
+          <h3>Journal submission history ({journalAttempts.length})</h3>
           <dl>
             {journalAttempts.map((a: any) => (
-              <><dt>{a.journal}</dt><dd>{a.outcome ?? 'open'}{a.revision_round ? ` · rev ${a.revision_round}` : ''}</dd></>
+              <>
+                <dt>{a.journal}</dt>
+                <dd>
+                  {a.outcome ?? 'open'}{a.revision_round ? ` · rev ${a.revision_round}` : ''}
+                  {' · '}Submitted {a.submitted_on ? fmtDate(a.submitted_on) : 'date unknown'}
+                </dd>
+              </>
             ))}
           </dl>
         </>
