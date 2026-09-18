@@ -38,11 +38,6 @@ import { director, stats, societies } from '../data/site';
         />
       </div>
     </div>
-
-    <div class="hero__scroll" aria-hidden="true">
-      <span>Scroll</span>
-      <i></i>
-    </div>
   </section>
 
   {/* ------------------------------------------------------------ Societies */}
@@ -76,7 +71,6 @@ import { director, stats, societies } from '../data/site';
       </figure>
 
       <div class="director__copy" data-reveal style="--reveal-delay:120ms">
-        <p class="section-head__meta"><span class="section-head__num">01</span> Led by</p>
         <h2 class="director__name">
           {director.name}<span class="director__creds">, {director.credentialsFull}</span>
         </h2>
@@ -103,7 +97,6 @@ import { director, stats, societies } from '../data/site';
 
     <div class="shell shell--wide">
       <header class="impact__head section-head" data-reveal>
-        <p class="section-head__meta"><span class="section-head__num">02</span> By the numbers</p>
         <h2 class="display impact__title">Impact<br />through<br />excellence</h2>
       </header>
 
@@ -122,7 +115,6 @@ import { director, stats, societies } from '../data/site';
   <section class="section pillars">
     <div class="shell shell--wide">
       <header class="pillars__head section-head" data-reveal>
-        <p class="section-head__meta"><span class="section-head__num">03</span> What we do</p>
         <h2 class="display pillars__title">Three arms, one mission</h2>
       </header>
 
@@ -297,26 +289,6 @@ import { director, stats, societies } from '../data/site';
     100% { transform: scale(1); }        /* rest - ~64% of the cycle */
   }
 
-  .hero__scroll {
-    position: absolute;
-    left: 50%;
-    bottom: var(--space-m);
-    transform: translateX(-50%);
-    display: grid;
-    justify-items: center;
-    gap: 0.6rem;
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.26em;
-    color: var(--text-faint);
-  }
-  .hero__scroll i {
-    width: 1px;
-    height: 46px;
-    background: linear-gradient(to bottom, var(--border), transparent);
-  }
-
   @media (max-width: 900px) {
     .hero { min-height: auto; }
     .hero__inner { grid-template-columns: 1fr; gap: var(--space-m); }
@@ -324,7 +296,6 @@ import { director, stats, societies } from '../data/site';
        still lands above the fold on a phone. */
     .hero__art { order: -1; justify-self: start; }
     .hero__art img { height: min(34svh, 290px); }
-    .hero__scroll { display: none; }
   }
 
   /* ----------------------------------------------------------- Societies */

@@ -303,24 +303,16 @@ p { text-wrap: pretty; }
   color: var(--blue);
 }
 
-/* Section label — bold letterspaced caps with a short crimson rule. */
+/* Section label — bold letterspaced caps, plain (no accent rule/colour). */
 .eyebrow {
   display: inline-flex;
   align-items: center;
-  gap: 0.75em;
   font-family: var(--font-sans);
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: var(--blue);
-}
-.eyebrow::before {
-  content: '';
-  width: 2em;
-  height: 2px;
-  background: var(--blue);
-  flex: none;
+  color: var(--text-muted);
 }
 .eyebrow--center { justify-content: center; }
 
@@ -336,40 +328,13 @@ p { text-wrap: pretty; }
 .prose { max-width: var(--measure); color: var(--text); }
 .prose p + p { margin-top: var(--space-s); }
 
-/* Section header — heavy rule + oversized crimson numeral + label. */
+/* Section header - just spacing above the h2 now; the numbered
+   "01 LED BY ———" label row was removed. */
 .section-head {
   display: grid;
   gap: var(--space-s);
   margin-bottom: var(--space-l);
 }
-.section-head__meta {
-  display: flex;
-  align-items: center;
-  gap: var(--space-s);
-  font-family: var(--font-sans);
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.13em;
-  color: var(--text-muted);
-  padding-top: 0.9rem;
-  border-top: 2px solid var(--ink);
-}
-.section-head__num {
-  color: var(--blue);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-}
-.section-head__meta::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-.dark-ground .section-head__meta { color: var(--on-dark-muted); border-top-color: var(--on-dark-strong); }
-.dark-ground .section-head__num { color: var(--on-dark-accent); }
-.dark-ground .section-head__meta::after { background: var(--on-dark-border); }
 
 /* ---------- 4. Layout ---------------------------------------------------- */
 
@@ -404,8 +369,7 @@ p { text-wrap: pretty; }
   color: var(--on-dark-strong);
 }
 .dark-ground .lede, .dark-ground .prose { color: var(--on-dark-muted); }
-.dark-ground .eyebrow { color: var(--on-dark-strong); }
-.dark-ground .eyebrow::before { background: var(--on-dark-accent); }
+.dark-ground .eyebrow { color: var(--on-dark-muted); }
 
 .rule { height: 1px; background: var(--border); border: 0; }
 .rule--strong { background: var(--ink); height: 2px; }
