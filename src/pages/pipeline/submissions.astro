@@ -23,8 +23,13 @@ if (!isAdmin) query = scopeProjects(query, person);
 
 const { data: rows, error } = await query;
 
-const fmt = (d: string | null) =>
-  d ? new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
+// Numeric MM-DD-YYYY - keeps the date column narrow so title/status columns
+// have the room, instead of the long "September 2, 2024" form.
+const fmt = (d: string | null) => {
+  if (!d) return '-';
+  const dt = new Date(d);
+  return `${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}-${dt.getFullYear()}`;
+};
 ---
 
 <PipelineLayout title="Submissions" active="submissions">

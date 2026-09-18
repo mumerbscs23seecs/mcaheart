@@ -224,7 +224,7 @@
 .pl-table tbody tr:last-child td { border-bottom: 0; }
 .pl-table tbody tr:hover td { background: var(--pl-link-wash); }
 
-.pl-t__title { max-width: 40ch; }
+.pl-t__title { width: 100%; max-width: 64ch; }
 .pl-t__title a {
   color: var(--pl-link);
   font-weight: 600;
@@ -244,6 +244,7 @@
 }
 .pl-t__venue { font-family: var(--pl-serif); font-style: italic; color: var(--text); }
 .pl-t__date {
+  width: 1%;
   color: var(--text-muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;

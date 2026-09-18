@@ -31,7 +31,6 @@ export const STAGES = [
   ['journal',    'with_editor',   'With editor'],
   ['journal',    'under_review',  'Under review'],
   ['journal',    'revision_req',  'Revision requested'],
-  ['journal',    'revision_wip',  'Working on revision'],
   ['journal',    'revision_review','Revision under review'],
   ['journal',    'rejected_comments','Rejected with comments'],
   ['journal',    'rejected_no_comments','Rejected with no comments'],
@@ -153,7 +152,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
           /conference outcome/, 'conference outcome is admin-only');
   a.match(stageChangeError({ phase: 'journal', stage: 'under_review', lead_id: 'u-lead' }, 'published', lead),
           /journal outcome/, 'journal outcome is admin-only');
-  a.equal(stageChangeError({ phase: 'journal', stage: 'under_review', lead_id: 'u-lead' }, 'revision_wip', lead),
+  a.equal(stageChangeError({ phase: 'journal', stage: 'under_review', lead_id: 'u-lead' }, 'revision_review', lead),
           null, 'lead may still move within phase C');
 
   a.match(gate3Error(p), /Reach stage 5/);
@@ -177,7 +176,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   a.equal(flags({ ...p, parked: true }, new Date('2026-09-05')).overdue, false, 'parked never chases');
 
   a.equal(stagesFor('manuscript').length, 6);
-  a.equal(stagesFor('journal').length, 10);
+  a.equal(stagesFor('journal').length, 9);
   a.equal(nextRevisionRound({ revision_round: 1 }, 'revision_req'), 2, 'round increments on request');
   a.equal(nextRevisionRound({ revision_round: 1 }, 'revision_review'), 1, 'and only then');
   a.equal(refOf(142), 'MCA-0142');
