@@ -238,6 +238,7 @@
 .pl-t__status { width: 1%; }
 .pl-t__status .pl-status,
 .pl-t__status select.pl-status { min-width: 150px; max-width: 190px; }
+.pl-t__status .pl-status-form { max-width: 190px; }
 .pl-t__title a {
   color: var(--pl-link);
   font-weight: 600;

@@ -85,7 +85,11 @@ const editable =
 )}
 
 <style>
-  .pl-status-form { display: grid; gap: 6px; }
+  /* Cap the form itself to the status pill's own max-width - otherwise the
+     extra-field row (input + button) can want to be wider than the select
+     above it, stretching the grid column and knocking the two out of
+     alignment. */
+  .pl-status-form { display: grid; gap: 6px; max-width: 250px; }
   .pl-status-extra { display: flex; gap: 6px; width: 100%; box-sizing: border-box; }
   .pl-status-extra[hidden] { display: none; }
   .pl-status-extra input {
