@@ -471,7 +471,11 @@ select.pl-status:focus-visible { outline: 2px solid var(--pl-accent); outline-of
 }
 
 /* ---------- project detail ---------- */
-.pl-detail { display: grid; grid-template-columns: 1fr 300px; gap: 44px; align-items: start; }
+/* The main column caps out instead of stretching to fill the (now wider)
+   page - on a large screen a 1fr column left the Actions/Manuscript boxes
+   mostly empty and pushed the People/Dates sidebar all the way out to the
+   page's edge, far from the content it describes. */
+.pl-detail { display: grid; grid-template-columns: minmax(0, 720px) 300px; gap: 44px; align-items: start; }
 @media (max-width: 860px) { .pl-detail { grid-template-columns: 1fr; gap: 28px; } }
 
 .pl-phead { margin: 0 0 8px; }
