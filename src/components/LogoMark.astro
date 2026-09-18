@@ -1,0 +1,46 @@
+---
+// The MCA logo, in two forms:
+//   "mark"      - the small circular MCA monogram (nav bars, small spots)
+//   "wordmark"  - the full "MCA HEART" lockup (public site header/footer)
+// data-theme is always stamped explicitly by ThemeInit.astro before paint,
+// so a plain [data-theme='dark'] selector is enough - no prefers-color-
+// scheme fallback needed here.
+interface Props {
+  /** Any CSS size (e.g. "2em", "32px"). */
+  size?: string;
+  /**
+   * What background this sits on. "auto" (default) follows the site theme
+   * toggle - use for anywhere the surrounding surface flips light/dark with
+   * the theme. Pin to "dark" or "light" for a section whose background
+   * never changes with the toggle (e.g. the always-dark footer).
+   */
+  background?: 'auto' | 'dark' | 'light';
+  kind?: 'mark' | 'wordmark';
+}
+const { size = '2em', background = 'auto', kind = 'mark' } = Astro.props;
+const base = kind === 'wordmark' ? 'mca-wordmark' : 'mca-mark';
+---
+
+<span class="logo-mark" style={`--logo-mark-size:${size}`} aria-hidden="true">
+  {background === 'auto' ? (
+    <>
+      <img class="logo-mark__light" src={`/assets/brand/${base}-light.png`} alt="" />
+      <img class="logo-mark__dark" src={`/assets/brand/${base}-dark.png`} alt="" />
+    </>
+  ) : (
+    <img src={`/assets/brand/${base}-${background}.png`} alt="" />
+  )}
+</span>
+
+<style is:global>
+  .logo-mark {
+    display: inline-grid;
+    width: var(--logo-mark-size, 2em);
+    height: var(--logo-mark-size, 2em);
+    flex-shrink: 0;
+  }
+  .logo-mark img { grid-area: 1 / 1; width: 100%; height: 100%; object-fit: contain; }
+  .logo-mark__dark { display: none; }
+  :root[data-theme='dark'] .logo-mark__light { display: none; }
+  :root[data-theme='dark'] .logo-mark__dark { display: block; }
+</style>

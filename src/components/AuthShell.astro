@@ -2,6 +2,7 @@
 import '../styles/global.css';
 import FontLinks from './FontLinks.astro';
 import ThemeInit from './ThemeInit.astro';
+import LogoMark from './LogoMark.astro';
 import { site } from '../data/site';
 
 interface Props {
@@ -21,7 +22,7 @@ const pageTitle = `${title} | ${site.name}`;
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
     <meta name="robots" content="noindex" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.png" type="image/png" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#141412" media="(prefers-color-scheme: dark)" />
     <FontLinks />
@@ -31,11 +32,7 @@ const pageTitle = `${title} | ${site.name}`;
     <main class="authpage">
       <div class="authpage__inner">
         <a class="authpage__brand" href="/" aria-label="MCA Heart - home">
-          <span class="authpage__badge" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-              <path d="M12 21s-8-5.2-8-10.6A4.4 4.4 0 0 1 12 7.6a4.4 4.4 0 0 1 8 2.8C20 15.8 12 21 12 21Z"/>
-            </svg>
-          </span>
+          <LogoMark size="1.9em" />
           <span class="authpage__word"><b>MCA</b> HEART</span>
         </a>
 
@@ -76,15 +73,6 @@ const pageTitle = `${title} | ${site.name}`;
         color: var(--text-strong);
       }
       .authpage__brand b { color: var(--blue); font-weight: 800; }
-      .authpage__badge {
-        display: grid;
-        place-items: center;
-        width: 1.9em; height: 1.9em;
-        color: #fff;
-        background: var(--blue);
-        border-radius: 0;
-      }
-
       /* --- The card --- */
       .auth-card {
         display: grid;

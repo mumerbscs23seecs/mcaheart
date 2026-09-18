@@ -1,5 +1,6 @@
 ---
 import { site, footerLinks } from '../data/site';
+import LogoMark from './LogoMark.astro';
 const year = new Date().getFullYear();
 ---
 
@@ -7,13 +8,8 @@ const year = new Date().getFullYear();
   <div class="shell shell--wide foot__inner">
     <div class="foot__brand">
       <a class="wordmark" href="/" aria-label="MCA Heart - home">
-      <span class="wordmark__badge" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-          <path d="M12 21s-8-5.2-8-10.6A4.4 4.4 0 0 1 12 7.6a4.4 4.4 0 0 1 8 2.8C20 15.8 12 21 12 21Z"/>
-        </svg>
-      </span>
-      <span class="wordmark__text"><span class="wordmark__mca">MCA</span> <span class="wordmark__heart">HEART</span></span>
-    </a>
+        <LogoMark size="3.6em" kind="wordmark" background="dark" />
+      </a>
       <p class="foot__tag">{site.tagline}</p>
       <a class="foot__yt" href={site.youtube} target="_blank" rel="noopener noreferrer">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -75,31 +71,7 @@ const year = new Date().getFullYear();
     border-top: 2px solid var(--on-dark-strong);
   }
 
-  .wordmark {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5em;
-    font-family: var(--font-display);
-    font-weight: 800;
-    font-size: 1.35rem;
-    text-transform: uppercase;
-    letter-spacing: -0.01em;
-    line-height: 1;
-  }
-
-  .wordmark__badge {
-    display: grid;
-    place-items: center;
-    width: 2em; height: 2em;
-    flex-shrink: 0;
-    color: #fff;
-    background: var(--blue);
-    border-radius: 0;
-    font-size: 0.6em;
-  }
-  .wordmark__text { display: inline-flex; gap: 0.28em; align-items: baseline; }
-  .wordmark__mca { color: var(--on-dark-accent); }
-  .wordmark__heart { color: var(--on-dark-strong); }
+  .wordmark { display: inline-flex; align-items: center; }
 
   .foot__tag {
     margin-top: var(--space-s);
