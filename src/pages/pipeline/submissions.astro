@@ -28,7 +28,7 @@ const fmt = (d: string | null) =>
 ---
 
 <PipelineLayout title="Submissions" active="submissions">
-  <h1 class="pl-h1">Submissions</h1>
+  <h1 class="pl-h1">Submissions <span class="pl-h1__count">({(rows ?? []).length})</span></h1>
   <p class="pl-sub">
     {isAdmin
       ? 'Journal-phase projects - manuscripts under review at a journal.'
@@ -81,5 +81,5 @@ const fmt = (d: string | null) =>
     </div>
   )}
 
-  <p class="pl-count">{(rows ?? []).length} projects · submission dates are the import date, not real</p>
+  <p class="pl-count">Submission dates are the import date, not real.</p>
 </PipelineLayout>

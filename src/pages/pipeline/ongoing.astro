@@ -27,7 +27,7 @@ const fmt = (d: string | null) =>
 ---
 
 <PipelineLayout title="Ongoing" active="ongoing">
-  <h1 class="pl-h1">Ongoing</h1>
+  <h1 class="pl-h1">Ongoing <span class="pl-h1__count">({(rows ?? []).length})</span></h1>
   <p class="pl-sub">
     {isAdmin
       ? 'Manuscript-phase projects - accepted abstracts now being written up.'
@@ -81,5 +81,4 @@ const fmt = (d: string | null) =>
     </div>
   )}
 
-  <p class="pl-count">{(rows ?? []).length} projects</p>
 </PipelineLayout>

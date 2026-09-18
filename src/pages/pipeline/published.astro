@@ -25,7 +25,7 @@ const fmt = (d: string | null) =>
 ---
 
 <PipelineLayout title="Published" active="published">
-  <h1 class="pl-h1">Published</h1>
+  <h1 class="pl-h1">Published <span class="pl-h1__count">({(rows ?? []).length})</span></h1>
   <p class="pl-sub">
     Papers that have appeared in a journal. Nothing here moves - it is the record of what the group has published.
   </p>
@@ -74,5 +74,4 @@ const fmt = (d: string | null) =>
     </div>
   )}
 
-  <p class="pl-count">{(rows ?? []).length} published</p>
 </PipelineLayout>
