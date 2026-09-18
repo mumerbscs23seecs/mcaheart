@@ -170,7 +170,7 @@ const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
     <p class="iform__small">Fields marked <b>*</b> are required. Takes about 10 minutes.</p>
   </div>
 
-  <p class="iform__status" role="status" aria-live="polite" data-status hidden></p>
+  <div class="iform__status" role="status" aria-live="polite" data-status hidden></div>
 </form>
 
 <script>
@@ -196,9 +196,20 @@ const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
       }
       first?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     };
-    const setStatus = (message: string, tone: 'ok' | 'error') => {
+    const setError = (message: string) => {
+      status.innerHTML = '';
       status.textContent = message;
-      status.dataset.tone = tone;
+      status.dataset.tone = 'error';
+      status.hidden = false;
+      status.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+
+    // title/bodyHtml come from our own API responses (static copy, no user
+    // input interpolated in) - safe to set as innerHTML.
+    const setSuccess = (title: string, bodyHtml: string) => {
+      status.textContent = '';
+      status.dataset.tone = 'ok';
+      status.innerHTML = `<p class="iform__status-title">${title}</p><div class="iform__status-body">${bodyHtml}</div>`;
       status.hidden = false;
       status.scrollIntoView({ block: 'center', behavior: 'smooth' });
     };
@@ -214,13 +225,16 @@ const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
         const data = await res.json();
         if (res.ok && data.ok) {
           form.reset();
-          setStatus(data.message ?? 'Thank you - your application has been submitted.', 'ok');
+          setSuccess(
+            data.title ?? 'Application Submitted Successfully',
+            data.bodyHtml ?? '<p>Thank you - your application has been submitted.</p>',
+          );
         } else {
-          setStatus(data.error ?? 'Something went wrong. Please try again.', 'error');
+          setError(data.error ?? 'Something went wrong. Please try again.');
           if (data.fieldErrors) showErrors(data.fieldErrors);
         }
       } catch {
-        setStatus('We could not reach the server. Check your connection and try again.', 'error');
+        setError('We could not reach the server. Check your connection and try again.');
       } finally {
         submit.disabled = false;
         label.textContent = original;

@@ -144,15 +144,29 @@
   padding: 1.2rem 1.4rem;
   border-radius: var(--radius);
   border: 1px solid;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+/* The confirmation is the payoff of the form, so it still leads with the
+   same display type as a headline (e.g. the director's name on the
+   homepage) - just at a normal reading weight, not shouting. */
+.iform__status[data-tone='ok'] { color: var(--text); background: var(--ok-bg); border-color: var(--ok-border); }
+.iform__status[data-tone='error'] {
+  color: var(--red);
+  background: var(--red-wash);
+  border-color: var(--red-border);
+  font-weight: 600;
+}
+
+.iform__status-title {
+  margin: 0 0 0.5rem;
   font-family: var(--font-display);
-  font-size: var(--step-1);
-  font-weight: 800;
-  line-height: 1.25;
+  font-size: var(--step-0);
+  font-weight: 600;
+  color: var(--text-strong);
   letter-spacing: -0.01em;
   text-wrap: balance;
 }
-/* The confirmation is the payoff of the form - it gets the same bold black
-   display type as a headline (e.g. the director's name on the homepage),
-   not a quiet green aside. */
-.iform__status[data-tone='ok'] { color: var(--text-strong); background: var(--ok-bg); border-color: var(--ok-border); }
-.iform__status[data-tone='error'] { color: var(--red); background: var(--red-wash); border-color: var(--red-border); }
+.iform__status-body p { margin: 0.4rem 0 0; }
+.iform__status-body p:first-child { margin-top: 0; }
+.iform__status-body strong { font-weight: 700; color: var(--text-strong); }

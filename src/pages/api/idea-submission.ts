@@ -12,6 +12,12 @@ const json = (body: unknown, status = 200, headers: HeadersInit = {}) =>
     headers: { 'Content-Type': 'application/json', ...headers },
   });
 
+const SUCCESS_TITLE = 'Idea Submitted Successfully';
+const SUCCESS_BODY_HTML =
+  '<p>Thank you for submitting your research idea. Your submission has been received and is now under review.</p>' +
+  '<p>You will receive an email with the outcome, typically within <strong>5 business days</strong>.</p>' +
+  '<p>If you have not received a response within <strong>3 weeks</strong>, please contact <strong>researchoperations@mcaheart.com</strong>.</p>';
+
 export const POST: APIRoute = async ({ request }) => {
   // --- 1. Throttle -----------------------------------------------------------
   const limit = rateLimit(clientIp(request));
@@ -73,7 +79,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   // Honeypot tripped - accept silently.
   if (parsed.data.company) {
-    return json({ ok: true, message: 'Thank you - your research idea has been received.' });
+    return json({ ok: true, title: SUCCESS_TITLE, bodyHtml: SUCCESS_BODY_HTML });
   }
 
   // --- 4. Optional file --------------------------------------------------
@@ -110,11 +116,7 @@ export const POST: APIRoute = async ({ request }) => {
     console.error('[idea] email delivery failed (record kept):', err);
   });
 
-  return json({
-    ok: true,
-    message:
-      'Thank you - your research idea has been submitted. The team will review it for feasibility and publication value and follow up about next steps.',
-  });
+  return json({ ok: true, title: SUCCESS_TITLE, bodyHtml: SUCCESS_BODY_HTML });
 };
 
 export const ALL: APIRoute = () =>
