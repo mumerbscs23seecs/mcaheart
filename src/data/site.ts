@@ -17,14 +17,7 @@ export type NavLink = { label: string; href: string };
 export type NavItem = { label: string; href?: string; children?: NavLink[] };
 
 export const nav: NavItem[] = [
-  {
-    label: 'Research',
-    href: '/research-group',
-    children: [
-      { label: 'MCA Heart Research Lab', href: '/research-group' },
-      { label: 'Publications', href: '/publications' },
-    ],
-  },
+  { label: 'Research', href: '/research-group' },
   { label: 'Heart Trending', href: '/heart-trending' },
   { label: 'Education', href: '/education' },
   {
@@ -253,7 +246,6 @@ export const footerLinks = {
   quick: [
     { label: 'Heart Trending', href: '/heart-trending' },
     { label: 'MCA Heart Research Lab', href: '/research-group' },
-    { label: 'Publications', href: '/publications' },
     { label: 'Submit an Idea', href: '/submit-idea' },
     { label: 'Join the Lab', href: '/join-lab' },
     { label: 'Education', href: '/education' },

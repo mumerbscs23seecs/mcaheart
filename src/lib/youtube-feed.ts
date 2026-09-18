@@ -1,10 +1,12 @@
 /**
- * Pulls the channel's most recent uploads straight from YouTube's public
- * Atom feed - no API key, no quota, nothing to configure or ever expire.
+ * Pulls a channel's (or playlist's) most recent videos straight from
+ * YouTube's public Atom feed - no API key, no quota, nothing to configure
+ * or ever expire.
  *
  *   https://www.youtube.com/feeds/videos.xml?channel_id=<id>
+ *   https://www.youtube.com/feeds/videos.xml?playlist_id=<id>
  *
- * Returns up to 15 most-recent uploads. Cached in memory for CACHE_MS so a
+ * Returns up to 15 most-recent videos. Cached in memory for CACHE_MS so a
  * burst of visitors doesn't each trigger their own fetch; on a failed fetch
  * we fall back to whatever's cached (even if stale) rather than showing
  * nothing.
@@ -48,21 +50,34 @@ function parseFeed(xml: string): Video[] {
     .filter((v): v is Video => v !== null);
 }
 
-export async function fetchLatestVideos(channelId: string, limit = 8): Promise<Video[]> {
-  const hit = cache.get(channelId);
+async function fetchFeed(url: string, cacheKey: string, limit: number): Promise<Video[]> {
+  const hit = cache.get(cacheKey);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.videos.slice(0, limit);
 
   try {
-    const res = await fetch(
-      `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`,
-      { signal: AbortSignal.timeout(5000) },
-    );
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) throw new Error(`YouTube feed ${res.status}`);
     const videos = parseFeed(await res.text());
-    cache.set(channelId, { at: Date.now(), videos });
+    cache.set(cacheKey, { at: Date.now(), videos });
     return videos.slice(0, limit);
   } catch (err) {
-    console.error('[youtube-feed] fetch failed, using stale cache if any:', err);
+    console.error(`[youtube-feed] fetch failed for ${cacheKey}, using stale cache if any:`, err);
     return (hit?.videos ?? []).slice(0, limit);
   }
+}
+
+export async function fetchLatestVideos(channelId: string, limit = 8): Promise<Video[]> {
+  return fetchFeed(
+    `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`,
+    `channel:${channelId}`,
+    limit,
+  );
+}
+
+export async function fetchPlaylistVideos(playlistId: string, limit = 12): Promise<Video[]> {
+  return fetchFeed(
+    `https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(playlistId)}`,
+    `playlist:${playlistId}`,
+    limit,
+  );
 }

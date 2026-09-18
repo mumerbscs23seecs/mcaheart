@@ -68,7 +68,6 @@ import { testimonials, missionVision, director } from '../data/site';
     <div class="shell shell--wide mv__grid">
       {missionVision.map((m, i) => (
         <article class="mv__card" data-reveal style={`--reveal-delay:${i * 120}ms`}>
-          <span class="mv__index" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
           <div class="mv__figure">
             <img src={m.image} alt="" loading="lazy" decoding="async" />
           </div>
@@ -78,6 +77,24 @@ import { testimonials, missionVision, director } from '../data/site';
           </div>
         </article>
       ))}
+
+      <a
+        class="mv__pubmed"
+        href="https://pubmed.ncbi.nlm.nih.gov/?term=chadi+alraies&sort=date&size=200"
+        target="_blank"
+        rel="noopener noreferrer"
+        data-reveal
+        style="--reveal-delay:240ms"
+      >
+        <span class="mv__pubmed-logo">
+          <img src="/assets/research/pubmed-logo-blue.svg" alt="PubMed" loading="lazy" decoding="async" />
+        </span>
+        <span class="mv__pubmed-body">
+          <span class="mv__pubmed-title">Our Publications on PubMed</span>
+          <span class="mv__pubmed-sub">The full, continuously updated list of our peer-reviewed papers.</span>
+        </span>
+        <span class="mv__pubmed-arrow" aria-hidden="true">&rarr;</span>
+      </a>
     </div>
   </section>
 
@@ -237,17 +254,6 @@ import { testimonials, missionVision, director } from '../data/site';
     border-radius: var(--radius);
   }
 
-  .mv__index {
-    position: absolute;
-    top: var(--space-m);
-    right: var(--space-m);
-    font-family: var(--font-serif);
-    font-size: var(--step-2);
-    font-weight: 700;
-    line-height: 1;
-    color: var(--border);
-  }
-
   /* The supplied artwork is flat vector stock; a small tinted plate keeps it
      as a supporting mark rather than a competing background. */
   .mv__figure {
@@ -281,6 +287,55 @@ import { testimonials, missionVision, director } from '../data/site';
 
   @media (max-width: 520px) {
     .mv__card { grid-template-columns: 1fr; }
+  }
+
+  .mv__pubmed {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: var(--space-m);
+    padding: var(--space-m);
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-top: 2px solid var(--blue);
+    border-radius: var(--radius);
+    text-decoration: none;
+    transition: border-color 0.25s var(--ease), background 0.25s var(--ease);
+  }
+  .mv__pubmed:hover { border-color: var(--border); background: var(--bg-tint); }
+  .mv__pubmed:hover .mv__pubmed-arrow { transform: translateX(4px); }
+
+  .mv__pubmed-logo {
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    width: clamp(120px, 100px + 4vw, 150px);
+    padding: 0.6rem 0.9rem;
+    background: #fff;
+    border: 1px solid var(--border-soft);
+  }
+  .mv__pubmed-logo img { width: 100%; height: auto; display: block; }
+
+  .mv__pubmed-body { display: grid; gap: 0.3rem; flex: 1; min-width: 0; }
+  .mv__pubmed-title {
+    font-family: var(--font-display);
+    font-size: var(--step-1);
+    font-weight: 800;
+    color: var(--text-strong);
+    letter-spacing: -0.012em;
+  }
+  .mv__pubmed-sub { font-size: var(--step--1); color: var(--text-muted); line-height: 1.5; }
+
+  .mv__pubmed-arrow {
+    flex-shrink: 0;
+    font-size: var(--step-1);
+    color: var(--blue);
+    transition: transform 0.25s var(--ease-out);
+  }
+
+  @media (max-width: 560px) {
+    .mv__pubmed { flex-wrap: wrap; }
+    .mv__pubmed-arrow { display: none; }
   }
 
   /* ------------------------------------------------------------ Testimonials */
