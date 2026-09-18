@@ -10,22 +10,30 @@ const { project: p, isAdmin } = Astro.props;
 // So a change made from a list drops the person back on that list, not the detail page.
 const returnTo = Astro.url.pathname + Astro.url.search;
 
-// Outcomes freeze an attempt and (journal) "submitted" needs a journal name -
-// those stay on the detail page. Inline editing is plain within-phase progress.
+// Outcomes freeze an attempt (accept/reject/publish) - those need the specific
+// attempt record and stay on the detail page. Everything else, including
+// journal "submitted" (which just needs a journal name), is editable inline.
 const OUTCOME_CODES: Record<string, string[]> = {
   conference: ['accepted', 'rejected'],
-  journal: ['accepted', 'published', 'rejected_comments', 'rejected_no_comments', 'submitted'],
+  journal: ['accepted', 'published', 'rejected_comments', 'rejected_no_comments'],
 };
 const blocked = OUTCOME_CODES[p.phase] ?? [];
 const options = stagesFor(p.phase).filter((s: any) => !blocked.includes(s.code));
 
+// A handful of stage codes need one more field before they can apply - gate.astro
+// already knows how to use it (set_submitted_journal), this just surfaces the box.
+const EXTRA_FIELD: Record<string, { field: string; placeholder: string }> = {
+  'journal:submitted': { field: 'journal', placeholder: 'Journal name' },
+};
+const extraFor = (code: string) => EXTRA_FIELD[`${p.phase}:${code}`];
+
 const warn = p.days_in_stage != null && p.days_in_stage >= 21;
-// advance_stage covers idea / manuscript / journal; request_stage_change only
-// conference / manuscript. Conference outcomes + journal "submitted" stay on the
-// detail page (they need an attempt / a journal name).
+// advance_stage covers idea / manuscript / journal; request_stage_change covers
+// conference / manuscript / journal. Outcomes (accept/reject/publish) stay on
+// the detail page - they need a specific attempt record, not just a stage code.
 const phaseOK = isAdmin
   ? ['idea', 'manuscript', 'journal'].includes(p.phase)
-  : ['conference', 'manuscript'].includes(p.phase);
+  : ['conference', 'manuscript', 'journal'].includes(p.phase);
 const editable =
   phaseOK && !p.archived_at && !blocked.includes(p.stage) && options.length > 1;
 ---
@@ -33,24 +41,100 @@ const editable =
 {!editable ? (
   <span class:list={['pl-status', warn && 'pl-status--warn']}>{p.stage_label}</span>
 ) : isAdmin ? (
-  <form method="post" action={`/pipeline/projects/${p.id}/gate`}>
+  <form method="post" action={`/pipeline/projects/${p.id}/gate`} class="pl-status-form" data-status-form>
     <input type="hidden" name="gate" value="stage" />
     <input type="hidden" name="return" value={returnTo} />
-    <select class="pl-status" name="stage" title={p.stage_label} aria-label={`Status for ${p.title ?? p.ref}`} onchange="this.form.submit()">
+    <select class="pl-status" name="stage" title={p.stage_label} aria-label={`Status for ${p.title ?? p.ref}`} data-status-select>
       {options.map((s: any) => (
-        <option value={s.code} selected={s.code === p.stage}>{s.label}</option>
+        <option value={s.code} selected={s.code === p.stage} data-extra-field={extraFor(s.code)?.field ?? ''}>{s.label}</option>
       ))}
     </select>
+    {options.map((s: any) => {
+      const extra = extraFor(s.code);
+      // Already sitting on this stage - show the box open so the field can be
+      // corrected without needing to re-trigger a change event first.
+      const isCurrent = s.code === p.stage;
+      return extra && (
+        <span class="pl-status-extra" data-status-extra={s.code} hidden={!isCurrent}>
+          <input type="text" name={extra.field} placeholder={extra.placeholder} value={isCurrent ? (p.current_journal ?? '') : ''} />
+          <button type="submit" class="pl-status-extra__go">Update</button>
+        </span>
+      );
+    })}
   </form>
 ) : (
-  <form method="post" action={`/pipeline/projects/${p.id}/request`}>
+  <form method="post" action={`/pipeline/projects/${p.id}/request`} class="pl-status-form" data-status-form>
     <input type="hidden" name="return" value={returnTo} />
-    <select class="pl-status" name="stage" title={p.stage_label} aria-label={`Request a status change for ${p.title ?? p.ref}`} onchange="if (this.value) this.form.submit()">
+    <select class="pl-status" name="stage" title={p.stage_label} aria-label={`Request a status change for ${p.title ?? p.ref}`} data-status-select data-member-select>
       <option value="" selected>{p.stage_label}</option>
       {options
         .filter((s: any) => s.code !== p.stage)
-        .map((s: any) => <option value={s.code}>&rarr; {s.label}</option>)}
+        .map((s: any) => <option value={s.code} data-extra-field={extraFor(s.code)?.field ?? ''}>&rarr; {s.label}</option>)}
     </select>
+    {options.filter((s: any) => s.code !== p.stage).map((s: any) => {
+      const extra = extraFor(s.code);
+      return extra && (
+        <span class="pl-status-extra" data-status-extra={s.code} hidden>
+          <input type="text" name={extra.field} placeholder={extra.placeholder} />
+          <button type="submit" class="pl-status-extra__go">Request</button>
+        </span>
+      );
+    })}
     <span class="pl-status__note">change needs coordinator approval</span>
   </form>
 )}
+
+<style>
+  .pl-status-form { display: grid; gap: 6px; }
+  .pl-status-extra { display: flex; gap: 6px; }
+  .pl-status-extra[hidden] { display: none; }
+  .pl-status-extra input {
+    flex: 1;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid var(--pl-border, #d8dce6);
+    border-radius: 4px;
+    font: inherit;
+    font-size: 0.85rem;
+  }
+  .pl-status-extra__go {
+    padding: 6px 10px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--bg);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+</style>
+
+<script>
+  // Delegated once (Astro dedupes this script across every PipelineStatusCell
+  // instance on the page). Plain "advance the stage" selections still submit
+  // immediately; a selection that needs one more field (data-extra-field)
+  // reveals that field's box instead and waits for its own submit button.
+  document.addEventListener('change', (e) => {
+    const select = (e.target as HTMLElement | null)?.closest<HTMLSelectElement>('select[data-status-select]');
+    if (!select) return;
+    const form = select.closest<HTMLFormElement>('[data-status-form]');
+    if (!form) return;
+
+    form.querySelectorAll<HTMLElement>('[data-status-extra]').forEach((box) => { box.hidden = true; });
+
+    const chosen = select.selectedOptions[0];
+    const extraField = chosen?.dataset.extraField;
+    if (extraField) {
+      const box = form.querySelector<HTMLElement>(`[data-status-extra="${chosen.value}"]`);
+      if (box) {
+        box.hidden = false;
+        box.querySelector<HTMLInputElement>('input')?.focus();
+        return; // wait for the box's own submit button
+      }
+    }
+
+    // Member's placeholder option ("") means "no change chosen yet" - don't submit that.
+    if (select.hasAttribute('data-member-select') && !select.value) return;
+    form.submit();
+  });
+</script>

@@ -15,7 +15,12 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
 
   const form = await request.formData();
   const stage = String(form.get('stage') ?? '').trim();
-  const note = String(form.get('note') ?? '').trim() || null;
+  const journal = String(form.get('journal') ?? '').trim();
+  let note = String(form.get('note') ?? '').trim() || null;
+  // request_stage_change has no dedicated journal param - fold it into the
+  // note so the coordinator sees it when deciding (gate.astro's set_submitted_
+  // journal path is admin-only, this is just a heads-up for the request).
+  if (journal) note = `Journal: ${journal}${note ? `\n\n${note}` : ''}`;
   const reviewUrl = String(form.get('review_url') ?? '').trim();
   const ret = String(form.get('return') ?? '');
   const dest = /^\/pipeline\/[\w/-]*(\?[\w=&%-]*)?$/.test(ret) ? ret : back;
