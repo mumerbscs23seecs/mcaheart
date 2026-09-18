@@ -15,8 +15,7 @@ const json = (body: unknown, status = 200, headers: HeadersInit = {}) =>
 
 const SUCCESS_TITLE = 'Application Submitted Successfully';
 const SUCCESS_BODY_HTML =
-  '<p>Thank you for submitting your application. Your submission has been received and is now under review.</p>' +
-  '<p>You will receive an email with the outcome, typically within <strong>5 business days</strong>.</p>' +
+  '<p>Thank you for submitting your application. Your submission has been received and is now under review. You will receive an email with the outcome, typically within <strong>5 business days</strong>.</p>' +
   '<p>If you have not received a response within <strong>3 weeks</strong>, please contact <strong>researchoperations@mcaheart.com</strong>.</p>';
 
 type Slot = keyof typeof UPLOADS;
