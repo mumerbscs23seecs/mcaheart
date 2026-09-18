@@ -238,16 +238,16 @@ import { testimonials, missionVision, director } from '../data/site';
   /* ------------------------------------------------------- Mission / Vision */
   .mv__grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+    grid-template-columns: 1fr;
     gap: var(--space-m);
   }
   .mv__card {
     position: relative;
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: var(--space-m);
-    align-items: start;
-    padding: var(--space-m);
+    gap: var(--space-l);
+    align-items: center;
+    padding: var(--space-l);
     background: var(--surface);
     border: 1px solid var(--border-soft);
     border-top: 2px solid var(--blue);
@@ -257,7 +257,7 @@ import { testimonials, missionVision, director } from '../data/site';
   /* The supplied artwork is flat vector stock; a small tinted plate keeps it
      as a supporting mark rather than a competing background. */
   .mv__figure {
-    width: clamp(84px, 70px + 3vw, 116px);
+    width: clamp(96px, 70px + 6vw, 148px);
     aspect-ratio: 1;
     overflow: hidden;
     border-radius: 0;
@@ -279,14 +279,14 @@ import { testimonials, missionVision, director } from '../data/site';
   }
   .mv__text {
     margin-top: var(--space-xs);
-    font-size: var(--step--1);
+    font-size: var(--step-0);
     line-height: 1.75;
     color: var(--text);
-    max-width: 46ch;
+    max-width: 70ch;
   }
 
-  @media (max-width: 520px) {
-    .mv__card { grid-template-columns: 1fr; }
+  @media (max-width: 620px) {
+    .mv__card { grid-template-columns: 1fr; align-items: start; }
   }
 
   .mv__pubmed {
