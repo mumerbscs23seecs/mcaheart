@@ -52,8 +52,6 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
             height="399"
           />
         </span>
-        <h2 class="display series__title">{series.name}</h2>
-        <blockquote class="series__quote">{series.quote}</blockquote>
         <p class="prose series__body">{series.body}</p>
         <p class="series__cadence">{series.cadence}</p>
       </div>
@@ -218,21 +216,7 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
     width: clamp(150px, 120px + 6vw, 230px);
     height: auto;
   }
-  .series__title { font-size: var(--step-3); margin-top: var(--space-s); }
-  .series__quote {
-    margin-top: var(--space-m);
-    padding: var(--space-s) var(--space-m);
-    background: var(--surface);
-    border: 1px solid var(--border-soft);
-    border-left: 3px solid var(--blue);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-sm);
-    font-size: var(--step-1);
-    line-height: 1.55;
-    font-style: italic;
-    color: var(--text);
-  }
-  .series__body { margin-top: var(--space-m); }
+  .series__body { margin-top: 0; }
   .series__cadence {
     margin-top: var(--space-m);
     font-size: var(--step--1);
