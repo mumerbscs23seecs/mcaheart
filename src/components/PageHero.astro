@@ -11,13 +11,18 @@ interface Props {
   /** The hero image already carries the title as artwork - keep the <h1>
    *  for SEO/accessibility but don't render it visibly over the image. */
   hideTitle?: boolean;
+  /** Show the supplied image exactly as given - no crop (object-fit: contain
+   *  instead of cover) and no fade/tint overlay on top of it. */
+  imageRaw?: boolean;
 }
-const { eyebrow, title, subtitle, image, align = 'left', compact = false, hideTitle = false } = Astro.props;
+const {
+  eyebrow, title, subtitle, image, align = 'left', compact = false, hideTitle = false, imageRaw = false,
+} = Astro.props;
 ---
 
 <section class:list={['phero', align === 'center' && 'phero--center', compact && 'phero--compact']}>
   {image && (
-    <div class="phero__bg" aria-hidden="true">
+    <div class:list={['phero__bg', imageRaw && 'phero__bg--raw']} aria-hidden="true">
       <img src={image} alt="" fetchpriority="high" decoding="async" />
     </div>
   )}
@@ -55,6 +60,9 @@ const { eyebrow, title, subtitle, image, align = 'left', compact = false, hideTi
       color-mix(in srgb, var(--bg) 42%, transparent) 100%
     );
   }
+  /* Raw - the exact image, uncropped and unfaded. */
+  .phero__bg--raw img { object-fit: contain; }
+  .phero__bg--raw::after { content: none; }
 
   .phero__inner { width: 100%; }
   .phero--center .phero__inner { text-align: center; }
