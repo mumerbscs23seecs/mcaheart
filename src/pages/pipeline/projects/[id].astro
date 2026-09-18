@@ -26,7 +26,7 @@ const who = new Map((peopleRows ?? []).map((r: any) => [r.id, r]));
 
 const { data: confAttempts } = await supabase
   .from('conference_attempts')
-  .select('id,outcome,submitted_on,conference:conferences(name)')
+  .select('id,outcome,submitted_on,recycled_from,conference:conferences(name)')
   .eq('project_id', id)
   .order('submitted_on', { ascending: false })
   .order('id', { ascending: false });
@@ -375,14 +375,22 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
 
       {confAttempts && confAttempts.length > 0 && (
         <>
-          <h3>Conference attempts</h3>
+          <h3>Conference submission history ({confAttempts.length})</h3>
           <dl>
-            {confAttempts.map((a: any) => (
-              <>
-                <dt>{a.conference?.name}</dt>
-                <dd>{a.outcome ?? 'pending'} · {a.submitted_on ? fmtDate(a.submitted_on) : 'date unknown'}</dd>
-              </>
-            ))}
+            {confAttempts.map((a: any) => {
+              const recycledFromName = a.recycled_from
+                ? confAttempts.find((x: any) => x.id === a.recycled_from)?.conference?.name
+                : null;
+              return (
+                <>
+                  <dt>{a.conference?.name}</dt>
+                  <dd>
+                    {a.outcome ?? 'pending'} · Submitted {a.submitted_on ? fmtDate(a.submitted_on) : 'date unknown'}
+                    {recycledFromName && ` · previously submitted to ${recycledFromName}`}
+                  </dd>
+                </>
+              );
+            })}
           </dl>
         </>
       )}

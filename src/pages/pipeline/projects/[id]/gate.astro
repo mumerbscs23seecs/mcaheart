@@ -53,7 +53,22 @@ let actionLabel = 'Update';
 
 if (gate === '1') {
   const conference = String(form.get('conference') ?? '');
-  rpc = { fn: 'gate1_send_to_conference', args: { p_project: projectId, p_conference: conference, p_recycled_from: null } };
+  // Resubmitting after a rejection - link the new attempt back to the most
+  // recent rejected one so the project's and the conference's own pages can
+  // both say "recycled from an earlier attempt" instead of looking like two
+  // unrelated submissions.
+  const { data: lastRejected } = await supabase
+    .from('conference_attempts')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('outcome', 'rejected')
+    .order('decided_on', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  rpc = {
+    fn: 'gate1_send_to_conference',
+    args: { p_project: projectId, p_conference: conference, p_recycled_from: lastRejected?.id ?? null },
+  };
   mail = { template: 'conference_assigned', venue: conference, to: [p0.lead_id, p0.analyst_id] };
   actionLabel = `Send to ${conference || 'conference'}`;
 } else if (gate === '2') {
