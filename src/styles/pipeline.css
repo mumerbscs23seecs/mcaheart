@@ -1,8 +1,11 @@
 /* MCA Research Pipeline — journal-submission-portal look (Editorial-Manager
-   style): Open Sans throughout, italic-serif venue names, submissions in a
-   real table with an inline status control, blue titles / links and red
-   "Actions". This palette + type is scoped to the pipeline area only — the
-   marketing site keeps its Archivo / crimson system. Tokens from global.css. */
+   style): IBM Plex Sans throughout (the closest freely-licensed match to
+   Elsevier's own in-house "Elsevier Sans" - that one's proprietary, not on
+   Google Fonts or any CDN we can load), italic-serif venue names,
+   submissions in a real table with an inline status control, blue titles /
+   links and red "Actions". This palette + type is scoped to the pipeline
+   area only — the marketing site keeps its Archivo / crimson system.
+   Tokens from global.css. */
 
 :root {
   --pl-navy: var(--dark, #1b1b1b);      /* banner ground — charcoal */
@@ -21,8 +24,8 @@
   /* Pipeline runs its own type. Overriding these here re-skins the whole
      pipeline area (app bar, tabs, detail pages) without touching the site. */
   --pl-serif: Georgia, 'Times New Roman', Times, serif;
-  --font-sans: 'Open Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-display: 'Open Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-display: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-serif: var(--pl-serif);
 }
 
@@ -49,7 +52,8 @@
   min-height: 100vh;
   color: var(--text, #2e2e2e);
   font-family: var(--font-sans, system-ui, sans-serif);
-  font-size: 0.95rem;
+  font-weight: 400;
+  font-size: 1.02rem;
   line-height: 1.6;
   background: var(--bg, #ffffff);
   -webkit-font-smoothing: antialiased;
@@ -189,14 +193,14 @@
   width: 100%;
   min-width: 760px;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-size: 0.98rem;
 }
 .pl-table thead th {
   text-align: left;
   padding: 15px 18px 13px;
   font-family: var(--font-sans);
   font-weight: 700;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   color: var(--text-strong);
   background: var(--surface);
   border-bottom: 2px solid var(--ink);
@@ -243,7 +247,7 @@
   color: var(--text-muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  font-size: 0.86rem;
+  font-size: 0.94rem;
 }
 .pl-t__actions a {
   color: var(--pl-action);
@@ -265,7 +269,7 @@
 select.pl-status {
   display: inline-block;
   width: 100%;
-  max-width: 230px;
+  max-width: 250px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -274,7 +278,7 @@ select.pl-status {
   border-radius: 0;
   background: var(--bg-tint);
   font: inherit;
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   color: var(--text-strong);
   line-height: 1.3;
 }
