@@ -16,12 +16,12 @@ export const STAGES = [
   ['conference', 'accepted',      'Accepted'],
   ['conference', 'rejected',      'Rejected'],
 
-  ['manuscript', 'ms_1_4',        '1/4 Analysis shared / being revised'],
-  ['manuscript', 'ms_2_4',        '2/4 Results & methods being written'],
-  ['manuscript', 'ms_3_4',        '3/4 Introduction & discussion being written'],
-  ['manuscript', 'ms_4_4',        '4/4 Final formatting / tables / references / SF'],
-  ['manuscript', 'ms_5_review',   '5 Sent for review to RG Operations'],
-  ['manuscript', 'ms_6_comments', '6 Addressing RG Operations comments'],
+  ['manuscript', 'ms_1_4',        '1/6 Analysis shared / being revised'],
+  ['manuscript', 'ms_2_4',        '2/6 Results & methods being written'],
+  ['manuscript', 'ms_3_4',        '3/6 Introduction & discussion being written'],
+  ['manuscript', 'ms_4_4',        '4/6 Final formatting / tables / references / SF'],
+  ['manuscript', 'ms_5_review',   '5/6 Sent for review to RG Operations'],
+  ['manuscript', 'ms_6_comments', '6/6 Addressing RG Operations comments'],
 
   // Phase C mirrors what SNAPP / Wiley actually show the corresponding author,
   // intersected with what the Submissions sheet already tracks. Anything finer
