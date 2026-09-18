@@ -95,7 +95,10 @@ import { testimonials, missionVision, director, societies } from '../data/site';
       </a>
 
       <dl class="pub__stats" data-reveal style="--reveal-delay:120ms">
-        <div class="pub__stat pub__stat--reserved" aria-hidden="true"></div>
+        <div class="pub__stat">
+          <dt>75+</dt>
+          <dd>manuscripts published a year</dd>
+        </div>
         <div class="pub__stat">
           <dt>150+</dt>
           <dd>abstracts presented a year</dd>
@@ -350,7 +353,6 @@ import { testimonials, missionVision, director, societies } from '../data/site';
     justify-content: center;
   }
   .pub__stat:last-child { border-right: 0; }
-  .pub__stat--reserved { color: var(--text-faint); }
   .pub__stat dt {
     font-family: var(--font-serif);
     font-size: var(--step-3);
@@ -370,7 +372,6 @@ import { testimonials, missionVision, director, societies } from '../data/site';
     .pub__stats { grid-template-columns: 1fr; border-left: 0; border-top: 1px solid var(--border-soft); }
     .pub__stat { border-right: 0; border-bottom: 1px solid var(--border-soft); min-height: auto; padding-block: var(--space-m); }
     .pub__stat:last-child { border-bottom: 0; }
-    .pub__stat--reserved { display: none; }
   }
 
   /* --------------------------------------------------------------- Societies */
