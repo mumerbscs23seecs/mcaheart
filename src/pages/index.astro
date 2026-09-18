@@ -75,10 +75,8 @@ import { director, stats, societies } from '../data/site';
 
       <div class="director__copy" data-reveal style="--reveal-delay:120ms">
         <p class="section-head__meta"><span class="section-head__num">01</span> Led by</p>
-        <h2 class="director__name">
-          {director.name}
-          <span class="director__creds">{director.credentialsFull}</span>
-        </h2>
+        <h2 class="director__name">{director.name}, {director.credentials}</h2>
+        <p class="director__creds">{director.credentialsExtra}</p>
         <ul class="director__roles">
           {director.roles.map((r) => <li>{r}</li>)}
         </ul>
@@ -374,10 +372,9 @@ import { director, stats, societies } from '../data/site';
   .director__name {
     margin-top: var(--space-s);
     font-size: var(--step-3);
-    display: grid;
-    gap: 0.35rem;
   }
   .director__creds {
+    margin-top: 0.35rem;
     font-family: var(--font-sans);
     font-size: var(--step--1);
     font-weight: 700;

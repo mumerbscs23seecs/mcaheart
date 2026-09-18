@@ -40,13 +40,13 @@ export const nav: NavItem[] = [
 
 export const director = {
   name: 'M Chadi Alraies',
-  /** Short form - used everywhere except the homepage's full bio block. */
+  /** Short form - sits inline with the name everywhere, including the homepage headline. */
   credentials: 'MD, MPH',
-  /** Full form - homepage only. */
-  credentialsFull: 'MD, MPH, FACC, FSCAI',
+  /** The extra fellowships - homepage only, shown as a secondary line under the name. */
+  credentialsExtra: 'FACC, FSCAI',
   /** Full title list - homepage only (research-group.astro shows just name + credentials). */
   roles: [
-    'Head and Principal Investigator, MCA Heart Lab',
+    'Head and Principal Investigator, MCA Heart Research Lab',
     'Clinical Associate Professor of Medicine, Wayne State University',
     'Associate Program Director, Interventional Cardiology Fellowship, Detroit Medical Center',
     'Clinical Assistant Professor of Medicine, Michigan State University College of Osteopathic Medicine',
