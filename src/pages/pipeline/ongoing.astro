@@ -32,18 +32,14 @@ const fmt = (d: string | null) => {
 ---
 
 <PipelineLayout title="Ongoing" active="ongoing">
-  <h1 class="pl-h1">Ongoing <span class="pl-h1__count">({(rows ?? []).length})</span></h1>
-  <p class="pl-sub">
-    {isAdmin
-      ? 'Manuscript-phase projects - accepted abstracts now being written up.'
-      : 'Your papers being written up after an accepted abstract.'}
-  </p>
-
-  <form class="pl-filter" method="get">
-    <input type="search" name="q" placeholder="Filter by title" value={q} />
-    <label class="pl-small"><input type="checkbox" name="parked" value="1" checked={showParked} onchange="this.form.submit()" /> show parked</label>
-    <button class="pl-btn pl-btn--ghost" type="submit">Filter</button>
-  </form>
+  <div class="pl-head">
+    <h1 class="pl-h1">Ongoing <span class="pl-h1__count">({(rows ?? []).length})</span></h1>
+    <form class="pl-filter" method="get">
+      <input type="search" name="q" placeholder="Filter by title" value={q} />
+      <label class="pl-small"><input type="checkbox" name="parked" value="1" checked={showParked} onchange="this.form.submit()" /> show parked</label>
+      <button class="pl-btn pl-btn--ghost" type="submit">Filter</button>
+    </form>
+  </div>
 
   {error && <p class="pl-flash pl-flash--err">{error.message}</p>}
   {rows && rows.length === 0 && <p class="pl-muted" style="margin-top:20px">Nothing here.</p>}

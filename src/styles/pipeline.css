@@ -124,7 +124,7 @@
   line-height: 1.1;
   letter-spacing: -0.015em;
   color: var(--text-strong);
-  margin: 0 0 10px;
+  margin: 0;
 }
 /* The live count, right where the reader is already looking - not a
    separate line buried at the bottom of the table. */
@@ -136,17 +136,24 @@
 .pl-muted { color: var(--text-muted, #64748b); }
 .pl-small { font-size: 0.82rem; }
 
+/* Title + filter bar side by side, no rule between them - the table's own
+   header row already draws the next line down. */
+.pl-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 26px;
+}
+
 /* ---------- filter bar ---------- */
 .pl-filter {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
-  padding-bottom: 20px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--border-soft);
 }
-.pl-filter { border-top: 2px solid var(--ink); border-bottom: 1px solid var(--border); padding-top: 16px; }
 .pl-filter input[type='search'],
 .pl-filter select {
   padding: 10px 12px;

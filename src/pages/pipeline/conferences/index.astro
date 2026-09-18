@@ -71,20 +71,21 @@ if (isAdmin) {
 ---
 
 <PipelineLayout title="Conferences" active="conferences">
-  <h1 class="pl-h1">Conferences</h1>
-
-  {isAdmin ? (
-    <>
-      <p class="pl-sub">Every abstract submission, permanent once the meeting is over.</p>
-
-      {flash && <p class:list={['pl-flash', flash.tone === 'ok' ? 'pl-flash--ok' : 'pl-flash--err']}>{flash.text}</p>}
-
+  <div class="pl-head">
+    <h1 class="pl-h1">Conferences</h1>
+    {isAdmin && (
       <div class="pl-filter">
         <a class:list={['pl-chip', !activeSeries && 'is-active']} href="/pipeline/conferences">All</a>
         {SERIES.map((s) => (
           <a class:list={['pl-chip', activeSeries === s && 'is-active']} href={`/pipeline/conferences?series=${s}`}>{s}</a>
         ))}
       </div>
+    )}
+  </div>
+
+  {isAdmin ? (
+    <>
+      {flash && <p class:list={['pl-flash', flash.tone === 'ok' ? 'pl-flash--ok' : 'pl-flash--err']}>{flash.text}</p>}
 
       <details class="pl-inline-details" style="margin:14px 0 0">
         <summary>+ Add {activeSeries ?? 'a'} conference</summary>
@@ -150,8 +151,6 @@ if (isAdmin) {
     </>
   ) : (
     <>
-      <p class="pl-sub">Your papers at the abstract stage - being written, submitted, or awaiting a decision.</p>
-
       {mine.length === 0 && <p class="pl-muted" style="margin-top:20px">Nothing here.</p>}
 
       {mine.length > 0 && (

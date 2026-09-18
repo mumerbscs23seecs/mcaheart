@@ -30,15 +30,13 @@ const fmt = (d: string | null) => {
 ---
 
 <PipelineLayout title="Published" active="published">
-  <h1 class="pl-h1">Published <span class="pl-h1__count">({(rows ?? []).length})</span></h1>
-  <p class="pl-sub">
-    Papers that have appeared in a journal. Nothing here moves - it is the record of what the group has published.
-  </p>
-
-  <form class="pl-filter" method="get">
-    <input type="search" name="q" placeholder="Filter by title" value={q} />
-    <button class="pl-btn pl-btn--ghost" type="submit">Filter</button>
-  </form>
+  <div class="pl-head">
+    <h1 class="pl-h1">Published <span class="pl-h1__count">({(rows ?? []).length})</span></h1>
+    <form class="pl-filter" method="get">
+      <input type="search" name="q" placeholder="Filter by title" value={q} />
+      <button class="pl-btn pl-btn--ghost" type="submit">Filter</button>
+    </form>
+  </div>
 
   {error && <p class="pl-flash pl-flash--err">{error.message}</p>}
   {rows && rows.length === 0 && <p class="pl-muted" style="margin-top:20px">Nothing published yet.</p>}
