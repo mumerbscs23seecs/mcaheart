@@ -233,12 +233,11 @@
 
 .pl-t__title { max-width: 64ch; }
 /* Submissions specifically: the journal-name and revision-history columns
-   already say plenty, so give the title even more room and let the status
-   column shrink back down instead of stretching to match it. */
+   already say plenty, so give the title the freed space and let the
+   status column shrink to its own content instead of stretching further -
+   PipelineStatusCell's .pl-status-form has a fixed width of its own now,
+   so this only needs to stop the column growing past that. */
 .pl-t__status { width: 1%; }
-.pl-t__status .pl-status,
-.pl-t__status select.pl-status { min-width: 150px; max-width: 190px; }
-.pl-t__status .pl-status-form { max-width: 190px; }
 .pl-t__title a {
   color: var(--pl-link);
   font-weight: 600;
