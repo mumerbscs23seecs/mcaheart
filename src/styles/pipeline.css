@@ -210,6 +210,13 @@
   line-height: 1.55;
   color: var(--text);
 }
+/* Column dividers, like the Elsevier submissions grid - a hairline down
+   between columns, none on the outer edges (the .pl-tablewrap border
+   already frames the table). */
+.pl-table thead th:not(:first-child),
+.pl-table tbody td:not(:first-child) {
+  border-left: 1px solid var(--border-soft);
+}
 .pl-table tbody tr:last-child td { border-bottom: 0; }
 .pl-table tbody tr:hover td { background: var(--pl-link-wash); }
 
@@ -297,7 +304,8 @@ select.pl-status:focus-visible { outline: 2px solid var(--pl-accent); outline-of
     margin-bottom: 12px;
     padding: 6px 4px;
   }
-  .pl-table tbody td { border: 0; padding: 6px 14px; }
+  .pl-table tbody td,
+  .pl-table tbody td:not(:first-child) { border: 0; padding: 6px 14px; }
   .pl-table tbody td::before {
     content: attr(data-th);
     display: block;
