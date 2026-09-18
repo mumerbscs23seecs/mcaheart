@@ -1,12 +1,13 @@
 ---
 import { pendingIdeaCount } from '../lib/ideas';
 import { pendingApplicationCount } from '../lib/applications';
+import { unreadRequestCount } from '../lib/requests';
 import { getNotifications } from '../lib/notifications';
 import ThemeToggle from './ThemeToggle.astro';
 import LogoMark from './LogoMark.astro';
 
 interface Props {
-  active?: 'dashboard' | 'ideas' | 'applicants' | 'pipeline' | 'access';
+  active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'requests' | 'access';
   name: string;
   role: string;
   email: string;
@@ -19,12 +20,14 @@ const fmtNotif = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: '
 
 const pendingIdeas = isAdmin ? pendingIdeaCount() : 0;
 const pendingApps = isAdmin ? pendingApplicationCount() : 0;
+const unreadRequests = isAdmin ? unreadRequestCount() : 0;
 const navItems = isAdmin
   ? [
       { key: 'dashboard', label: 'Dashboard', href: '/admin', badge: 0 },
+      { key: 'pipeline', label: 'Pipeline', href: '/pipeline', badge: 0 },
       { key: 'ideas', label: 'Ideas', href: '/admin/ideas', badge: pendingIdeas },
       { key: 'applicants', label: 'Applicants', href: '/admin/applications', badge: pendingApps },
-      { key: 'pipeline', label: 'Pipeline', href: '/pipeline', badge: 0 },
+      { key: 'requests', label: 'Requests', href: '/admin/requests', badge: unreadRequests },
       { key: 'access', label: 'Access', href: '/admin/access', badge: 0 },
     ]
   : [];

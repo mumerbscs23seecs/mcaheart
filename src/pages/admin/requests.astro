@@ -1,0 +1,164 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import '../../styles/admin.css';
+import { currentUser } from '../../lib/auth';
+import { listRequests, markAllRequestsRead, type RequestRecord } from '../../lib/requests';
+import { INTENT_LABELS, INTENTS, type Intent } from '../../lib/contact-schema';
+
+export const prerender = false;
+
+const me = currentUser(Astro.cookies);
+if (!me) return Astro.redirect('/login', 302);
+if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+const activeParam = Astro.url.searchParams.get('type') ?? '';
+const active: Intent | null = (INTENTS as readonly string[]).includes(activeParam)
+  ? (activeParam as Intent)
+  : null;
+
+const all = listRequests();
+const requests = active ? all.filter((r) => r.intent === active) : all;
+
+// Opening this page is how the admin "reads" new requests - the nav badge
+// clears once they've actually looked at the list.
+markAllRequestsRead();
+
+const fmtDate = (t: number) => new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+const ago = (t: number) => {
+  const d = Math.floor((Date.now() - t) / 86_400_000);
+  return d === 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`;
+};
+
+const NEEDS_LETTER_LABEL: Record<string, string> = { yes: 'Yes', no: 'No' };
+
+/** Rows specific to the chosen reason - mirrors mailer.ts's intentRows. */
+function detailRows(r: RequestRecord): Array<[string, string]> {
+  if (r.intent === 'collaborate') return [['Message', r.message || '-']];
+  if (r.intent === 'recommendation') return [['Name', r.recName || '-']];
+  return [
+    ['Name', r.obsName || '-'],
+    ['Plans to apply for IM match', r.obsApplyDate || '-'],
+    ['Needs a letter confirming the rotation', NEEDS_LETTER_LABEL[r.obsNeedsLetter ?? ''] ?? '-'],
+    ['Professional status', r.obsStatus || '-'],
+    ['USMLEs completed', r.obsUsmle || '-'],
+    ['Visa situation', r.obsVisa || '-'],
+    ['Year of graduation', r.obsGradYear || '-'],
+    ['Intended rotation dates', `${r.obsStart || '?'} → ${r.obsEnd || '?'}`],
+  ];
+}
+---
+
+<AppLayout title="Requests" heading="Contact requests" user={me} active="requests">
+  <div class="adm">
+    <div class="reqs__filter">
+      <a class:list={['reqs__chip', !active && 'is-active']} href="/admin/requests">
+        All <span>{all.length}</span>
+      </a>
+      {INTENTS.map((v) => (
+        <a class:list={['reqs__chip', active === v && 'is-active']} href={`/admin/requests?type=${v}`}>
+          {INTENT_LABELS[v]} <span>{all.filter((r) => r.intent === v).length}</span>
+        </a>
+      ))}
+    </div>
+
+    {requests.length === 0 && <p class="adm-hint">No requests here yet.</p>}
+
+    <div class="reqs__list">
+      {requests.map((r) => (
+        <details class="idea">
+          <summary class="idea__summary">
+            <span class="idea__pill">{INTENT_LABELS[r.intent]}</span>
+            <span class="idea__title">{r.fullName}</span>
+            <span class="idea__meta">{r.email} · {ago(r.submittedAt)}</span>
+            <span class="idea__chev" aria-hidden="true">▾</span>
+          </summary>
+
+          <div class="idea__body">
+            <dl class="idea__dl">
+              <div class="idea__pair"><dt>Email</dt><dd>{r.email}</dd></div>
+              <div class="idea__pair"><dt>Phone</dt><dd>{r.phone || '-'}</dd></div>
+              <div class="idea__pair"><dt>Location</dt><dd>{r.location || '-'}</dd></div>
+              <div class="idea__pair"><dt>Designation</dt><dd>{r.designation || '-'}</dd></div>
+              <div class="idea__pair"><dt>Submitted</dt><dd>{fmtDate(r.submittedAt)}</dd></div>
+              {detailRows(r).map(([k, v]) => (
+                <div class="idea__pair"><dt>{k}</dt><dd>{v}</dd></div>
+              ))}
+              {r.intent === 'observership' && (
+                <div class="idea__pair">
+                  <dt>CV</dt>
+                  <dd class="idea__files">
+                    {r.cv
+                      ? <a href={`/admin/requests/${r.id}/cv`} target="_blank" rel="noopener">{r.cv.filename} ({Math.round(r.cv.size / 1024)} KB)</a>
+                      : <span class="adm-tag">not attached</span>}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          </div>
+        </details>
+      ))}
+    </div>
+  </div>
+</AppLayout>
+
+<style>
+  .reqs__filter { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: var(--space-m); }
+  .reqs__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.85rem;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+  .reqs__chip span { font-variant-numeric: tabular-nums; color: var(--text-faint); }
+  .reqs__chip:hover { border-color: var(--ink); color: var(--text-strong); }
+  .reqs__chip.is-active { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .reqs__chip.is-active span { color: var(--bg); opacity: 0.7; }
+
+  .reqs__list { display: grid; gap: 0.6rem; }
+
+  .idea { background: var(--surface); border: 1px solid var(--border-soft); border-radius: var(--radius-lg); overflow: hidden; }
+  .idea[open] { border-color: var(--border); }
+  .idea__summary {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: 'pill title chev' 'pill meta chev';
+    gap: 0.15rem 0.75rem;
+    align-items: center;
+    padding: 0.9rem 1.1rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  .idea__summary::-webkit-details-marker { display: none; }
+  .idea__summary:hover { background: var(--bg-tint); }
+  .idea__pill {
+    grid-area: pill; align-self: start; margin-top: 0.1rem;
+    font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em;
+    padding: 0.2rem 0.5rem; border-radius: 0;
+    color: var(--blue); background: var(--accent-wash);
+  }
+  .idea__title { grid-area: title; font-weight: 600; color: var(--text-strong); font-size: 0.95rem; line-height: 1.35; }
+  .idea__meta { grid-area: meta; font-size: 0.78rem; color: var(--text-muted); }
+  .idea__chev { grid-area: chev; color: var(--text-muted); transition: transform 0.2s var(--ease); }
+  .idea[open] .idea__chev { transform: rotate(180deg); }
+
+  .idea__body { padding: 0.4rem 1.1rem 1.2rem; border-top: 1px solid var(--border-soft); }
+  .idea__dl { display: grid; gap: 0; margin: 0.6rem 0 0; }
+  .idea__pair {
+    display: grid; grid-template-columns: 210px 1fr; gap: 0.75rem;
+    padding: 0.55rem 0; border-bottom: 1px solid var(--border-soft);
+  }
+  .idea__pair dt { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
+  .idea__pair dd { margin: 0; font-size: 0.88rem; line-height: 1.6; color: var(--text); white-space: pre-wrap; }
+  @media (max-width: 640px) { .idea__pair { grid-template-columns: 1fr; gap: 0.15rem; } }
+
+  .idea__files a { color: var(--blue); font-weight: 600; }
+  .idea__files a:hover { text-decoration: underline; }
+</style>

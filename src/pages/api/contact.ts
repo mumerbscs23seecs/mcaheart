@@ -3,6 +3,7 @@ import { contactSchema, OBS_CV } from '../../lib/contact-schema';
 import { clientIp, rateLimit } from '../../lib/rate-limit';
 import { deliverEnquiry } from '../../lib/mailer';
 import type { Attachment } from '../../lib/email';
+import { addRequest, type StoredFile } from '../../lib/requests';
 
 // Runs on demand rather than being prerendered with the rest of the site.
 export const prerender = false;
@@ -64,7 +65,7 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   // --- 4. Optional CV (observership only) ---------------------------------
-  let cv: { filename: string; mime: string; bytes: Buffer } | null = null;
+  let cv: StoredFile | null = null;
   if (form) {
     const f = form.get(OBS_CV.field);
     if (f instanceof File && f.size > 0) {
@@ -89,11 +90,19 @@ export const POST: APIRoute = async ({ request }) => {
           422,
         );
       }
-      cv = { filename: f.name, mime: f.type || 'application/octet-stream', bytes: Buffer.from(await f.arrayBuffer()) };
+      cv = {
+        filename: f.name,
+        mime: f.type || 'application/octet-stream',
+        size: f.size,
+        bytes: Buffer.from(await f.arrayBuffer()),
+      };
     }
   }
 
-  // --- 5. Deliver --------------------------------------------------------
+  // --- 5. Save (kept in memory - shows up under Admin → Requests) --------
+  addRequest(parsed.data, cv);
+
+  // --- 6. Deliver ----------------------------------------------------------
   const attachments: Attachment[] | undefined = cv
     ? cv.bytes.byteLength <= EMAIL_ATTACH_MAX
       ? [{ filename: cv.filename, content: cv.bytes.toString('base64') }]
@@ -101,15 +110,11 @@ export const POST: APIRoute = async ({ request }) => {
     : undefined;
   const cvTooLarge = !!cv && !attachments;
 
-  try {
-    await deliverEnquiry(parsed.data, { attachments, cvFilename: cv?.filename, cvTooLarge });
-  } catch (err) {
-    console.error('[contact] delivery failed:', err);
-    return json(
-      { ok: false, error: 'We could not send that just now. Please email us directly.' },
-      502,
-    );
-  }
+  // Record is saved above either way - don't make the confirmation message
+  // wait on SMTP (Gmail auth failure + Resend fallback can take seconds).
+  deliverEnquiry(parsed.data, { attachments, cvFilename: cv?.filename, cvTooLarge }).catch((err) => {
+    console.error('[contact] email failed (record kept):', err);
+  });
 
   return json({
     ok: true,
