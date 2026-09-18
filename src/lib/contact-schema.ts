@@ -53,6 +53,6 @@ export const contactSchema = z.object({
 export type ContactPayload = z.infer<typeof contactSchema>;
 
 export const INTENT_LABELS: Record<Intent, string> = {
-  join: 'Interested in joining the MCA Research Group',
+  join: 'Interested in joining the MCA Heart Research Lab',
   collaborate: 'Looking for a collaboration',
 };

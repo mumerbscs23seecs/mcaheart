@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 /**
- * MCA Research Lab recruitment application. Shared between the browser (hints)
+ * MCA Heart Research Lab recruitment application. Shared between the browser (hints)
  * and the API route (enforcement). The CV and headshot files are handled in
  * the API route - they arrive as Files in the multipart body.
  */

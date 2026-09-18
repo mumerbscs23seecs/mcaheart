@@ -62,7 +62,7 @@ export async function deliverApplication(
 
   const html = `<div style="background:#f8fafc;padding:28px">
   <div style="max-width:660px;margin:0 auto;background:#fff;border:1px solid rgba(43,57,144,.14);border-radius:12px;padding:28px">
-    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Research Lab</p>
+    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart Research Lab</p>
     <h1 style="margin:0 0 18px;color:#1e293b;font:600 21px/1.25 Georgia,serif">New recruitment application</h1>
     <table style="border-collapse:collapse;width:100%">${rows(data)}</table>
     ${note}
@@ -94,11 +94,11 @@ const DECISION_HEADING: Record<ApplicationDecisionOpts['decision'], string> = {
 };
 const DECISION_LEAD: Record<ApplicationDecisionOpts['decision'], string> = {
   approved:
-    'Congratulations - your application to join the MCA Research Lab has been approved. Someone from research operations will be in touch shortly with onboarding details.',
+    'Congratulations - your application to join the MCA Heart Research Lab has been approved. Someone from research operations will be in touch shortly with onboarding details.',
   withheld:
-    'Thank you for applying to the MCA Research Lab. Your application is currently on hold rather than decided either way - this is not a final answer. We may follow up with a few questions, or revisit it once a spot opens up, and will get back to you with a final outcome in due course.',
+    'Thank you for applying to the MCA Heart Research Lab. Your application is currently on hold rather than decided either way - this is not a final answer. We may follow up with a few questions, or revisit it once a spot opens up, and will get back to you with a final outcome in due course.',
   declined:
-    'Thank you for applying to the MCA Research Lab. After review, we are not able to take your application forward at this time. We wish you the best and welcome a future application.',
+    'Thank you for applying to the MCA Heart Research Lab. After review, we are not able to take your application forward at this time. We wish you the best and welcome a future application.',
 };
 
 /** Build the approve/withhold/decline email (template + reviewer note) without sending. */
@@ -107,7 +107,7 @@ export function renderApplicationDecisionEmail(
 ): { subject: string; html: string } {
   const subjectWord =
     opts.decision === 'approved' ? 'approved' : opts.decision === 'withheld' ? 'on hold' : 'outcome';
-  const subject = `[MCA Research Lab] Your application - ${subjectWord}`;
+  const subject = `[MCA Heart Research Lab] Your application - ${subjectWord}`;
   const lead = DECISION_LEAD[opts.decision];
   const noteBlock = opts.note
     ? `<p style="margin:16px 0 0;padding:12px 14px;background:#f1f5f9;border-radius:8px;color:#1e293b;font:14px/1.6 Arial,sans-serif;white-space:pre-wrap"><strong>Note:</strong> ${esc(opts.note)}</p>`
@@ -115,7 +115,7 @@ export function renderApplicationDecisionEmail(
 
   const html = `<div style="background:#f8fafc;padding:28px">
   <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid rgba(43,57,144,.14);border-radius:12px;padding:28px">
-    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Research Lab</p>
+    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart Research Lab</p>
     <h1 style="margin:0 0 12px;color:#1e293b;font:600 20px/1.3 Georgia,serif">${DECISION_HEADING[opts.decision]}</h1>
     <p style="margin:0 0 8px;color:#1e293b;font:14px/1.6 Arial,sans-serif">Hi ${esc(opts.name)},</p>
     <p style="margin:0;color:#1e293b;font:14px/1.6 Arial,sans-serif">${lead}</p>

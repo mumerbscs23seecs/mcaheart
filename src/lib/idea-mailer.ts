@@ -110,7 +110,7 @@ export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: stri
 
     <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">Dear ${esc(opts.leadName)},</p>
     <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
-      Thank you for submitting your idea '<strong>${esc(opts.title)}</strong>' to the MCA Research Lab. We
+      Thank you for submitting your idea '<strong>${esc(opts.title)}</strong>' to the MCA Heart Research Lab. We
       evaluate ideas based on clinical relevance, methodological practicality, and publication value. Any
       relevant comments and the outcome of your idea submission are at the bottom of this email.
     </p>

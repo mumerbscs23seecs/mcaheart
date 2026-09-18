@@ -77,15 +77,15 @@ import { director, stats, societies } from '../data/site';
         <p class="section-head__meta"><span class="section-head__num">01</span> Led by</p>
         <h2 class="director__name">
           {director.name}
-          <span class="director__creds">{director.credentials}</span>
+          <span class="director__creds">{director.credentialsFull}</span>
         </h2>
         <ul class="director__roles">
           {director.roles.map((r) => <li>{r}</li>)}
         </ul>
         <p class="prose director__body">
-          Dr Alraies leads the MCA Research Group's clinical and academic programme,
-          mentoring trainees from medical school through interventional fellowship
-          and anchoring the group's presence at the major cardiology congresses.
+          {director.name}, {director.credentials} leads the MCA Heart Research Lab's clinical and
+          academic programme, mentoring trainees from medical school through interventional
+          fellowship and anchoring the group's presence at the major cardiology congresses.
         </p>
         <a class="btn btn--ghost" href="/research-group">
           Meet the group <span class="btn__arrow" aria-hidden="true">&rarr;</span>
@@ -132,7 +132,7 @@ import { director, stats, societies } from '../data/site';
           </span>
           <span class="pillar__body">
             <span class="pillar__num">01</span>
-            <h3 class="pillar__title">MCA Research Group</h3>
+            <h3 class="pillar__title">MCA Heart Research Lab</h3>
             <span class="pillar__text">
               300+ researchers, 75+ manuscripts and 150+ abstracts a year across
               SCAI, AHA, TCT and ACC.
@@ -175,7 +175,7 @@ import { director, stats, societies } from '../data/site';
   </section>
 
   <CTABanner
-    eyebrow="MCA Research Group"
+    eyebrow="MCA Heart Research Lab"
     title="Learn more about us"
     body="Whether you are an aspiring research fellow seeking mentorship or a seasoned professional looking to contribute, there is a place for you here."
     ctaLabel="Get in touch"

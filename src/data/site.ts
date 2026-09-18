@@ -8,7 +8,7 @@ export const site = {
   name: 'MCA Heart',
   tagline: 'Charting New Paths in Cardiology',
   description:
-    'MCA Heart is a cardiovascular research collective led by Dr Chadi Alraies - over 100 researchers publishing, presenting and teaching at the frontier of cardiology.',
+    'MCA Heart is a cardiovascular research collective led by M Chadi Alraies, MD, MPH - over 300 researchers publishing, presenting and teaching at the frontier of cardiology.',
   url: 'https://www.mcaheart.com',
   youtube: 'https://www.youtube.com/channel/UCR1U9EROhLsdeuCB4hlAw4w',
 } as const;
@@ -22,7 +22,7 @@ export const nav: NavItem[] = [
     label: 'Research',
     href: '/research-group',
     children: [
-      { label: 'MCA Research Group', href: '/research-group' },
+      { label: 'MCA Heart Research Lab', href: '/research-group' },
       { label: 'Publications', href: '/publications' },
     ],
   },
@@ -39,12 +39,20 @@ export const nav: NavItem[] = [
 ];
 
 export const director = {
-  name: 'Dr Chadi Alraies',
-  credentials: 'MD, FACC, FSCAI',
+  name: 'M Chadi Alraies',
+  /** Short form - used everywhere except the homepage's full bio block. */
+  credentials: 'MD, MPH',
+  /** Full form - homepage only. */
+  credentialsFull: 'MD, MPH, FACC, FSCAI',
+  /** Full title list - homepage only (research-group.astro shows just name + credentials). */
   roles: [
-    'Director of Cardiac Cath Lab',
-    'Clinical Associate Professor',
-    'Detroit Medical Center',
+    'Head and Principal Investigator, MCA Heart Lab',
+    'Clinical Associate Professor of Medicine, Wayne State University',
+    'Associate Program Director, Interventional Cardiology Fellowship, Detroit Medical Center',
+    'Clinical Assistant Professor of Medicine, Michigan State University College of Osteopathic Medicine',
+    'Medical Director, Cardiac Catheterization Laboratory, Harper University Hospital',
+    'Medical Director, Interventional Cardiology Research, Harper University Hospital',
+    'Medical Director, Cardiac Rehab, Rehab Institute of Michigan',
   ],
 } as const;
 
@@ -138,7 +146,7 @@ export type Testimonial = {
 export const testimonials: Testimonial[] = [
   {
     quote:
-      "I've been part of the MCA research group since 2021, joining after meeting Dr. Yasar Sattar at ACC that year. This group and the mentorship provided by Dr. Alraies has been one of the most important reasons I matched into cardiology fellowship in the first attempt. The collegiality that exists here and the opportunities in research for trainees of all levels is unparalleled. Privileged to be a part of MCA.",
+      "I've been part of the MCA Heart Research Lab since 2021, joining after meeting Dr. Yasar Sattar at ACC that year. This group and the mentorship provided by M Chadi Alraies, MD, MPH has been one of the most important reasons I matched into cardiology fellowship in the first attempt. The collegiality that exists here and the opportunities in research for trainees of all levels is unparalleled. Privileged to be a part of MCA.",
     name: 'Varun Victor',
     affiliation: 'Aultman Hospital / Canton Medical Education Foundation / NEOMED University',
     future: 'Interventional Cardiology fellowship',
@@ -146,7 +154,7 @@ export const testimonials: Testimonial[] = [
   },
   {
     quote:
-      'Joining MCA research group has not only deepened my research skills but also connected me with like-minded individuals who share my passion for the field. These collaborations have been invaluable as I prepare for my cardiology application.',
+      'Joining the MCA Heart Research Lab has not only deepened my research skills but also connected me with like-minded individuals who share my passion for the field. These collaborations have been invaluable as I prepare for my cardiology application.',
     name: 'Heena Kaushal Asnani',
     affiliation: 'IM Resident at Roger Williams Medical Center, Boston University',
     future: 'Cardiology fellowship',
@@ -154,7 +162,7 @@ export const testimonials: Testimonial[] = [
   },
   {
     quote:
-      'This group has allowed me to connect with other passionate professionals interested in Cardiology. The mentorship I’ve received from Dr. Alraies is invaluable and has really expanded my personal and professional growth.',
+      'This group has allowed me to connect with other passionate professionals interested in Cardiology. The mentorship I’ve received from M Chadi Alraies, MD, MPH is invaluable and has really expanded my personal and professional growth.',
     name: 'Ankit Hanmandlu',
     affiliation: 'Wayne State University / Detroit Medical Center',
     future: 'Cardiology',
@@ -190,7 +198,7 @@ export const missionVision = [
   {
     kind: 'Our Mission',
     image: '/assets/research/mission.jpg',
-    body: 'At MCA Research Group, we are a diverse community of researcher-physicians united by shared goals of growth, discovery, and impact. We foster collaboration, share knowledge, and support one another to thrive. Together, we are shaping the future of cardiovascular research while building lasting global connections.',
+    body: 'At the MCA Heart Research Lab, we are a diverse community of researcher-physicians united by shared goals of growth, discovery, and impact. We foster collaboration, share knowledge, and support one another to thrive. Together, we are shaping the future of cardiovascular research while building lasting global connections.',
   },
   {
     kind: 'Our Vision',
@@ -231,7 +239,7 @@ export const contactIntents = [
     id: 'join',
     icon: '\u{1FA7A}',
     title: 'Looking to join us?',
-    body: 'Passionate about cardiology? Whether you are a researcher, physician, or medical student, MCA Research Group is the place to grow your skills and contribute to impactful research.',
+    body: 'Passionate about cardiology? Whether you are a researcher, physician, or medical student, the MCA Heart Research Lab is the place to grow your skills and contribute to impactful research.',
   },
   {
     id: 'collaborate',
@@ -244,7 +252,7 @@ export const contactIntents = [
 export const footerLinks = {
   quick: [
     { label: 'Heart Trending', href: '/heart-trending' },
-    { label: 'MCA Research Group', href: '/research-group' },
+    { label: 'MCA Heart Research Lab', href: '/research-group' },
     { label: 'Publications', href: '/publications' },
     { label: 'Submit an Idea', href: '/submit-idea' },
     { label: 'Join the Lab', href: '/join-lab' },
