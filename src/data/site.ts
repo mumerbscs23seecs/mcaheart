@@ -59,7 +59,7 @@ export const stats = [
 export const societies = [
   { name: 'SCAI - Society for Cardiovascular Angiography & Interventions', logo: '/assets/home/logo-scai.png' },
   { name: 'ACC - American College of Cardiology', logo: '/assets/home/logo-acc.jpg' },
-  { name: 'AHA - American Heart Association', logo: '/assets/home/logo-aha.jpg' },
+  { name: 'TCT - Transcatheter Cardiovascular Therapeutics', logo: '/assets/home/logo-tct.png' },
 ] as const;
 
 /* -------------------------------------------------------------------------- */

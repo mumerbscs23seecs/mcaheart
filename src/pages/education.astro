@@ -1,13 +1,23 @@
 ---
+export const prerender = false;
+
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
+import VideoCard from '../components/VideoCard.astro';
 import VideoLightbox from '../components/VideoLightbox.astro';
 import CTABanner from '../components/CTABanner.astro';
 import { education, videos } from '../data/site';
+import { fetchPlaylistVideos } from '../lib/youtube-feed';
 
 const { series, webinar } = education;
 // The monthly webinar episode from the Heart Trending library.
 const webinarVideo = videos.find((v) => v.title === 'Monthly Webinar')!;
+
+// Pulled live from the Education playlist's public RSS feed - no API key,
+// cached for 20 minutes server-side so it stays fresh without hammering
+// YouTube.
+const educationPlaylistId = 'PLU8rCA-F825UA0ogbRMvq6tbaanN8Mfio';
+const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
 ---
 
 <BaseLayout
@@ -71,6 +81,25 @@ const webinarVideo = videos.find((v) => v.title === 'Monthly Webinar')!;
       </div>
     </div>
   </section>
+
+  {/* ------------------------------------------------------- Education playlist */}
+  {educationVideos.length > 0 && (
+    <section class="section playlist">
+      <div class="shell shell--wide">
+        <header class="playlist__head" data-reveal>
+          <p class="eyebrow">Playlist</p>
+          <h2 class="display playlist__title">Education</h2>
+          <p class="prose playlist__note">
+            From our Education playlist on YouTube, kept in sync automatically.
+          </p>
+        </header>
+
+        <div class="playlist__grid">
+          {educationVideos.map((v, i) => <VideoCard video={v} index={i} />)}
+        </div>
+      </div>
+    </section>
+  )}
 
   {/* ---------------------------------------------------------- Monthly webinar */}
   <section class="section--tall webinar dark-ground">
@@ -218,6 +247,16 @@ const webinarVideo = videos.find((v) => v.title === 'Monthly Webinar')!;
   }
 
   @media (max-width: 880px) { .series__grid { grid-template-columns: 1fr; } }
+
+  /* ------------------------------------------------------- Education playlist */
+  .playlist__title { font-size: var(--step-3); margin-top: var(--space-s); }
+  .playlist__note { margin-top: var(--space-s); }
+  .playlist__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr));
+    gap: var(--space-m);
+    margin-top: var(--space-l);
+  }
 
   /* ---------------------------------------------------------------- Webinar */
   .webinar__grid {

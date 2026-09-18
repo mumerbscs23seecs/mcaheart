@@ -5,18 +5,13 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
 import VideoCard from '../components/VideoCard.astro';
 import VideoLightbox from '../components/VideoLightbox.astro';
-import { videos, site } from '../data/site';
-import { fetchLatestVideos, fetchPlaylistVideos } from '../lib/youtube-feed';
+import { site } from '../data/site';
+import { fetchLatestVideos } from '../lib/youtube-feed';
 
-// Pulled live from the channel's/playlist's public RSS feed - no API key,
-// cached for 20 minutes server-side so it stays fresh without hammering
-// YouTube.
+// Pulled live from the channel's public RSS feed - no API key, cached for
+// 20 minutes server-side so it stays fresh without hammering YouTube.
 const channelId = site.youtube.split('/').filter(Boolean).pop()!;
-const educationPlaylistId = 'PLU8rCA-F825UA0ogbRMvq6tbaanN8Mfio';
-const [latestVideos, educationVideos] = await Promise.all([
-  fetchLatestVideos(channelId, 8),
-  fetchPlaylistVideos(educationPlaylistId, 12),
-]);
+const latestVideos = await fetchLatestVideos(channelId, 12);
 ---
 
 <BaseLayout
@@ -54,43 +49,6 @@ const [latestVideos, educationVideos] = await Promise.all([
       </div>
     </section>
   )}
-
-  {/* ------------------------------------------------------------ Education */}
-  {educationVideos.length > 0 && (
-    <section class="section library">
-      <div class="shell shell--wide">
-        <header class="library__head" data-reveal>
-          <p class="eyebrow">Playlist</p>
-          <h2 class="display library__title">Education</h2>
-          <p class="prose library__note">
-            From our Education playlist on YouTube, kept in sync automatically.
-          </p>
-        </header>
-
-        <div class="library__grid">
-          {educationVideos.map((v, i) => <VideoCard video={v} index={i} />)}
-        </div>
-      </div>
-    </section>
-  )}
-
-  {/* --------------------------------------------------------------- Library */}
-  <section class="section library">
-    <div class="shell shell--wide">
-      <header class="library__head" data-reveal>
-        <p class="eyebrow">The library</p>
-        <h2 class="display library__title">Fan favourites</h2>
-        <p class="prose library__note">
-          Every episode plays here without leaving the page. Nothing loads from
-          YouTube until you press play.
-        </p>
-      </header>
-
-      <div class="library__grid">
-        {videos.map((v, i) => <VideoCard video={v} index={i} />)}
-      </div>
-    </div>
-  </section>
 
   {/* ------------------------------------------------------------ Collaborate */}
   <section class="section collab dark-ground">
