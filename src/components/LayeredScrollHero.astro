@@ -152,6 +152,7 @@ const base = '/assets/research/hero-layers';
 
     let current = 0; // smoothed hero-pin progress, 0..1
     let raf = 0;
+    let lastHeroRect: { left: number; top: number; width: number; height: number } | null = null;
 
     const clamp = (v: number, min = 0, max = 1) => Math.min(max, Math.max(min, v));
     const ease = (v: number) => (v < 0.5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2);
@@ -168,9 +169,11 @@ const base = '/assets/research/hero-layers';
       return max <= 0 ? 0 : clamp(window.scrollY / max);
     }
 
-    // How far past the end of the pin the portrait spends traveling to its
-    // slot in the About section, in pixels of additional scroll.
-    const TRAVEL_PX = 480;
+    // How far past the end of the pin the portrait's journey continues -
+    // combined with starting the journey partway through the pin itself
+    // (see journeyStartY below), this stretches the whole rise-and-travel
+    // out gradually rather than snapping across in a short burst.
+    const TRAVEL_PX = 900;
 
     // The portrait's rect while it's still "in" the hero - a fixed spot
     // near the bottom-center of the stage, derived from the stage's own
@@ -189,9 +192,9 @@ const base = '/assets/research/hero-layers';
       const p = current;
 
       // Side art exits fully off-stage (percentages, so it scales with the
-      // stage's own size) - finished by ~80% of the pin so the frame is
-      // clear before the portrait arrives.
-      const pSide = remap(p, 0, 0.8);
+      // stage's own size) - finished by 55% of the pin, so it's well clear
+      // in time for the portrait to appear "not very late".
+      const pSide = remap(p, 0, 0.55);
       layers.tl.style.transform = `translate(${-160 * pSide}%, ${-70 * pSide}%) scale(${1 + 0.08 * pSide})`;
       layers.ecg.style.transform = `translate(${-170 * pSide}%, ${20 * pSide}%) scale(${1 + 0.03 * pSide})`;
       layers.blOrbit.style.transform = `translate(${-150 * pSide}%, ${90 * pSide}%) rotate(${-3 * pSide}deg)`;
@@ -213,12 +216,25 @@ const base = '/assets/research/hero-layers';
       // rather than exiting the frame.
       layers.logo.style.transform = `translate3d(0, ${-46 * p}%, 0) scale(${1 - 0.08 * p})`;
 
-      // --- Portrait: rise in the hero, then travel to the About slot. ---
-      const pReveal = remap(p, 0.45, 1); // fades/scales in late in the pin
-      const scrollPastPin = Math.max(0, window.scrollY - pinEnd());
-      const pTravel = ease(clamp(scrollPastPin / TRAVEL_PX));
+      // --- Portrait: two clear beats, not one blurred-together motion.
+      // 1) Appear: fades/lifts in at its hero spot, right as the side art
+      //    finishes clearing (not very late) - done well before the pin
+      //    itself ends.
+      // 2) Travel: only once it's fully visible does it start easing
+      //    toward the About slot - a long, gradual glide (spans the rest
+      //    of the pin plus extra scroll after), never a quick snap.
+      const pinY = pinEnd();
+      const revealStartY = pinY * 0.35;
+      const revealEndY = pinY * 0.55;
+      const pReveal = remap(window.scrollY, revealStartY, revealEndY);
+      const pTravel = ease(remap(window.scrollY, revealEndY, pinY + TRAVEL_PX));
 
-      const from = heroRect();
+      // Freeze the "from" rect at the instant the pin releases - past that
+      // point the stage has scrolled away, so its live rect is no longer
+      // meaningful as a start reference.
+      if (window.scrollY <= pinY) lastHeroRect = heroRect();
+
+      const from = lastHeroRect ?? heroRect();
       const to = slot!.getBoundingClientRect();
       const rect = {
         left: lerp(from.left, to.left, pTravel),
@@ -227,15 +243,14 @@ const base = '/assets/research/hero-layers';
         height: lerp(from.height, to.height, pTravel),
       };
 
-      portrait.style.opacity = `${pTravel > 0 ? 1 : pReveal}`;
+      const pVisible = Math.max(pReveal, pTravel > 0 ? 1 : 0);
+      portrait.style.opacity = `${pVisible}`;
       portrait.style.width = `${rect.width}px`;
       portrait.style.height = `${rect.height}px`;
-      portrait.style.transform =
-        `translate(${rect.left}px, ${rect.top + (pTravel === 0 ? (1 - pReveal) * 40 : 0)}px)` +
-        ` scale(${pTravel > 0 ? 1 : 0.94 + 0.06 * pReveal})`;
+      portrait.style.transform = `translate(${rect.left}px, ${rect.top}px) scale(${0.94 + 0.06 * pVisible})`;
       // Once fully docked, the shadow is redundant with the slot's own
       // card frame - fade it out over the tail of the travel.
-      portrait.style.boxShadow = pTravel > 0.85 ? 'none' : '0 18px 40px rgba(0, 0, 0, 0.22)';
+      portrait.style.boxShadow = pTravel > 0.9 ? 'none' : '0 18px 40px rgba(0, 0, 0, 0.22)';
 
       raf = requestAnimationFrame(render);
     }
