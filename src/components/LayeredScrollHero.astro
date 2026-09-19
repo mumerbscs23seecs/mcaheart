@@ -71,12 +71,13 @@ const base = '/assets/research/hero-layers';
     display: grid;
     place-items: center;
     overflow: hidden;
-    padding: var(--gutter);
   }
 
+  /* Full-bleed - no side gutters, no max-width cap. The stage always
+     spans the entire window width; height follows from the aspect ratio. */
   .lshero__stage {
     position: relative;
-    width: min(100%, 1500px);
+    width: 100%;
     aspect-ratio: 1672 / 941;
   }
 
