@@ -6,8 +6,11 @@ services:
     buildCommand: npm install && npm run build
     startCommand: node ./dist/server/entry.mjs
     envVars:
+      # @supabase/supabase-js needs Node's native WebSocket (its realtime
+      # client constructor throws without it, crashing every pipeline-
+      # touching page) - that only exists from Node 22 onward.
       - key: NODE_VERSION
-        value: 20
+        value: 22
       - key: HOST
         value: 0.0.0.0
       - key: PORT
