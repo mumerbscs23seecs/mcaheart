@@ -29,6 +29,18 @@ export interface PipelineSession {
   person: Person;
 }
 
+/**
+ * Every pipeline/admin page load calls getPipelineSession() once, and it's
+ * two Supabase round trips: auth.getUser() (real token validation - never
+ * skipped) then a `people` row lookup (rarely changes request to request).
+ * That second one is what's cached here, briefly, keyed by auth id - so
+ * clicking around the pipeline doesn't re-query the same row on every
+ * single navigation. Short enough that a role/active change from the
+ * Access page takes effect within a few seconds, not minutes.
+ */
+const PERSON_CACHE_TTL_MS = 20_000;
+const personCache = new Map<string, { person: Person; expiresAt: number }>();
+
 /** Resolve the current pipeline user, or null. Links auth_id on first sign-in. */
 export async function getPipelineSession(
   request: Request,
@@ -40,11 +52,15 @@ export async function getPipelineSession(
   } = await supabase.auth.getUser();
   if (!user?.email) return null;
 
-  let { data: person } = await supabase
-    .from('people')
-    .select('*')
-    .eq('auth_id', user.id)
-    .maybeSingle();
+  const cached = personCache.get(user.id);
+  let person: Person | null;
+  if (cached && cached.expiresAt > Date.now()) {
+    person = cached.person;
+  } else {
+    const { data } = await supabase.from('people').select('*').eq('auth_id', user.id).maybeSingle();
+    person = data as Person | null;
+    if (person) personCache.set(user.id, { person, expiresAt: Date.now() + PERSON_CACHE_TTL_MS });
+  }
 
   if (!person) {
     // First authenticated request for this account - link it to the invited

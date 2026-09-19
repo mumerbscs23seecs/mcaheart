@@ -24,6 +24,11 @@ export default defineConfig({
     checkOrigin: false,
   },
   integrations: [sitemap(), react()],
+  // Prefetches a linked page's HTML as soon as its link scrolls into view,
+  // so by the time someone actually clicks it the navigation is close to
+  // instant. Astro dedupes/cancels automatically - no extra requests for
+  // links never seen.
+  prefetch: { defaultStrategy: 'viewport' },
   image: {
     // Assets are pre-optimised in /public, so skip the sharp pipeline.
     service: { entrypoint: 'astro/assets/services/noop' },

@@ -23,6 +23,18 @@ const {
 
 const pageTitle = title === 'Home' ? `${site.name} - ${site.tagline}` : `${title} | ${site.name}`;
 const canonical = new URL(Astro.url.pathname, Astro.site ?? site.url).href;
+
+// BaseLayout is only ever used by the public marketing pages - never the
+// admin/pipeline/auth surfaces (separate layouts, no shared import), and
+// none of them render anything user-specific server-side (login state is
+// handled client-side). Safe to let Cloudflare's edge cache and serve
+// these directly instead of hitting the Render origin on every request -
+// previously every page came back `Cache-Control: max-age=0` / `DYNAMIC`
+// at the edge. 5 minutes fresh, then stale-while-revalidate for a day so
+// a visitor is (almost) never the one waiting on a background refresh -
+// short enough that heart-trending/education's own 20-minute YouTube-feed
+// cache is never the stale part.
+Astro.response.headers.set('Cache-Control', 'public, max-age=300, stale-while-revalidate=86400');
 ---
 
 <!doctype html>

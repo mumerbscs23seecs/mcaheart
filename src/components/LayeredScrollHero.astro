@@ -24,7 +24,7 @@ interface Props {
 }
 const {
   title,
-  directorPhoto = '/assets/research/alraies.jpg',
+  directorPhoto = '/assets/research/alraies.webp',
   directorName = 'M Chadi Alraies',
 } = Astro.props;
 const base = '/assets/research/hero-layers';
@@ -253,13 +253,28 @@ const base = '/assets/research/hero-layers';
       // card frame - fade it out over the tail of the travel.
       portrait.style.boxShadow = pTravel > 0.9 ? 'none' : '0 18px 40px rgba(0, 0, 0, 0.22)';
 
+      // Everything here is fully settled once well past the journey's end -
+      // stop spending a frame budget on it for the rest of the page (the
+      // About section, testimonials, everything below). Scrolling back up
+      // re-arms the loop via the listener below.
+      const settled = window.scrollY > pinY + TRAVEL_PX + 200;
+      if (settled) {
+        looping = false;
+        return;
+      }
       raf = requestAnimationFrame(render);
     }
 
-    // Nothing needed on the scroll event itself - render() reads
-    // window.scrollY fresh every animation frame, so the rAF loop alone
-    // keeps everything in sync.
-    render();
+    let looping = false;
+    function ensureLooping() {
+      if (looping) return;
+      looping = true;
+      render();
+    }
+
+    ensureLooping();
+    window.addEventListener('scroll', ensureLooping, { passive: true });
+    window.addEventListener('resize', ensureLooping);
 
     document.addEventListener('astro:before-swap', () => cancelAnimationFrame(raf), { once: true });
   } else if (portrait && slot) {
