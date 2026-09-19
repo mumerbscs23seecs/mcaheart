@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import PageHero from '../components/PageHero.astro';
+import LayeredScrollHero from '../components/LayeredScrollHero.astro';
 import CTABanner from '../components/CTABanner.astro';
 import { testimonials, missionVision, director, societies } from '../data/site';
 ---
@@ -8,14 +8,8 @@ import { testimonials, missionVision, director, societies } from '../data/site';
 <BaseLayout
   title="MCA Heart Research Lab"
   description="Over 300 cardiology researchers led by M Chadi Alraies, MD MPH - 75+ manuscripts and 150+ abstracts a year at SCAI, AHA, TCT and ACC."
-  transparentHeader
 >
-  <PageHero
-    title="MCA Heart Research Lab"
-    image="/assets/research/researchlab-bg.png"
-    hideTitle
-    imageRaw
-  />
+  <LayeredScrollHero title="MCA Heart Research Lab" />
 
   {/* ----------------------------------------------------------------- About */}
   <section class="section about" id="about">

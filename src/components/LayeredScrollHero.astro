@@ -1,0 +1,158 @@
+---
+/**
+ * Nine-layer scroll-parallax hero built from the client-supplied
+ * mca_heart_layers set - the whole "MCA Heart Research Lab" graphic split
+ * into independent pieces (background, ECG trace, orbit rings, stent scene,
+ * center wordmark, right panel, anatomical heart) so they can drift apart
+ * as the visitor scrolls, then read as one flat composition at rest.
+ *
+ * Respects prefers-reduced-motion (layers just sit at rest, no listener
+ * attached) and skips the scroll-lock height on narrow screens, where a
+ * long pinned scroll fights the page instead of introducing it.
+ */
+interface Props {
+  title: string;
+}
+const { title } = Astro.props;
+const base = '/assets/research/hero-layers';
+---
+
+<section class="lshero">
+  <div class="lshero__space" id="lsheroSpace">
+    <div class="lshero__pin">
+      <h1 class="visually-hidden">{title}</h1>
+      <div class="lshero__stage" id="lsheroStage">
+        <img class="lslayer" id="ls-bg" src={`${base}/00_background.jpg`} alt="" fetchpriority="high" />
+        <img class="lslayer" id="ls-tl" src={`${base}/01_top_left_orbit.png`} alt="" />
+        <img class="lslayer" id="ls-ecg" src={`${base}/02_ecg.png`} alt="" />
+        <img class="lslayer" id="ls-blorbit" src={`${base}/03_bottom_left_orbit.png`} alt="" />
+        <img class="lslayer" id="ls-bl" src={`${base}/04_bottom_left_stent_scene.png`} alt="" />
+        <img class="lslayer" id="ls-logo" src={`${base}/05_center_logo.png`} alt="" />
+        <img class="lslayer" id="ls-rorbit" src={`${base}/06_right_orbit.png`} alt="" />
+        <img class="lslayer" id="ls-panel" src={`${base}/07_right_panel.png`} alt="" />
+        <img class="lslayer" id="ls-heart" src={`${base}/08_right_heart.png`} alt="" />
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .lshero {
+    position: relative;
+    background: var(--bg);
+    border-bottom: 2px solid var(--ink);
+  }
+
+  /* The tall scroll track the pinned stage rides inside of. Shorter on
+     narrow screens - a 4x-viewport pin makes little sense on a phone. */
+  .lshero__space { position: relative; height: 340vh; }
+  @media (max-width: 760px) { .lshero__space { height: 190vh; } }
+
+  .lshero__pin {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    max-height: 900px;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    padding: var(--gutter);
+  }
+
+  .lshero__stage {
+    position: relative;
+    width: min(100%, 1500px);
+    aspect-ratio: 1672 / 941;
+  }
+
+  .lslayer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    pointer-events: none;
+    user-select: none;
+    transform-origin: center center;
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+  }
+  #ls-bg { z-index: 0; }
+  #ls-tl { z-index: 10; }
+  #ls-ecg { z-index: 20; }
+  #ls-blorbit { z-index: 30; }
+  #ls-bl { z-index: 40; }
+  #ls-logo { z-index: 50; }
+  #ls-rorbit { z-index: 60; }
+  #ls-panel { z-index: 70; }
+  #ls-heart { z-index: 80; }
+
+  /* Reduced motion / narrow screens: freeze at the resting composition -
+     no scroll-lock, no per-layer transforms, just the flat image. */
+  @media (prefers-reduced-motion: reduce), (max-width: 760px) {
+    .lshero__pin { position: relative; height: auto; max-height: none; padding-block: var(--space-xl); }
+    .lshero__space { height: auto; }
+  }
+</style>
+
+<script>
+  const space = document.getElementById('lsheroSpace');
+  const stage = document.getElementById('lsheroStage');
+  if (space && stage && !matchMedia('(prefers-reduced-motion: reduce)').matches && matchMedia('(min-width: 761px)').matches) {
+    const layers = {
+      tl: document.getElementById('ls-tl'),
+      ecg: document.getElementById('ls-ecg'),
+      blOrbit: document.getElementById('ls-blorbit'),
+      bl: document.getElementById('ls-bl'),
+      logo: document.getElementById('ls-logo'),
+      rOrbit: document.getElementById('ls-rorbit'),
+      panel: document.getElementById('ls-panel'),
+      heart: document.getElementById('ls-heart'),
+    } as Record<string, HTMLImageElement>;
+
+    let target = 0;
+    let current = 0;
+    let raf = 0;
+
+    const clamp = (v: number, min = 0, max = 1) => Math.min(max, Math.max(min, v));
+    // Smoother cinematic response to wheel/trackpad movement.
+    const ease = (v: number) => (v < 0.5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2);
+
+    function progress() {
+      const max = space!.offsetHeight - window.innerHeight;
+      return max <= 0 ? 0 : clamp(window.scrollY / max);
+    }
+
+    function render() {
+      current += (target - current) * 0.11;
+      if (Math.abs(target - current) < 0.0001) current = target;
+      const p = ease(current);
+
+      layers.tl.style.transform = `translate3d(${-85 * p}px,${-48 * p}px,0) scale(${1 + 0.055 * p})`;
+      layers.ecg.style.transform = `translate3d(${-150 * p}px,${18 * p}px,0) scale(${1 + 0.025 * p})`;
+      layers.blOrbit.style.transform = `translate3d(${-105 * p}px,${74 * p}px,0) rotate(${-1.6 * p}deg)`;
+      layers.bl.style.transform = `translate3d(${-55 * p}px,${82 * p}px,0) scale(${1 + 0.09 * p})`;
+      layers.logo.style.transform = `translate3d(0px,${-34 * p}px,0) scale(${1 + 0.055 * p})`;
+      layers.rOrbit.style.transform = `translate3d(${105 * p}px,${-45 * p}px,0) rotate(${1.2 * p}deg)`;
+      layers.panel.style.transform = `translate3d(${145 * p}px,${12 * p}px,0) scale(${1 + 0.045 * p})`;
+      layers.heart.style.transform = `translate3d(${250 * p}px,${-25 * p}px,0) scale(${1 + 0.12 * p}) rotate(${2.4 * p}deg)`;
+
+      layers.tl.style.opacity = `${1 - 0.05 * p}`;
+      layers.ecg.style.opacity = `${1 - 0.02 * p}`;
+      layers.blOrbit.style.opacity = `${1 - 0.03 * p}`;
+      layers.bl.style.opacity = `${1 - 0.01 * p}`;
+      layers.logo.style.opacity = `${1 - 0.015 * p}`;
+      layers.rOrbit.style.opacity = `${1 - 0.03 * p}`;
+
+      raf = requestAnimationFrame(render);
+    }
+
+    function onScroll() { target = progress(); }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    onScroll();
+    render();
+
+    document.addEventListener('astro:before-swap', () => cancelAnimationFrame(raf), { once: true });
+  }
+</script>
