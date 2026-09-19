@@ -15,14 +15,10 @@ import { testimonials, missionVision, director, societies } from '../data/site';
   <section class="section about" id="about">
     <div class="shell shell--wide about__grid">
       <figure class="about__portrait" data-reveal>
-        <img
-          src="/assets/research/alraies.jpg"
-          alt={`Portrait of ${director.name}`}
-          loading="lazy"
-          decoding="async"
-          width="800"
-          height="950"
-        />
+        {/* The photo itself lives in LayeredScrollHero, traveling here from
+            the hero as the visitor scrolls - this reserves its layout space
+            (same aspect ratio) so nothing jumps once it docks. */}
+        <div class="about__portrait-slot" id="aboutPortraitSlot" aria-hidden="true"></div>
         <figcaption>
           {director.name}<span>{director.credentials}</span>
         </figcaption>
@@ -212,6 +208,15 @@ import { testimonials, missionVision, director, societies } from '../data/site';
   }
   .about__portrait img {
     width: 100%; height: auto;
+    border-radius: calc(var(--radius-lg) - 6px);
+  }
+  /* Reserves the photo's space - the actual image is the traveling
+     portrait from LayeredScrollHero, docking here as the visitor scrolls
+     past the hero (or, with reduced motion / on mobile, rendered directly
+     inside this slot as a plain static image). */
+  .about__portrait-slot {
+    width: 100%;
+    aspect-ratio: 800 / 950;
     border-radius: calc(var(--radius-lg) - 6px);
   }
   .about__portrait figcaption {

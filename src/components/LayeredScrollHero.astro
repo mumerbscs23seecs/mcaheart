@@ -6,14 +6,27 @@
  * center wordmark, right panel, anatomical heart) so they can drift apart
  * as the visitor scrolls, then read as one flat composition at rest.
  *
- * Respects prefers-reduced-motion (layers just sit at rest, no listener
- * attached) and skips the scroll-lock height on narrow screens, where a
- * long pinned scroll fights the page instead of introducing it.
+ * The director's portrait is a single element, not two: it rises into view
+ * late in the hero scroll, then - once the hero un-pins - travels (fixed
+ * position, tracking real getBoundingClientRect() each frame) into
+ * #aboutPortraitSlot, the empty placeholder the About section reserves for
+ * it. It never exists as a separate static image anywhere else.
+ *
+ * Respects prefers-reduced-motion (everything sits at rest, no listener
+ * attached, portrait renders straight into its slot) and skips the
+ * scroll-lock height on narrow screens, where a long pinned scroll fights
+ * the page instead of introducing it.
  */
 interface Props {
   title: string;
+  directorPhoto?: string;
+  directorName?: string;
 }
-const { title } = Astro.props;
+const {
+  title,
+  directorPhoto = '/assets/research/alraies.jpg',
+  directorName = 'M Chadi Alraies',
+} = Astro.props;
 const base = '/assets/research/hero-layers';
 ---
 
@@ -34,6 +47,8 @@ const base = '/assets/research/hero-layers';
       </div>
     </div>
   </div>
+
+  <img class="lsportrait" id="lsPortrait" src={directorPhoto} alt={directorName} />
 </section>
 
 <style>
@@ -87,18 +102,43 @@ const base = '/assets/research/hero-layers';
   #ls-panel { z-index: 70; }
   #ls-heart { z-index: 80; }
 
-  /* Reduced motion / narrow screens: freeze at the resting composition -
-     no scroll-lock, no per-layer transforms, just the flat image. */
+  /* The traveling portrait - fixed to the viewport, positioned every frame
+     by JS (either "floating in the hero" or "docking into the About
+     section's slot"). Starts invisible; JS controls opacity/transform. */
+  .lsportrait {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 90;
+    width: 220px;
+    aspect-ratio: 4 / 5;
+    object-fit: cover;
+    border-radius: calc(var(--radius-lg) - 6px);
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.22);
+    opacity: 0;
+    pointer-events: none;
+    will-change: transform, opacity, width, height;
+  }
+
+  /* Reduced motion / narrow screens: freeze the hero at rest, no scroll-
+     lock, no per-layer transforms - and let the portrait render normally
+     inside its slot instead of floating/traveling. */
   @media (prefers-reduced-motion: reduce), (max-width: 760px) {
     .lshero__pin { position: relative; height: auto; max-height: none; padding-block: var(--space-xl); }
     .lshero__space { height: auto; }
+    .lsportrait { display: none; }
   }
 </style>
 
 <script>
   const space = document.getElementById('lsheroSpace');
   const stage = document.getElementById('lsheroStage');
-  if (space && stage && !matchMedia('(prefers-reduced-motion: reduce)').matches && matchMedia('(min-width: 761px)').matches) {
+  const portrait = document.getElementById('lsPortrait') as HTMLImageElement | null;
+  const slot = document.getElementById('aboutPortraitSlot');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const narrow = matchMedia('(max-width: 760px)').matches;
+
+  if (space && stage && portrait && slot && !reduced && !narrow) {
     const layers = {
       tl: document.getElementById('ls-tl'),
       ecg: document.getElementById('ls-ecg'),
@@ -110,49 +150,109 @@ const base = '/assets/research/hero-layers';
       heart: document.getElementById('ls-heart'),
     } as Record<string, HTMLImageElement>;
 
-    let target = 0;
-    let current = 0;
+    let current = 0; // smoothed hero-pin progress, 0..1
     let raf = 0;
 
     const clamp = (v: number, min = 0, max = 1) => Math.min(max, Math.max(min, v));
-    // Smoother cinematic response to wheel/trackpad movement.
     const ease = (v: number) => (v < 0.5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2);
+    /** Remap p from [start,end] to [0,1] - lets one layer's motion run on
+     *  its own window of the scroll instead of the full 0-1 range. */
+    const remap = (p: number, start: number, end: number) => clamp((p - start) / (end - start));
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-    function progress() {
-      const max = space!.offsetHeight - window.innerHeight;
+    function pinEnd() {
+      return Math.max(0, space!.offsetHeight - window.innerHeight);
+    }
+    function pinProgress() {
+      const max = pinEnd();
       return max <= 0 ? 0 : clamp(window.scrollY / max);
     }
 
+    // How far past the end of the pin the portrait spends traveling to its
+    // slot in the About section, in pixels of additional scroll.
+    const TRAVEL_PX = 480;
+
+    // The portrait's rect while it's still "in" the hero - a fixed spot
+    // near the bottom-center of the stage, derived from the stage's own
+    // live position so it tracks correctly at any viewport size.
+    function heroRect() {
+      const s = stage!.getBoundingClientRect();
+      const w = s.width * 0.19;
+      const h = w * 1.25; // 4:5
+      return { left: s.left + s.width / 2 - w / 2, top: s.top + s.height * 0.96 - h, width: w, height: h };
+    }
+
     function render() {
-      current += (target - current) * 0.11;
-      if (Math.abs(target - current) < 0.0001) current = target;
-      const p = ease(current);
+      const targetP = ease(pinProgress());
+      current += (targetP - current) * 0.16;
+      if (Math.abs(targetP - current) < 0.0005) current = targetP;
+      const p = current;
 
-      layers.tl.style.transform = `translate3d(${-85 * p}px,${-48 * p}px,0) scale(${1 + 0.055 * p})`;
-      layers.ecg.style.transform = `translate3d(${-150 * p}px,${18 * p}px,0) scale(${1 + 0.025 * p})`;
-      layers.blOrbit.style.transform = `translate3d(${-105 * p}px,${74 * p}px,0) rotate(${-1.6 * p}deg)`;
-      layers.bl.style.transform = `translate3d(${-55 * p}px,${82 * p}px,0) scale(${1 + 0.09 * p})`;
-      layers.logo.style.transform = `translate3d(0px,${-34 * p}px,0) scale(${1 + 0.055 * p})`;
-      layers.rOrbit.style.transform = `translate3d(${105 * p}px,${-45 * p}px,0) rotate(${1.2 * p}deg)`;
-      layers.panel.style.transform = `translate3d(${145 * p}px,${12 * p}px,0) scale(${1 + 0.045 * p})`;
-      layers.heart.style.transform = `translate3d(${250 * p}px,${-25 * p}px,0) scale(${1 + 0.12 * p}) rotate(${2.4 * p}deg)`;
+      // Side art exits fully off-stage (percentages, so it scales with the
+      // stage's own size) - finished by ~80% of the pin so the frame is
+      // clear before the portrait arrives.
+      const pSide = remap(p, 0, 0.8);
+      layers.tl.style.transform = `translate(${-160 * pSide}%, ${-70 * pSide}%) scale(${1 + 0.08 * pSide})`;
+      layers.ecg.style.transform = `translate(${-170 * pSide}%, ${20 * pSide}%) scale(${1 + 0.03 * pSide})`;
+      layers.blOrbit.style.transform = `translate(${-150 * pSide}%, ${90 * pSide}%) rotate(${-3 * pSide}deg)`;
+      layers.bl.style.transform = `translate(${-140 * pSide}%, ${110 * pSide}%) scale(${1 + 0.12 * pSide})`;
+      layers.rOrbit.style.transform = `translate(${150 * pSide}%, ${-70 * pSide}%) rotate(${3 * pSide}deg)`;
+      layers.panel.style.transform = `translate(${160 * pSide}%, ${20 * pSide}%) scale(${1 + 0.08 * pSide})`;
+      layers.heart.style.transform = `translate(${175 * pSide}%, ${-40 * pSide}%) scale(${1 + 0.16 * pSide}) rotate(${4 * pSide}deg)`;
 
-      layers.tl.style.opacity = `${1 - 0.05 * p}`;
-      layers.ecg.style.opacity = `${1 - 0.02 * p}`;
-      layers.blOrbit.style.opacity = `${1 - 0.03 * p}`;
-      layers.bl.style.opacity = `${1 - 0.01 * p}`;
-      layers.logo.style.opacity = `${1 - 0.015 * p}`;
-      layers.rOrbit.style.opacity = `${1 - 0.03 * p}`;
+      layers.tl.style.opacity = `${1 - pSide}`;
+      layers.ecg.style.opacity = `${1 - pSide}`;
+      layers.blOrbit.style.opacity = `${1 - pSide}`;
+      layers.bl.style.opacity = `${1 - pSide}`;
+      layers.rOrbit.style.opacity = `${1 - pSide}`;
+      layers.panel.style.opacity = `${1 - pSide}`;
+      layers.heart.style.opacity = `${1 - pSide}`;
+
+      // The wordmark rises on its own, slower and more contained than the
+      // side art leaving - it settles near the top, still fully readable,
+      // rather than exiting the frame.
+      layers.logo.style.transform = `translate3d(0, ${-46 * p}%, 0) scale(${1 - 0.08 * p})`;
+
+      // --- Portrait: rise in the hero, then travel to the About slot. ---
+      const pReveal = remap(p, 0.45, 1); // fades/scales in late in the pin
+      const scrollPastPin = Math.max(0, window.scrollY - pinEnd());
+      const pTravel = ease(clamp(scrollPastPin / TRAVEL_PX));
+
+      const from = heroRect();
+      const to = slot!.getBoundingClientRect();
+      const rect = {
+        left: lerp(from.left, to.left, pTravel),
+        top: lerp(from.top, to.top, pTravel),
+        width: lerp(from.width, to.width, pTravel),
+        height: lerp(from.height, to.height, pTravel),
+      };
+
+      portrait.style.opacity = `${pTravel > 0 ? 1 : pReveal}`;
+      portrait.style.width = `${rect.width}px`;
+      portrait.style.height = `${rect.height}px`;
+      portrait.style.transform =
+        `translate(${rect.left}px, ${rect.top + (pTravel === 0 ? (1 - pReveal) * 40 : 0)}px)` +
+        ` scale(${pTravel > 0 ? 1 : 0.94 + 0.06 * pReveal})`;
+      // Once fully docked, the shadow is redundant with the slot's own
+      // card frame - fade it out over the tail of the travel.
+      portrait.style.boxShadow = pTravel > 0.85 ? 'none' : '0 18px 40px rgba(0, 0, 0, 0.22)';
 
       raf = requestAnimationFrame(render);
     }
 
-    function onScroll() { target = progress(); }
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
-    onScroll();
+    // Nothing needed on the scroll event itself - render() reads
+    // window.scrollY fresh every animation frame, so the rAF loop alone
+    // keeps everything in sync.
     render();
 
     document.addEventListener('astro:before-swap', () => cancelAnimationFrame(raf), { once: true });
+  } else if (portrait && slot) {
+    // Reduced motion / narrow screens: skip the traveling animation - move
+    // the same <img> (not a clone, so it's never fetched twice) straight
+    // into the About section's slot as a plain static photo.
+    portrait.removeAttribute('id');
+    portrait.className = '';
+    portrait.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;';
+    slot.appendChild(portrait);
   }
 </script>
