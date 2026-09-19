@@ -13,6 +13,20 @@ import { createServerClient, createBrowserClient, parseCookieHeader } from '@sup
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { AstroCookies } from 'astro';
 
+// supabase-js always constructs a RealtimeClient (even though this app never
+// uses realtime subscriptions), which needs Node's native WebSocket - only
+// present from Node 22 onward. Rather than depend on the deploy host running
+// exactly the right Node version, give it a WebSocket implementation
+// directly so client construction never throws, on any Node 18+ runtime.
+// (Node itself does have a native WebSocket on 22+, in which case this is a
+// harmless no-op - the check below only fills it in when it's missing.)
+if (typeof globalThis.WebSocket === 'undefined') {
+  const { WebSocket } = await import('ws');
+  // @ts-expect-error - Node's lib.dom types expect the browser WebSocket
+  // shape; ws's is close enough for supabase-js's realtime client.
+  globalThis.WebSocket = WebSocket;
+}
+
 const SUPABASE_URL = import.meta.env.SUPABASE_URL as string | undefined;
 const SUPABASE_ANON_KEY = import.meta.env.SUPABASE_ANON_KEY as string | undefined;
 const SUPABASE_SERVICE_ROLE_KEY = import.meta.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined;
