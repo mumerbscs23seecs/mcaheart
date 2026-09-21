@@ -24,6 +24,14 @@ const { data: peopleRows } = ids.length
   : { data: [] };
 const who = new Map((peopleRows ?? []).map((r: any) => [r.id, r]));
 
+// Full active roster, for the admin-only "Edit people" pickers below -
+// setting analyst_id here is also how that person gets member-portal
+// access to this paper (scopeProjects() grants visibility off these
+// same five columns).
+const { data: roster } = isAdmin
+  ? await supabase.from('people').select('id,full_name').eq('active', true).order('full_name')
+  : { data: [] };
+
 const { data: confAttempts } = await supabase
   .from('conference_attempts')
   .select('id,outcome,submitted_on,recycled_from,conference:conferences(name)')
@@ -365,6 +373,50 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
         {p.presenter_id && <><dt>Presenter</dt><dd>{who.get(p.presenter_id)?.full_name}</dd></>}
         <dt>Corresponding author</dt><dd>{who.get(p.corresponding_id)?.full_name ?? <span class="pl-muted">not set</span>}</dd>
       </dl>
+
+      {isAdmin && (
+        <details class="pl-inline-details" style="margin-top:10px">
+          <summary>Edit people</summary>
+          <form method="post" action={`/pipeline/projects/${id}/assign`} class="pl-mini pl-mini--col" style="margin-top:10px">
+            <label class="pl-field">
+              <span>Lead</span>
+              <select name="lead_id">
+                <option value="">Unassigned</option>
+                {(roster ?? []).map((r: any) => <option value={r.id} selected={r.id === p.lead_id}>{r.full_name}</option>)}
+              </select>
+            </label>
+            <label class="pl-field">
+              <span>Co-lead</span>
+              <select name="colead_id">
+                <option value="">Unassigned</option>
+                {(roster ?? []).map((r: any) => <option value={r.id} selected={r.id === p.colead_id}>{r.full_name}</option>)}
+              </select>
+            </label>
+            <label class="pl-field">
+              <span>Analyst</span>
+              <select name="analyst_id">
+                <option value="">Unassigned</option>
+                {(roster ?? []).map((r: any) => <option value={r.id} selected={r.id === p.analyst_id}>{r.full_name}</option>)}
+              </select>
+            </label>
+            <label class="pl-field">
+              <span>Presenter</span>
+              <select name="presenter_id">
+                <option value="">Unassigned</option>
+                {(roster ?? []).map((r: any) => <option value={r.id} selected={r.id === p.presenter_id}>{r.full_name}</option>)}
+              </select>
+            </label>
+            <label class="pl-field">
+              <span>Corresponding author</span>
+              <select name="corresponding_id">
+                <option value="">Unassigned</option>
+                {(roster ?? []).map((r: any) => <option value={r.id} selected={r.id === p.corresponding_id}>{r.full_name}</option>)}
+              </select>
+            </label>
+            <button class="pl-btn" type="submit">Save people</button>
+          </form>
+        </details>
+      )}
 
       <h3>Dates</h3>
       <dl>
