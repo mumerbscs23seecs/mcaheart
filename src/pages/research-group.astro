@@ -113,7 +113,10 @@ import { testimonials, missionVision, director, societies } from '../data/site';
         {societies.map((s) => (
           <li class="societies__item">
             <a href={s.url} target="_blank" rel="noopener noreferrer" aria-label={`${s.name} - view M Chadi Alraies' work indexed here`}>
-              <img src={s.logo} alt={s.name} loading="lazy" decoding="async" height="60" />
+              <img class="societies__logo--light" src={s.logo} alt={s.name} loading="lazy" decoding="async" height="60" />
+              {s.logoDark && (
+                <img class="societies__logo--dark" src={s.logoDark} alt={s.name} loading="lazy" decoding="async" height="60" />
+              )}
             </a>
           </li>
         ))}
@@ -422,6 +425,18 @@ import { testimonials, missionVision, director, societies } from '../data/site';
   .societies__item a:hover img,
   .societies__item a:focus-visible img { opacity: 1; filter: grayscale(0); }
   .societies__item a:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
+
+  /* Dark-mode logo variants: the default logos are dark ink on a transparent
+     background (mix-blend-mode:multiply relies on a light page behind them),
+     so on a dark ground they'd vanish. Swap to a white-on-transparent
+     version instead - no multiply blend, since white through "multiply"
+     is a no-op and would stay invisible too. */
+  .societies__logo--dark { display: none; }
+  :root[data-theme='dark'] .societies__logo--light { display: none; }
+  :root[data-theme='dark'] .societies__logo--dark {
+    display: inline-block;
+    mix-blend-mode: normal;
+  }
 
   /* ------------------------------------------------------------ Testimonials */
   .voices__title { font-size: var(--step-3); margin-top: var(--space-s); }

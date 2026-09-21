@@ -60,16 +60,21 @@ export const societies = [
   {
     name: 'SCAI - Society for Cardiovascular Angiography & Interventions',
     logo: '/assets/home/logo-scai.png',
+    // White-on-transparent variant for dark mode - the default logo's dark
+    // wordmark disappears against a dark page background.
+    logoDark: '/assets/home/logo-scai-dark.webp',
     url: 'https://www.jscai.org/action/doSearch?type=quicksearch&text1=chadi+alraies&field1=AllField&startPage=&ContentItemType=abs',
   },
   {
     name: 'ACC - American College of Cardiology',
     logo: '/assets/home/logo-acc.jpg',
+    logoDark: '/assets/home/logo-acc-dark.webp',
     url: 'https://www.jacc.org/action/doSearch?AllField=%28chadi+alraies%29+AND+%28ACC%29',
   },
   {
     name: 'TCT - Transcatheter Cardiovascular Therapeutics',
     logo: '/assets/home/logo-tct.png',
+    logoDark: '/assets/home/logo-tct-dark.webp',
     url: 'https://www.jacc.org/action/doSearch?AllField=%28chadi+alraies%29+AND+%28TCT%29',
   },
 ] as const;
