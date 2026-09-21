@@ -47,6 +47,14 @@ export const director = {
     'Medical Director, Interventional Cardiology Research, Harper University Hospital',
     'Medical Director, Cardiac Rehab, Rehab Institute of Michigan',
   ],
+  /** Homepage director card - profile links, icon-only buttons. */
+  links: [
+    { label: 'X', icon: 'x', url: 'https://x.com/chadialraies' },
+    { label: 'LinkedIn', icon: 'linkedin', url: 'https://www.linkedin.com/in/chadi-alraies-md-facc-fscai-65131711/' },
+    { label: 'Wayne State University profile', icon: 'university', url: 'https://cardiology.med.wayne.edu/profile/hj4412' },
+    { label: 'Detroit Medical Center profile', icon: 'hospital', url: 'https://www.dmc.org/provider/1689828238' },
+    { label: 'ResearchGate', icon: 'researchgate', url: 'https://www.researchgate.net/profile/M-Chadi-Alraies' },
+  ],
 } as const;
 
 export const stats = [
