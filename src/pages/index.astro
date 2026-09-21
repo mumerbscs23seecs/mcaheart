@@ -107,7 +107,7 @@ const DIRECTOR_ICONS: Record<string, string> = {
             <li>
               <a href={l.url} target="_blank" rel="noopener noreferrer" aria-label={l.label} title={l.label}>
                 {l.icon === 'university' ? (
-                  <img src="/assets/home/logo-wsu.webp" alt="" loading="lazy" decoding="async" />
+                  <img class="director__socials-wsu" src="/assets/home/logo-wsu.webp" alt="" loading="lazy" decoding="async" />
                 ) : l.icon === 'researchgate' ? (
                   <>
                     <img class="director__socials-light" src="/assets/home/logo-researchgate.webp" alt="" loading="lazy" decoding="async" />
@@ -456,6 +456,10 @@ const DIRECTOR_ICONS: Record<string, string> = {
   }
   .director__socials svg { width: 1.15rem; height: 1.15rem; }
   .director__socials img { width: 1.5rem; height: 1.5rem; object-fit: contain; }
+  /* The WSU shield reads smaller than the others at the same box size - its
+     ink doesn't reach the edges the way a square glyph does - so it gets a
+     bigger box to visually match the rest of the row's zoom/weight. */
+  .director__socials-wsu { width: 2.05rem !important; height: 2.05rem !important; }
   .director__socials-dark { display: none; }
   :root[data-theme='dark'] .director__socials-light { display: none; }
   :root[data-theme='dark'] .director__socials-dark { display: block; }
