@@ -103,12 +103,30 @@ export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: stri
   const subject = `[MCA Heart] Idea submission outcome - ${OUTCOME_LABEL[opts.decision]}`;
   const comments = opts.note ? esc(opts.note) : '-';
 
-  const html = `<div style="background:#f8fafc;padding:28px">
-  <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid rgba(165,28,48,.14);border-radius:12px;padding:28px">
-    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart</p>
-    <h1 style="margin:0 0 18px;color:#1e293b;font:600 20px/1.3 Georgia,serif">Idea submission outcome</h1>
-
-    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">Dear ${esc(opts.leadName)},</p>
+  // "Withheld" reads as its own letter (per the lab's own template) rather
+  // than the generic accepted/declined lead paragraph - it explains what
+  // the on-hold category means and invites a revision, before the same
+  // Outcome/Comments block every decision shares.
+  const lead =
+    opts.decision === 'withheld'
+      ? `<p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">Dear ${esc(opts.leadName)},</p>
+    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">Thank you for taking the time to submit your research idea.</p>
+    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
+      Following review and discussion with Dr. Alraies and/or the Analysis Team, your proposal '<strong>${esc(opts.title)}</strong>'
+      has been placed in the withhold category. The study concept is of interest; however, additional details
+      and modifications are required before a final decision can be made regarding acceptance and project
+      initiation.
+    </p>
+    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
+      Any comments or recommendations from the reviewers can be found at the end of this email. We invite you
+      to revise the proposal and address the points outlined below - once the requested information is
+      provided, the proposal will be reconsidered.
+    </p>
+    <p style="margin:0 0 24px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
+      Thank you for your contribution and interest in collaborative research.<br /><br />
+      Kind regards,<br />On behalf of Dr. Alraies and the Research Team
+    </p>`
+      : `<p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">Dear ${esc(opts.leadName)},</p>
     <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
       Thank you for submitting your idea '<strong>${esc(opts.title)}</strong>' to the MCA Heart Research Lab. We
       evaluate ideas based on clinical relevance, methodological practicality, and publication value. Any
@@ -116,7 +134,14 @@ export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: stri
     </p>
     <p style="margin:0 0 24px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
       Best regards,<br />MCA HEART RESEARCH LAB
-    </p>
+    </p>`;
+
+  const html = `<div style="background:#f8fafc;padding:28px">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid rgba(165,28,48,.14);border-radius:12px;padding:28px">
+    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart</p>
+    <h1 style="margin:0 0 18px;color:#1e293b;font:600 20px/1.3 Georgia,serif">Idea submission outcome</h1>
+
+    ${lead}
 
     <table style="border-collapse:collapse;width:100%;border-top:1px solid rgba(165,28,48,.14);padding-top:16px">
       <tr>
@@ -126,7 +151,7 @@ export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: stri
         <td style="padding:0 0 14px;color:${OUTCOME_COLOR[opts.decision]};font:700 15px/1.5 Arial,sans-serif">${OUTCOME_LABEL[opts.decision]}</td>
       </tr>
       <tr>
-        <td style="padding:0 0 4px;color:#64748b;font:600 12px/1.4 Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em">Comments</td>
+        <td style="padding:0 0 4px;color:#64748b;font:600 12px/1.4 Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em">${opts.decision === 'withheld' ? 'Comments by Team' : 'Comments'}</td>
       </tr>
       <tr>
         <td style="padding:0;color:#1e293b;font:14px/1.6 Arial,sans-serif;white-space:pre-wrap">${comments}</td>
@@ -141,13 +166,7 @@ export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: stri
       provided. Failure to follow this timeline may result in the lead author's demotion from first
       authorship, and the lab will appoint a new lead.
     </p>`
-        : opts.decision === 'withheld'
-          ? `<p style="margin:24px 0 0;padding:12px 14px;background:#f1f5f9;border-radius:8px;color:#1e293b;font:13px/1.6 Arial,sans-serif">
-      <strong>What "on hold" means:</strong> this is not a final decision. The lab is holding your idea for
-      further review - this may be to request more information, check for overlap with ongoing work, or
-      wait for capacity to open up. We will follow up with a final outcome in due course.
-    </p>`
-          : ''
+        : ''
     }
   </div>
 </div>`;
