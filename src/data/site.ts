@@ -203,12 +203,12 @@ export const missionVision = [
   {
     kind: 'Our Mission',
     image: '/assets/research/mission.jpg',
-    body: 'At the MCA Heart Research Lab, we are a diverse community of researcher-physicians united by shared goals of growth, discovery, and impact. We foster collaboration, share knowledge, and support one another to thrive. Together, we are shaping the future of cardiovascular research while building lasting global connections.',
+    body: 'At the MCA Heart Research Lab, we bring together physician-researchers and trainees from around the world with a shared commitment to advancing cardiovascular medicine. Through collaboration, mentorship, and rigorous research, we generate meaningful evidence, foster academic growth, and translate scientific discovery into improved patient care.',
   },
   {
     kind: 'Our Vision',
     image: '/assets/research/vision.jpg',
-    body: 'To lead the future of cardiovascular research through innovation, collaboration, and inclusivity. We aim to advance cardiology, improve patient outcomes, and empower the next generation of researchers to make a global impact.',
+    body: 'To advance the future of cardiovascular medicine through innovative research, global collaboration, and excellence in education. We aim to generate impactful evidence, improve cardiovascular outcomes, and develop the next generation of researchers and physician-leaders.',
   },
 ] as const;
 
