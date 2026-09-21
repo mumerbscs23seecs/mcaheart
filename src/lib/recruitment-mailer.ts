@@ -176,7 +176,8 @@ export function renderApplicationDecisionEmail(
       <p style="margin:0 0 12px;color:#1e293b;font:13px/1.6 Arial,sans-serif">If you have an idea you would like to pursue through the lab, please submit it at <a href="${site.url}/submit-idea" style="color:#a51c30">${site.url}/submit-idea</a>.</p>
       <p style="margin:0 0 4px;color:#1e293b;font:700 13px/1.5 Arial,sans-serif">Letters of recommendation</p>
       <p style="margin:0;color:#1e293b;font:13px/1.6 Arial,sans-serif">Joining the research group does not guarantee a Letter of Recommendation (LOR) from the PI or other faculty collaborators. LOR requests are evaluated individually and are based on a rigorous assessment of the member's performance, contribution, and engagement within the lab.</p>
-    </div>`;
+    </div>
+    <p style="margin:18px 0 0;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.14em">Operations@MCAHeart</p>`;
   } else if (opts.decision === 'declined') {
     subject = '[MCA Heart Research Lab] Your application outcome';
     body = `<p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">Dear ${name},</p>

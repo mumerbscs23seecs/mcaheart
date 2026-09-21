@@ -168,6 +168,7 @@ export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: stri
     </p>`
         : ''
     }
+    <p style="margin:18px 0 0;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.14em">Operations@MCAHeart</p>
   </div>
 </div>`;
 
