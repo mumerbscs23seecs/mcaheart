@@ -1,5 +1,6 @@
 ---
 import PipelineLayout from '../../../layouts/PipelineLayout.astro';
+import PeoplePicker from '../../../components/PeoplePicker.astro';
 import { stagesFor } from '../../../lib/lifecycle.mjs';
 import { personOnProject } from '../../../lib/pipeline-scope';
 import { docLinkLabel, DOC_LINK_HINT } from '../../../lib/doc-links';
@@ -378,41 +379,11 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
         <details class="pl-inline-details" style="margin-top:10px">
           <summary>Edit people</summary>
           <form method="post" action={`/pipeline/projects/${id}/assign`} class="pl-mini pl-mini--col" style="margin-top:10px">
-            <label class="pl-field">
-              <span>Lead</span>
-              <select name="lead_id">
-                <option value="">Unassigned</option>
-                {(roster ?? []).map((r: any) => <option value={r.id} selected={r.id === p.lead_id}>{r.full_name}</option>)}
-              </select>
-            </label>
-            <label class="pl-field">
-              <span>Co-lead</span>
-              <select name="colead_id">
-                <option value="">Unassigned</option>
-                {(roster ?? []).map((r: any) => <option value={r.id} selected={r.id === p.colead_id}>{r.full_name}</option>)}
-              </select>
-            </label>
-            <label class="pl-field">
-              <span>Analyst</span>
-              <select name="analyst_id">
-                <option value="">Unassigned</option>
-                {(roster ?? []).map((r: any) => <option value={r.id} selected={r.id === p.analyst_id}>{r.full_name}</option>)}
-              </select>
-            </label>
-            <label class="pl-field">
-              <span>Presenter</span>
-              <select name="presenter_id">
-                <option value="">Unassigned</option>
-                {(roster ?? []).map((r: any) => <option value={r.id} selected={r.id === p.presenter_id}>{r.full_name}</option>)}
-              </select>
-            </label>
-            <label class="pl-field">
-              <span>Corresponding author</span>
-              <select name="corresponding_id">
-                <option value="">Unassigned</option>
-                {(roster ?? []).map((r: any) => <option value={r.id} selected={r.id === p.corresponding_id}>{r.full_name}</option>)}
-              </select>
-            </label>
+            <PeoplePicker name="lead_id" label="Lead" roster={roster ?? []} selectedId={p.lead_id} selectedName={who.get(p.lead_id)?.full_name} />
+            <PeoplePicker name="colead_id" label="Co-lead" roster={roster ?? []} selectedId={p.colead_id} selectedName={who.get(p.colead_id)?.full_name} />
+            <PeoplePicker name="analyst_id" label="Analyst" roster={roster ?? []} selectedId={p.analyst_id} selectedName={who.get(p.analyst_id)?.full_name} />
+            <PeoplePicker name="presenter_id" label="Presenter" roster={roster ?? []} selectedId={p.presenter_id} selectedName={who.get(p.presenter_id)?.full_name} />
+            <PeoplePicker name="corresponding_id" label="Corresponding author" roster={roster ?? []} selectedId={p.corresponding_id} selectedName={who.get(p.corresponding_id)?.full_name} />
             <button class="pl-btn" type="submit">Save people</button>
           </form>
         </details>

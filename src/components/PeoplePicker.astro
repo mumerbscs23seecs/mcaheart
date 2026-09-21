@@ -1,0 +1,247 @@
+---
+// Typeahead person picker for admin-only lead/analyst/etc forms: type to
+// filter the active roster, click a match to select it, or - when nothing
+// matches - "+ Add ... as a new person" creates one on the fly (POST
+// /pipeline/people/create) and selects it. Submits the person's id as a
+// plain hidden input named `name`, so the surrounding <form> needs nothing
+// special; assign.ts / conferences/[id].astro read it exactly like a <select>.
+interface RosterPerson { id: string; full_name: string }
+interface Props {
+  name: string;
+  label: string;
+  roster: RosterPerson[];
+  selectedId?: string | null;
+  selectedName?: string | null;
+  placeholder?: string;
+}
+const { name, label, roster, selectedId = null, selectedName = null, placeholder = 'Type a name…' } = Astro.props;
+---
+
+<div class="ppick" data-ppick>
+  <label class="pl-field">
+    <span>{label}</span>
+    <input
+      type="text"
+      class="ppick__input"
+      autocomplete="off"
+      placeholder={placeholder}
+      value={selectedName ?? ''}
+      data-ppick-input
+    />
+  </label>
+  <input type="hidden" name={name} value={selectedId ?? ''} data-ppick-value />
+  <ul class="ppick__menu" data-ppick-menu hidden></ul>
+
+  <div class="ppick__create" data-ppick-create hidden>
+    <p class="ppick__create-label">New person</p>
+    <input type="text" placeholder="Full name" data-ppick-create-name />
+    <input type="email" placeholder="Email" data-ppick-create-email />
+    <div class="ppick__create-actions">
+      <button type="button" class="pl-btn pl-btn--ghost" data-ppick-create-cancel>Cancel</button>
+      <button type="button" class="pl-btn" data-ppick-create-go>Create &amp; select</button>
+    </div>
+    <p class="ppick__create-err" data-ppick-create-err hidden></p>
+  </div>
+
+  <script type="application/json" data-ppick-roster set:html={JSON.stringify(roster)} />
+</div>
+
+<style>
+  .ppick { position: relative; }
+  .ppick__menu {
+    position: absolute;
+    z-index: 20;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin: 4px 0 0;
+    padding: 4px;
+    list-style: none;
+    max-height: 220px;
+    overflow-y: auto;
+    background: var(--surface, #fff);
+    border: 1px solid var(--pl-border, #d8dce6);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  }
+  .ppick__menu[hidden] { display: none; }
+  .ppick__opt {
+    padding: 7px 9px;
+    font-size: 0.85rem;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .ppick__opt:hover { background: var(--bg-tint, #f4f2ee); }
+  .ppick__opt--muted { color: var(--text-muted, #595959); font-style: italic; }
+  .ppick__opt--new { color: var(--pl-accent, var(--blue)); font-weight: 600; border-top: 1px solid var(--border-soft, #eee); margin-top: 2px; }
+
+  .ppick__create {
+    margin-top: 8px;
+    padding: 10px;
+    display: grid;
+    gap: 6px;
+    border: 1px solid var(--pl-border, #d8dce6);
+    border-radius: 6px;
+    background: var(--bg-tint, #f4f2ee);
+  }
+  .ppick__create-label { margin: 0; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+  .ppick__create input {
+    padding: 6px 8px;
+    border: 1px solid var(--pl-border, #d8dce6);
+    border-radius: 4px;
+    font: inherit;
+    font-size: 0.85rem;
+  }
+  .ppick__create-actions { display: flex; gap: 6px; justify-content: flex-end; }
+  .ppick__create-err { margin: 0; font-size: 0.78rem; color: var(--red, #a51c30); }
+  .ppick__create-err[hidden] { display: none; }
+</style>
+
+<script>
+  type RosterPerson = { id: string; full_name: string };
+
+  const rosterFor = (container: HTMLElement): RosterPerson[] => {
+    const script = container.querySelector<HTMLScriptElement>('[data-ppick-roster]');
+    try {
+      return JSON.parse(script?.textContent ?? '[]');
+    } catch {
+      return [];
+    }
+  };
+
+  const closeAllMenus = () => {
+    document.querySelectorAll<HTMLElement>('[data-ppick-menu]').forEach((m) => (m.hidden = true));
+  };
+
+  const selectPerson = (container: HTMLElement, id: string, name: string) => {
+    container.querySelector<HTMLInputElement>('[data-ppick-input]')!.value = name;
+    container.querySelector<HTMLInputElement>('[data-ppick-value]')!.value = id;
+    closeAllMenus();
+  };
+
+  const renderMenu = (container: HTMLElement, query: string) => {
+    const menu = container.querySelector<HTMLElement>('[data-ppick-menu]')!;
+    const roster = rosterFor(container);
+    const q = query.trim().toLowerCase();
+    const matches = q ? roster.filter((p) => p.full_name.toLowerCase().includes(q)) : roster;
+
+    menu.innerHTML = '';
+    if (!q) {
+      const li = document.createElement('li');
+      li.className = 'ppick__opt ppick__opt--muted';
+      li.textContent = 'Unassigned';
+      li.dataset.id = '';
+      li.dataset.name = '';
+      menu.appendChild(li);
+    }
+    matches.slice(0, 30).forEach((p) => {
+      const li = document.createElement('li');
+      li.className = 'ppick__opt';
+      li.textContent = p.full_name;
+      li.dataset.id = p.id;
+      li.dataset.name = p.full_name;
+      menu.appendChild(li);
+    });
+    if (q && !roster.some((p) => p.full_name.toLowerCase() === q)) {
+      const li = document.createElement('li');
+      li.className = 'ppick__opt ppick__opt--new';
+      li.textContent = `+ Add "${query.trim()}" as a new person…`;
+      li.dataset.new = '1';
+      menu.appendChild(li);
+    }
+    menu.hidden = false;
+  };
+
+  const openCreate = (container: HTMLElement, name: string) => {
+    closeAllMenus();
+    const box = container.querySelector<HTMLElement>('[data-ppick-create]')!;
+    box.hidden = false;
+    box.querySelector<HTMLInputElement>('[data-ppick-create-name]')!.value = name;
+    box.querySelector<HTMLElement>('[data-ppick-create-err]')!.hidden = true;
+    box.querySelector<HTMLInputElement>('[data-ppick-create-email]')?.focus();
+  };
+
+  document.addEventListener('input', (e) => {
+    const input = (e.target as HTMLElement | null)?.closest<HTMLInputElement>('[data-ppick-input]');
+    if (!input) return;
+    const container = input.closest<HTMLElement>('[data-ppick]')!;
+    container.querySelector<HTMLInputElement>('[data-ppick-value]')!.value = '';
+    renderMenu(container, input.value);
+  });
+
+  document.addEventListener('focusin', (e) => {
+    const input = (e.target as HTMLElement | null)?.closest<HTMLInputElement>('[data-ppick-input]');
+    if (!input) return;
+    renderMenu(input.closest<HTMLElement>('[data-ppick]')!, input.value);
+  });
+
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement | null;
+
+    const opt = target?.closest<HTMLElement>('[data-ppick-menu] li');
+    if (opt) {
+      const container = opt.closest<HTMLElement>('[data-ppick]')!;
+      if (opt.dataset.new) {
+        openCreate(container, container.querySelector<HTMLInputElement>('[data-ppick-input]')!.value.trim());
+      } else {
+        selectPerson(container, opt.dataset.id ?? '', opt.dataset.name ?? '');
+      }
+      return;
+    }
+
+    const cancel = target?.closest<HTMLElement>('[data-ppick-create-cancel]');
+    if (cancel) {
+      cancel.closest<HTMLElement>('[data-ppick-create]')!.hidden = true;
+      return;
+    }
+
+    const go = target?.closest<HTMLElement>('[data-ppick-create-go]');
+    if (go) {
+      const container = go.closest<HTMLElement>('[data-ppick]')!;
+      const box = container.querySelector<HTMLElement>('[data-ppick-create]')!;
+      const nameField = box.querySelector<HTMLInputElement>('[data-ppick-create-name]')!;
+      const emailField = box.querySelector<HTMLInputElement>('[data-ppick-create-email]')!;
+      const err = box.querySelector<HTMLElement>('[data-ppick-create-err]')!;
+      const fullName = nameField.value.trim();
+      const email = emailField.value.trim();
+      if (!fullName || !email) {
+        err.textContent = 'Name and email are both required.';
+        err.hidden = false;
+        return;
+      }
+      (go as HTMLButtonElement).disabled = true;
+      const body = new FormData();
+      body.set('full_name', fullName);
+      body.set('email', email);
+      fetch('/pipeline/people/create', { method: 'POST', body })
+        .then((r) => r.json())
+        .then((data) => {
+          (go as HTMLButtonElement).disabled = false;
+          if (data.error) {
+            err.textContent = data.error;
+            err.hidden = false;
+            return;
+          }
+          // So the next time this field's menu opens, the new person is in it too.
+          const script = container.querySelector<HTMLScriptElement>('[data-ppick-roster]')!;
+          const roster = rosterFor(container);
+          roster.push({ id: data.id, full_name: data.full_name });
+          script.textContent = JSON.stringify(roster);
+          selectPerson(container, data.id, data.full_name);
+          box.hidden = true;
+        })
+        .catch(() => {
+          (go as HTMLButtonElement).disabled = false;
+          err.textContent = 'Could not reach the server - try again.';
+          err.hidden = false;
+        });
+      return;
+    }
+
+    if (!target?.closest('[data-ppick]')) closeAllMenus();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAllMenus();
+  });
+</script>
