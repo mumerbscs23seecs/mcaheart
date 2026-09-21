@@ -69,7 +69,7 @@ const isActive = (item: NavItem) =>
             href="/pipeline" data-auth-home
           >Workflow</a>
           <form method="post" action="/logout" class="authbar__logout">
-            <button class="btn btn--light" type="submit">Log out</button>
+            <button class="authbar__logout-btn" type="submit">Log out</button>
           </form>
         </span>
       </div>
@@ -363,13 +363,30 @@ const isActive = (item: NavItem) =>
   .authbar__account .nav__link::after { background: var(--bg); }
   .authbar__account .nav__link.is-current { color: var(--bg); }
   .authbar__logout { display: flex; margin: 0; }
-  .authbar__logout button {
+  /* A ghost outline instead of a solid light button - a solid white fill
+     here nearly vanished against the pill's own background in dark mode
+     (--ink flips to an off-white there too), reading as two stacked boxes
+     instead of one pill. This scales its border/text with --bg the same
+     way the "Admin" link beside it does, and only goes solid on hover. */
+  .authbar__logout-btn {
     cursor: pointer;
     font-family: inherit;
-    padding-block: 0.42rem;
-    padding-inline: 1rem;
+    font-weight: 700;
+    padding-block: 0.4rem;
+    padding-inline: 0.9rem;
     font-size: 0.8rem;
     white-space: nowrap;
+    background: transparent;
+    color: var(--bg);
+    border: 1px solid color-mix(in srgb, var(--bg) 45%, transparent);
+    border-radius: 0;
+    transition: background 0.2s var(--ease), color 0.2s var(--ease), border-color 0.2s var(--ease);
+  }
+  .authbar__logout-btn:hover,
+  .authbar__logout-btn:focus-visible {
+    background: var(--bg);
+    color: var(--ink);
+    border-color: var(--bg);
   }
 
   /* --- Auth block (mobile drawer) --- */
