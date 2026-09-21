@@ -11,7 +11,7 @@ const q = (Astro.url.searchParams.get('q') ?? '').trim();
 
 let query = supabase
   .from('project_list')
-  .select('id,ref,title,phase,stage,stage_label,lead_name,current_journal,journals_tried,revision_round,days_in_stage,created_at,stage_changed_at,archived_at')
+  .select('id,ref,title,phase,stage,stage_label,lead_name,current_journal,journals_tried,revision_round,open_journal_attempt_id,days_in_stage,created_at,stage_changed_at,archived_at')
   .eq('phase', 'journal')
   .is('archived_at', null)
   .order('stage_changed_at', { ascending: false });

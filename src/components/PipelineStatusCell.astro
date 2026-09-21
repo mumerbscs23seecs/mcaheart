@@ -10,15 +10,40 @@ const { project: p, isAdmin } = Astro.props;
 // So a change made from a list drops the person back on that list, not the detail page.
 const returnTo = Astro.url.pathname + Astro.url.search;
 
-// Outcomes freeze an attempt (accept/reject/publish) - those need the specific
-// attempt record and stay on the detail page. Everything else, including
-// journal "submitted" (which just needs a journal name), is editable inline.
+// Conference outcomes still stay on the detail page - accepting/rejecting an
+// abstract needs a presenter, which this inline cell has no room for.
+// Journal outcomes are handled below instead of being blocked outright.
 const OUTCOME_CODES: Record<string, string[]> = {
   conference: ['accepted', 'rejected'],
-  journal: ['accepted', 'published', 'rejected_comments', 'rejected_no_comments'],
 };
 const blocked = OUTCOME_CODES[p.phase] ?? [];
-const options = stagesFor(p.phase).filter((s: any) => !blocked.includes(s.code));
+
+// Journal outcomes that freeze a specific submission attempt (needs
+// project_list.open_journal_attempt_id from the pipeline schema's
+// add-outcomes-to-dropdown.sql) instead of a plain stage change. 'published'
+// isn't here - once something is accepted, marking it published later is
+// just an ordinary stage update, no attempt to freeze.
+const JOURNAL_OUTCOME_ROUTE: Record<string, { outcome: string; rejectStage?: string }> = {
+  accepted: { outcome: 'accepted' },
+  rejected_comments: { outcome: 'rejected', rejectStage: 'rejected_comments' },
+  rejected_no_comments: { outcome: 'rejected', rejectStage: 'rejected_no_comments' },
+};
+const hasOpenAttempt = !!p.open_journal_attempt_id;
+const routeFor = (code: string) => (p.phase === 'journal' ? JOURNAL_OUTCOME_ROUTE[code] : undefined);
+
+// Admins see the full set (including outcomes, when there's an open attempt
+// to decide); members never see outcome codes - those aren't theirs to set,
+// and journal-phase requests aren't supported at all (the coordinator
+// handles Submissions directly).
+const adminOptions = stagesFor(p.phase).filter((s: any) => {
+  if (blocked.includes(s.code)) return false;
+  if (routeFor(s.code) && !hasOpenAttempt) return false;
+  return true;
+});
+const memberOptions = stagesFor(p.phase).filter(
+  (s: any) => !blocked.includes(s.code) && !routeFor(s.code),
+);
+const options = isAdmin ? adminOptions : memberOptions;
 
 // A handful of stage codes need one more field before they can apply - gate.astro
 // already knows how to use it (set_submitted_journal), this just surfaces the box.
@@ -29,8 +54,8 @@ const extraFor = (code: string) => EXTRA_FIELD[`${p.phase}:${code}`];
 
 const warn = p.days_in_stage != null && p.days_in_stage >= 21;
 // advance_stage covers idea / manuscript / journal; request_stage_change covers
-// conference / manuscript / journal. Outcomes (accept/reject/publish) stay on
-// the detail page - they need a specific attempt record, not just a stage code.
+// conference / manuscript / journal. Outcomes needing an attempt (above) route
+// through record_journal_outcome / stay on the detail page instead.
 const phaseOK = isAdmin
   ? ['idea', 'manuscript', 'journal'].includes(p.phase)
   : ['conference', 'manuscript', 'journal'].includes(p.phase);
@@ -42,24 +67,46 @@ const editable =
   <span class:list={['pl-status', warn && 'pl-status--warn']}>{p.stage_label}</span>
 ) : isAdmin ? (
   <form method="post" action={`/pipeline/projects/${p.id}/gate`} class="pl-status-form" data-status-form>
-    <input type="hidden" name="gate" value="stage" />
+    <input type="hidden" name="gate" value="stage" data-gate-input />
     <input type="hidden" name="return" value={returnTo} />
     <select class="pl-status" name="stage" title={p.stage_label} aria-label={`Status for ${p.title ?? p.ref}`} data-status-select>
-      {options.map((s: any) => (
-        <option value={s.code} selected={s.code === p.stage} data-extra-field={extraFor(s.code)?.field ?? ''}>{s.label}</option>
-      ))}
+      {options.map((s: any) => {
+        const route = routeFor(s.code);
+        return (
+          <option
+            value={s.code}
+            selected={s.code === p.stage}
+            data-extra-field={extraFor(s.code)?.field ?? ''}
+            data-outcome={route?.outcome ?? ''}
+            data-reject-stage={route?.rejectStage ?? ''}
+            data-attempt={route ? p.open_journal_attempt_id : ''}
+          >{s.label}</option>
+        );
+      })}
     </select>
     {options.map((s: any) => {
       const extra = extraFor(s.code);
-      // Already sitting on this stage - show the box open so the field can be
-      // corrected without needing to re-trigger a change event first.
+      const route = routeFor(s.code);
       const isCurrent = s.code === p.stage;
-      return extra && (
-        <span class="pl-status-extra" data-status-extra={s.code} hidden={!isCurrent}>
-          <input type="text" name={extra.field} placeholder={extra.placeholder} value={isCurrent ? (p.current_journal ?? '') : ''} />
-          <button type="submit" class="pl-status-extra__go">Update</button>
-        </span>
-      );
+      if (extra) {
+        // Already sitting on this stage - show the box open so the field can
+        // be corrected without needing to re-trigger a change event first.
+        return (
+          <span class="pl-status-extra" data-status-extra={s.code} hidden={!isCurrent}>
+            <input type="text" name={extra.field} placeholder={extra.placeholder} value={isCurrent ? (p.current_journal ?? '') : ''} />
+            <button type="submit" class="pl-status-extra__go">Update</button>
+          </span>
+        );
+      }
+      if (route) {
+        return (
+          <span class="pl-status-extra" data-status-extra={s.code} hidden>
+            <span class="pl-status-extra__label">Confirm &ldquo;{s.label}&rdquo;?</span>
+            <button type="submit" class="pl-status-extra__go pl-status-extra__go--confirm">Confirm</button>
+          </span>
+        );
+      }
+      return null;
     })}
   </form>
 ) : (
@@ -90,7 +137,7 @@ const editable =
      right edges always land in exactly the same place instead of each
      sizing to its own content. */
   .pl-status-form { display: grid; gap: 6px; width: 250px; }
-  .pl-status-extra { display: flex; gap: 6px; width: 100%; box-sizing: border-box; }
+  .pl-status-extra { display: flex; align-items: center; gap: 6px; width: 100%; box-sizing: border-box; }
   .pl-status-extra[hidden] { display: none; }
   .pl-status-extra input {
     flex: 1;
@@ -100,6 +147,12 @@ const editable =
     border-radius: 4px;
     font: inherit;
     font-size: 0.85rem;
+  }
+  .pl-status-extra__label {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.8rem;
+    color: var(--text, #1e293b);
   }
   .pl-status-extra__go {
     padding: 6px 10px;
@@ -111,6 +164,10 @@ const editable =
     cursor: pointer;
     white-space: nowrap;
   }
+  .pl-status-extra__go--confirm {
+    border-color: var(--pl-accent, var(--ink));
+    background: var(--pl-accent, var(--ink));
+  }
 </style>
 
 <script>
@@ -118,6 +175,8 @@ const editable =
   // instance on the page). Plain "advance the stage" selections still submit
   // immediately; a selection that needs one more field (data-extra-field)
   // reveals that field's box instead and waits for its own submit button.
+  // A journal outcome (data-outcome) swaps the form over to
+  // gate=journal-outcome first, so its Confirm button posts the right thing.
   document.addEventListener('change', (e) => {
     const select = (e.target as HTMLElement | null)?.closest<HTMLSelectElement>('select[data-status-select]');
     if (!select) return;
@@ -125,8 +184,36 @@ const editable =
     if (!form) return;
 
     form.querySelectorAll<HTMLElement>('[data-status-extra]').forEach((box) => { box.hidden = true; });
+    // Clear any outcome fields a previous selection added, before maybe adding new ones.
+    form.querySelectorAll<HTMLElement>('[data-outcome-field]').forEach((el) => el.remove());
 
     const chosen = select.selectedOptions[0];
+    const gateInput = form.querySelector<HTMLInputElement>('[data-gate-input]');
+    const outcome = chosen?.dataset.outcome;
+
+    if (outcome && gateInput) {
+      gateInput.value = 'journal-outcome';
+      const addHidden = (name: string, value: string) => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        input.dataset.outcomeField = '1';
+        form.appendChild(input);
+      };
+      addHidden('outcome', outcome);
+      addHidden('attempt', chosen.dataset.attempt ?? '');
+      if (chosen.dataset.rejectStage) addHidden('reject_stage', chosen.dataset.rejectStage);
+
+      const box = form.querySelector<HTMLElement>(`[data-status-extra="${chosen.value}"]`);
+      if (box) {
+        box.hidden = false;
+        return; // wait for the box's own Confirm button
+      }
+    } else if (gateInput) {
+      gateInput.value = 'stage';
+    }
+
     const extraField = chosen?.dataset.extraField;
     if (extraField) {
       const box = form.querySelector<HTMLElement>(`[data-status-extra="${chosen.value}"]`);

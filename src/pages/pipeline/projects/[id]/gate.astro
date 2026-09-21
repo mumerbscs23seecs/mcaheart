@@ -86,7 +86,13 @@ if (gate === '1') {
   const attempt = String(form.get('attempt') ?? '');
   const outcome = String(form.get('outcome') ?? '');
   const nextJournal = String(form.get('next_journal') ?? '').trim() || null;
-  rpc = { fn: 'record_journal_outcome', args: { p_attempt: attempt, p_outcome: outcome, p_next_journal: nextJournal } };
+  // Which rejected-* stage label to land on - only meaningful when outcome
+  // is 'rejected' with no resubmission; the RPC ignores it otherwise.
+  const rejectStage = String(form.get('reject_stage') ?? '').trim() || undefined;
+  rpc = {
+    fn: 'record_journal_outcome',
+    args: { p_attempt: attempt, p_outcome: outcome, p_next_journal: nextJournal, p_reject_stage: rejectStage },
+  };
   const template: TransitionTemplate =
     outcome === 'accepted' ? 'journal_accepted' : outcome === 'withdrawn' ? 'journal_withdrawn' : 'journal_rejected';
   mail = { template, venue: p0.current_journal ?? undefined, to: [p0.lead_id, p0.analyst_id] };
