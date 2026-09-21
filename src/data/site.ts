@@ -11,6 +11,8 @@ export const site = {
     'MCA Heart is a cardiovascular research collective led by M Chadi Alraies, MD MPH - over 300 researchers publishing, presenting and teaching at the frontier of cardiology.',
   url: 'https://www.mcaheart.com',
   youtube: 'https://www.youtube.com/channel/UCR1U9EROhLsdeuCB4hlAw4w',
+  instagram: 'https://www.instagram.com/mca_heart_lab/',
+  x: 'https://x.com/mca_heart',
 } as const;
 
 export type NavLink = { label: string; href: string };
