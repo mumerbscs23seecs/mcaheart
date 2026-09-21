@@ -11,6 +11,39 @@ if (person.role !== 'admin') return Astro.redirect('/pipeline/conferences', 302)
 const { data: conf } = await supabase.from('conferences').select('*').eq('id', id).maybeSingle();
 if (!conf) return Astro.redirect('/pipeline/conferences', 302);
 
+const STUDY_TYPES = ['DMC PCI', 'NIS', 'TriNetX', 'SRMA', 'Other'] as const;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  if (String(form.get('action') ?? '') === 'add-paper') {
+    const title = String(form.get('title') ?? '').trim();
+    const studyType = String(form.get('study_type') ?? '');
+    const leadId = String(form.get('lead_id') ?? '').trim() || null;
+    const analystId = String(form.get('analyst_id') ?? '').trim() || null;
+    if (!title || !studyType) {
+      return Astro.redirect(`/pipeline/conferences/${id}?err=${encodeURIComponent('Title and study type are both required.')}`);
+    }
+    const { error } = await supabase.rpc('create_project_in_conference', {
+      p_title: title,
+      p_study_type: studyType,
+      p_conference_id: id,
+      p_lead_id: leadId,
+      p_analyst_id: analystId,
+    });
+    if (error) {
+      return Astro.redirect(`/pipeline/conferences/${id}?err=${encodeURIComponent(error.message)}`);
+    }
+    return Astro.redirect(`/pipeline/conferences/${id}?ok=${encodeURIComponent(`Added "${title}".`)}`);
+  }
+}
+
+// For the "add a paper manually" form's lead/analyst pickers.
+const { data: people } = await supabase
+  .from('people')
+  .select('id,full_name')
+  .eq('active', true)
+  .order('full_name');
+
 const { data: score } = await supabase
   .from('conference_scorecard')
   .select('*')
@@ -50,6 +83,42 @@ const cap = (x: string | null) => (x ? x[0].toUpperCase() + x.slice(1) : 'Pendin
     <div><b>{s.rejected}</b><span>Rejected</span></div>
     <div><b>{s.accept_pct != null ? `${s.accept_pct}%` : '-'}</b><span>Acceptance</span></div>
   </div>
+
+  <details class="pl-inline-details" style="margin:14px 0 0">
+    <summary>+ Add a paper manually</summary>
+    <p class="pl-muted" style="padding:10px 0 0; font-size:.85rem">
+      Skips idea submission entirely - creates the project straight into this conference, "Abstract being written".
+    </p>
+    <form method="post" class="pl-mini pl-mini--col" style="margin-top:10px">
+      <input type="hidden" name="action" value="add-paper" />
+      <label class="pl-field">
+        <span>Title</span>
+        <input name="title" required placeholder="Paper title" />
+      </label>
+      <label class="pl-field">
+        <span>Study type</span>
+        <select name="study_type" required>
+          <option value="" selected disabled>Choose one</option>
+          {STUDY_TYPES.map((t) => <option value={t}>{t}</option>)}
+        </select>
+      </label>
+      <label class="pl-field">
+        <span>Lead (optional)</span>
+        <select name="lead_id">
+          <option value="">Unassigned</option>
+          {(people ?? []).map((p: any) => <option value={p.id}>{p.full_name}</option>)}
+        </select>
+      </label>
+      <label class="pl-field">
+        <span>Analyst (optional)</span>
+        <select name="analyst_id">
+          <option value="">Unassigned</option>
+          {(people ?? []).map((p: any) => <option value={p.id}>{p.full_name}</option>)}
+        </select>
+      </label>
+      <button class="pl-btn" type="submit">Add paper</button>
+    </form>
+  </details>
 
   {(!attempts || attempts.length === 0) && (
     <p class="pl-muted" style="margin-top:20px">No abstract outcomes recorded for this conference.</p>
