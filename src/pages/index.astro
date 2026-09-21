@@ -56,25 +56,6 @@ const DIRECTOR_ICONS: Record<string, string> = {
     </div>
   </section>
 
-  {/* ------------------------------------------------------------ Societies */}
-  <section class="section--tight societies">
-    <div class="shell shell--wide">
-      <p class="societies__label">Our work has been presented at</p>
-      <ul class="societies__list">
-        {societies.map((s) => (
-          <li class="societies__item">
-            <a href={s.url} target="_blank" rel="noopener noreferrer" aria-label={`${s.name} - view M Chadi Alraies' work indexed here`}>
-              <img class="societies__logo--light" src={s.logo} alt={s.name} loading="lazy" decoding="async" height="60" />
-              {s.logoDark && (
-                <img class="societies__logo--dark" src={s.logoDark} alt={s.name} loading="lazy" decoding="async" height="60" />
-              )}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
-  </section>
-
   {/* --------------------------------------------------------------- Director */}
   <section class="section director">
     <div class="shell shell--wide director__grid">
@@ -121,6 +102,25 @@ const DIRECTOR_ICONS: Record<string, string> = {
           ))}
         </ul>
       </div>
+    </div>
+  </section>
+
+  {/* ------------------------------------------------------------ Societies */}
+  <section class="section--tight societies">
+    <div class="shell shell--wide">
+      <p class="societies__label">Our work has been presented at</p>
+      <ul class="societies__list">
+        {societies.map((s) => (
+          <li class="societies__item">
+            <a href={s.url} target="_blank" rel="noopener noreferrer" aria-label={`${s.name} - view M Chadi Alraies' work indexed here`}>
+              <img class="societies__logo--light" src={s.logo} alt={s.name} loading="lazy" decoding="async" height="60" />
+              {s.logoDark && (
+                <img class="societies__logo--dark" src={s.logoDark} alt={s.name} loading="lazy" decoding="async" height="60" />
+              )}
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   </section>
 

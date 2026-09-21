@@ -2,7 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import LayeredScrollHero from '../components/LayeredScrollHero.astro';
 import CTABanner from '../components/CTABanner.astro';
-import { testimonials, missionVision, director, societies } from '../data/site';
+import { testimonials, missionVision, societies } from '../data/site';
 ---
 
 <BaseLayout
@@ -10,41 +10,6 @@ import { testimonials, missionVision, director, societies } from '../data/site';
   description="Over 300 cardiology researchers led by M Chadi Alraies, MD MPH - 75+ manuscripts and 150+ abstracts a year at SCAI, AHA, TCT and ACC."
 >
   <LayeredScrollHero title="MCA Heart Research Lab" />
-
-  {/* ----------------------------------------------------------------- About */}
-  <section class="section about" id="about">
-    <div class="shell shell--wide about__grid">
-      <figure class="about__portrait" data-reveal>
-        {/* The photo itself lives in LayeredScrollHero, traveling here from
-            the hero as the visitor scrolls - this reserves its layout space
-            (same aspect ratio) so nothing jumps once it docks. */}
-        <div class="about__portrait-slot" id="aboutPortraitSlot" aria-hidden="true"></div>
-        <figcaption>
-          {director.name}<span>{director.credentials}</span>
-        </figcaption>
-      </figure>
-
-      <div class="about__copy" data-reveal style="--reveal-delay:120ms">
-        <h2 class="about__title">
-          Excellence and productivity, at scale
-        </h2>
-        <div class="prose about__body">
-          <p>
-            Welcome to the MCA Heart Research Lab, a thriving hub of innovation and
-            collaboration in cardiovascular research. Led by M Chadi Alraies, MD MPH and
-            supported by two research coordinators, our group unites over 300
-            dedicated cardiology researchers.
-          </p>
-          <p>
-            Annually, our research fellows publish 75+ manuscripts in top journals
-            and present 150+ abstracts at leading conferences including SCAI, AHA,
-            TCT and ACC. Through diverse research opportunities, fellows contribute
-            to cardiology&rsquo;s progress while advancing their careers.
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
 
   {/* --------------------------------------------------------- Mission/Vision */}
   <section class="section--tight mv">
@@ -193,59 +158,6 @@ import { testimonials, missionVision, director, societies } from '../data/site';
 </BaseLayout>
 
 <style>
-  /* ----------------------------------------------------------------- About */
-  .about__grid {
-    display: grid;
-    grid-template-columns: 0.8fr 1.2fr;
-    gap: clamp(2rem, 1rem + 4vw, 5rem);
-    align-items: start;
-  }
-
-  .about__portrait {
-    position: relative;
-    padding: 0.5rem 0.5rem 0;
-    background: var(--surface);
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-  }
-  .about__portrait img {
-    width: 100%; height: auto;
-    border-radius: calc(var(--radius-lg) - 6px);
-  }
-  /* Reserves the photo's space - the actual image is the traveling
-     portrait from LayeredScrollHero, docking here as the visitor scrolls
-     past the hero (or, with reduced motion / on mobile, rendered directly
-     inside this slot as a plain static image). */
-  .about__portrait-slot {
-    width: 100%;
-    aspect-ratio: 800 / 950;
-    border-radius: calc(var(--radius-lg) - 6px);
-  }
-  .about__portrait figcaption {
-    display: grid;
-    gap: 0.2rem;
-    padding: var(--space-s) 0.2rem 0.3rem;
-    font-family: var(--font-serif);
-    font-size: var(--step-1);
-  }
-  .about__portrait figcaption span {
-    font-family: var(--font-sans);
-    font-size: var(--step--1);
-    font-weight: 700;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: var(--blue);
-  }
-
-  .about__title { font-size: var(--step-3); margin-top: var(--space-s); max-width: 16ch; }
-  .about__body { margin-top: var(--space-m); }
-
-  @media (max-width: 880px) {
-    .about__grid { grid-template-columns: 1fr; }
-    .about__portrait { max-width: 400px; }
-  }
-
   /* ------------------------------------------------------- Mission / Vision */
   .mv__grid {
     display: grid;
