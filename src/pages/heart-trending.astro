@@ -16,18 +16,29 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
 
 <BaseLayout
   title="Heart Trending"
-  description="Heart Trending is the video arm of MCA Heart - interviews with renowned cardiologists, journal reviews, congress wrap-ups and webinars."
+  description="MCA Heart Trending is a cardiovascular education platform led by Dr. M. Chadi Alraies, featuring conversations with cardiologists, researchers, and other experts on emerging evidence, clinical practice, and important developments in cardiovascular medicine."
   transparentHeader
 >
   <PageHero
     title="Heart Trending"
-    subtitle="A collaborative educational platform dedicated to advancing cardiovascular education through critical appraisal, discussion, and exploration of emerging evidence in cardiovascular medicine."
+    subtitle="Advancing cardiovascular education through conversation and evidence. MCA Heart Trending is a cardiovascular education platform led by Dr. M. Chadi Alraies, featuring conversations with cardiologists, researchers, and other experts on emerging evidence, clinical practice, and important developments in cardiovascular medicine."
     image="/assets/trending/hero-bg.webp"
   >
     <a class="btn phero__cta" href={site.youtube} target="_blank" rel="noopener noreferrer">
       Subscribe on YouTube <span class="btn__arrow" aria-hidden="true">&rarr;</span>
     </a>
   </PageHero>
+
+  {/* -------------------------------------------------------------- Intro */}
+  <section class="section--tight trending-intro">
+    <div class="shell shell--narrow">
+      <p class="prose center">
+        Through expert interviews, research discussions, and educational webinars, we explore new
+        ideas, examine the evidence behind evolving practices, and share insights that help advance
+        cardiovascular knowledge and patient care.
+      </p>
+    </div>
+  </section>
 
   {/* ------------------------------------------------------------- Just in */}
   {latestVideos.length > 0 && (

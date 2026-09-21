@@ -239,7 +239,7 @@ export const education = {
     cadence: 'New episodes every other Saturday',
     quote:
       'Join our expert team as they review the latest published research articles, delivering insights and practical implications for cardiology.',
-    body: 'Through our dedicated video series, including the flagship Heart of the Matter, we provide in-depth reviews of impactful cardiology research articles. Join us in exploring the science shaping the future of heart health.',
+    body: 'The Heart of the Matter is an educational series led by residents and medical students, focused on the latest randomized controlled trials and emerging evidence in cardiovascular medicine. Each episode takes a closer look at the research behind important developments in cardiology, exploring study design, patient populations, interventions, outcomes, statistical findings, limitations, and clinical implications. The series encourages participants to look beyond the headline results, critically evaluate the evidence, and develop a deeper understanding of how new research may influence cardiovascular practice.',
   },
   webinar: {
     name: 'Monthly Webinar Series',
