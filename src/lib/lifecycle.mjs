@@ -27,11 +27,12 @@ export const STAGES = [
   // intersected with what the Submissions sheet already tracks. Anything finer
   // (reviewer invited / reviewer accepted) is publisher-side and cannot be kept
   // accurate by hand - read it in SNAPP, do not retype it here.
-  ['journal',    'submitted',     'Submitted - technical check'],
-  ['journal',    'with_editor',   'With editor'],
+  ['journal',    'awaited',       'Submission awaited'],
+  ['journal',    'submitted',     'Submitted/With editor'],
   ['journal',    'under_review',  'Under review'],
   ['journal',    'revision_req',  'Revision requested'],
   ['journal',    'revision_review','Revision under review'],
+  ['journal',    'halted',        'Temporarily halted'],
   ['journal',    'rejected_comments','Rejected with comments'],
   ['journal',    'rejected_no_comments','Rejected with no comments'],
   ['journal',    'accepted',      'Accepted'],
@@ -176,7 +177,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   a.equal(flags({ ...p, parked: true }, new Date('2026-09-05')).overdue, false, 'parked never chases');
 
   a.equal(stagesFor('manuscript').length, 6);
-  a.equal(stagesFor('journal').length, 9);
+  a.equal(stagesFor('journal').length, 10);
   a.equal(nextRevisionRound({ revision_round: 1 }, 'revision_req'), 2, 'round increments on request');
   a.equal(nextRevisionRound({ revision_round: 1 }, 'revision_review'), 1, 'and only then');
   a.equal(refOf(142), 'MCA-0142');
