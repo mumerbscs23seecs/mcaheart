@@ -373,6 +373,9 @@ const DIRECTOR_ICONS: Record<string, string> = {
   .societies__item a:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
 
   /* ------------------------------------------------------------ Director */
+  /* The hero already carries its own bottom padding, so stacking the
+     section default on top of it left a big empty gap before the photo. */
+  .director { padding-top: var(--space-l); }
   .director__grid {
     display: grid;
     grid-template-columns: 0.8fr 1.2fr;
