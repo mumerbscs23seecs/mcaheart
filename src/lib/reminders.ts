@@ -53,7 +53,7 @@ function digestHtml(items: Submission[]): string {
 
   return `<div style="background:#f8fafc;padding:28px">
   <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid rgba(43,57,144,.12);border-radius:12px;padding:28px">
-    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart · Pipeline</p>
+    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart · Workflow</p>
     <h1 style="margin:0 0 6px;color:#1e293b;font:600 20px/1.3 Georgia,serif">${items.length} submission${items.length === 1 ? '' : 's'} need a nudge</h1>
     <p style="margin:0 0 18px;color:#64748b;font:14px/1.6 Arial,sans-serif">
       No recorded activity in over a week and still open. Review in the

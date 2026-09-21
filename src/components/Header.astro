@@ -66,7 +66,7 @@ const isActive = (item: NavItem) =>
           <a
             class:list={['nav__link', (matches('/pipeline') || matches('/admin')) && 'is-current']}
             href="/pipeline" data-auth-home
-          >Pipeline</a>
+          >Workflow</a>
           <form method="post" action="/logout" class="authbar__logout">
             <button class="btn btn--light" type="submit">Log out</button>
           </form>
@@ -118,7 +118,7 @@ const isActive = (item: NavItem) =>
         <a
           class:list={['drawer__link', (matches('/pipeline') || matches('/admin')) && 'is-current']}
           href="/pipeline" data-auth-home
-        >Pipeline</a>
+        >Workflow</a>
         <form method="post" action="/logout">
           <button class="drawer__link drawer__logout" type="submit">Log out</button>
         </form>

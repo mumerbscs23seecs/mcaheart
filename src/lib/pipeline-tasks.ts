@@ -8,10 +8,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Person } from './pipeline-auth';
 import { scopeProjects } from './pipeline-scope';
 import { stagesFor } from './lifecycle.mjs';
-import { listIdeas } from './ideas';
 import { listApplications } from './applications';
 
-export type TaskKind = 'approval' | 'idea' | 'application' | 'stale' | 'overdue' | 'declined';
+export type TaskKind = 'approval' | 'application' | 'stale' | 'overdue' | 'declined';
 
 export interface Task {
   id: string;
@@ -67,20 +66,7 @@ async function adminTasks(supabase: SupabaseClient): Promise<Task[]> {
     }
   }
 
-  // 2. new research ideas awaiting review
-  for (const i of listIdeas().filter((x) => x.status === 'pending')) {
-    tasks.push({
-      id: 'idea-' + i.id,
-      kind: 'idea',
-      title: `New idea to review - ${i.title}`,
-      detail: `Submitted by ${i.leadName}`,
-      href: '/admin/ideas',
-      cta: 'Open ideas',
-      when: new Date(i.submittedAt).toISOString(),
-    });
-  }
-
-  // 3. new lab recruitment applications awaiting review
+  // 2. new lab recruitment applications awaiting review
   for (const a of listApplications().filter((x) => x.status === 'pending')) {
     tasks.push({
       id: 'app-' + a.id,

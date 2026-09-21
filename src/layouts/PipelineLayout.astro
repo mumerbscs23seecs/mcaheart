@@ -75,7 +75,7 @@ const tabs: Tab[] = [
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <ThemeInit />
-    <title>{title} · MCA Research Pipeline</title>
+    <title>{title} · MCA Research Workflow</title>
     <meta name="robots" content="noindex" />
     <link rel="icon" href="/favicon.png" type="image/png" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
@@ -91,7 +91,7 @@ const tabs: Tab[] = [
   <body class="pl-body">
     <AppBar active="pipeline" name={person.full_name} role={person.role} email={person.email} />
 
-    <nav class="pl-tabs" aria-label="Pipeline sections">
+    <nav class="pl-tabs" aria-label="Workflow sections">
       <div class="pl-tabs__row">
         {tabs.map((t) => (
           <a class:list={['pl-tab', active === t.key && 'is-active']} href={t.href}>
