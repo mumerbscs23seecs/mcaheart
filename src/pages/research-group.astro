@@ -180,22 +180,26 @@ import { testimonials, missionVision, societies } from '../data/site';
     border-radius: var(--radius);
   }
 
-  /* The supplied artwork is flat vector stock; a small tinted plate keeps it
-     as a supporting mark rather than a competing background. */
+  /* The supplied artwork is flat vector stock drawn on a solid white plate -
+     it isn't designed to sit directly on a dark ground, and multiply-blending
+     it onto one (mix-blend-mode:multiply) crushed its own reds/blues toward
+     black instead of hiding the white. Pin the plate itself to a fixed light
+     tint in both themes (like a photo in its own mat) instead of trying to
+     "invert" full-color stock art - the frame around it still reads as part
+     of the (theme-aware) card. */
   .mv__figure {
     width: clamp(96px, 70px + 6vw, 148px);
     aspect-ratio: 1;
     overflow: hidden;
     border-radius: 0;
-    background: var(--bg-tint);
+    background: #f3f1ec;
     border: 1px solid var(--border-soft);
   }
   .mv__figure img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    mix-blend-mode: multiply;
-    filter: saturate(0.75) contrast(0.95);
+    filter: saturate(0.85) contrast(0.97);
   }
 
   .mv__kind {
