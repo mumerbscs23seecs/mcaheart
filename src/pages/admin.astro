@@ -213,9 +213,7 @@ const xLabelIdx =
     {/* ---------------------------------------------------------- Header */}
     <header class="adash-head">
       <div class="adash-head__intro">
-        <p class="adash-head__eyebrow">Welcome back, {me.name.split(/\s+/)[0]}!</p>
         <h1 class="adash-head__title">Research Submissions<br />Dashboard</h1>
-        <p class="adash-head__tag">Track progress. Meet deadlines. Advance science.</p>
       </div>
 
       <div class="adash-head__tools">
@@ -495,16 +493,14 @@ const xLabelIdx =
     align-items: flex-start;
     justify-content: space-between;
   }
-  .adash-head__eyebrow { margin: 0; color: var(--adash-muted); font-size: 0.9rem; }
   .adash-head__title {
-    margin: 2px 0 0;
+    margin: 0;
     font-size: clamp(1.7rem, 1.3rem + 1.6vw, 2.35rem);
     line-height: 1.08;
     font-weight: 800;
     letter-spacing: -0.02em;
     color: var(--adash-ink);
   }
-  .adash-head__tag { margin: 8px 0 0; color: var(--adash-muted); font-size: 0.95rem; }
 
   .adash-head__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
   .adash-search {
