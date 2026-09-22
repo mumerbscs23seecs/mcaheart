@@ -1,0 +1,372 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import '../../styles/admin.css';
+import { currentUser } from '../../lib/auth';
+import { getPipelineSession, bridgeAdminSession } from '../../lib/pipeline-auth';
+import { listIdeas, getIdea, decideIdea } from '../../lib/ideas';
+import { deliverIdeaDecision, renderIdeaDecisionEmail } from '../../lib/idea-mailer';
+import { CONFERENCE_LABELS, COMMITMENT_LABELS, type Conference } from '../../lib/idea-schema';
+import type { IdeaRecord } from '../../lib/ideas';
+
+export const prerender = false;
+
+const me = currentUser(Astro.cookies);
+if (!me) return Astro.redirect('/login', 302);
+if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+// An accepted idea becomes a real Supabase project - bridge a session the
+// same way /admin's dashboard does, transparently, from the in-memory login.
+let session = await getPipelineSession(Astro.request, Astro.cookies);
+session = session ?? (await bridgeAdminSession(Astro.request, Astro.cookies));
+const supabase = session?.supabase ?? null;
+
+/** idea.researchType/databases -> the pipeline's fixed study_type enum. */
+function studyTypeFor(idea: IdeaRecord): string {
+  if (idea.researchType === 'Meta-analysis') return 'SRMA';
+  const dbs = idea.databases ?? [];
+  if (dbs.includes('DMC PCI Database')) return 'DMC PCI';
+  if (dbs.includes('National Inpatient Sample (NIS)')) return 'NIS';
+  if (dbs.includes('TriNetX')) return 'TriNetX';
+  return 'Other';
+}
+
+type Flash = { tone: 'ok' | 'error'; text: string };
+type Decision = 'approved' | 'withheld' | 'declined';
+type Preview = {
+  ideaId: string;
+  decision: Decision;
+  note: string;
+  to: string;
+  subject: string;
+  html: string;
+};
+let flash: Flash | null = null;
+let preview: Preview | null = null;
+
+/** Short pipeline "target" label for an approved idea. */
+const targetFor = (c: Conference) =>
+  c === 'flexible' ? 'Conference - flexible' : c === 'none' ? 'Manuscript only' : c;
+
+const decisionFromAction = (action: string): Decision =>
+  action.includes('approve') ? 'approved' : action.includes('withhold') ? 'withheld' : 'declined';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  const ideaId = String(form.get('ideaId') ?? '');
+  const note = String(form.get('note') ?? '');
+  const decision: Decision =
+    (['approved', 'withheld', 'declined'] as const).find((d) => d === form.get('decision')) ??
+    decisionFromAction(action);
+
+  // --- Phase 1: build the preview -------------------------------------------
+  if (action === 'preview-approve' || action === 'preview-withhold' || action === 'preview-decline') {
+    const idea = getIdea(ideaId);
+    if (!idea) flash = { tone: 'error', text: 'Idea not found.' };
+    else if (idea.status !== 'pending') flash = { tone: 'error', text: `That idea was already ${idea.status}.` };
+    else {
+      const { subject, html } = renderIdeaDecisionEmail({
+        to: idea.leadEmail,
+        leadName: idea.leadName,
+        title: idea.title,
+        decision,
+        note: note.trim() || null,
+      });
+      preview = { ideaId, decision, note, to: idea.leadEmail, subject, html };
+    }
+  }
+
+  // --- Phase 2: confirmed - record + send --------------------------------
+  if (action === 'confirm') {
+    const result = decideIdea(ideaId, decision, me.name, note);
+    if (!result.ok || !result.idea) {
+      flash = { tone: 'error', text: result.error ?? 'Could not record that decision.' };
+    } else {
+      const idea = result.idea;
+      let pipelineNote = '';
+      if (decision === 'approved') {
+        if (!supabase) {
+          pipelineNote = ' (could not reach the pipeline database - add the project by hand)';
+        } else {
+          const { data: person } = await supabase
+            .from('people')
+            .select('id')
+            .ilike('email', idea.leadEmail)
+            .maybeSingle();
+          const { error: createErr } = await supabase.rpc('create_project_from_idea', {
+            p_title: idea.title,
+            p_study_type: studyTypeFor(idea),
+            p_lead_id: person?.id ?? null,
+            p_submitter_label: `${idea.leadName} <${idea.leadEmail}>`,
+          });
+          pipelineNote = createErr
+            ? ` (pipeline project not created: ${createErr.message})`
+            : person?.id
+              ? ' - added to the pipeline as the lead'
+              : ' - added to the pipeline, but no lead was assigned (no pipeline account for that email yet)';
+        }
+      }
+      let emailed = true;
+      try {
+        await deliverIdeaDecision({
+          to: idea.leadEmail,
+          leadName: idea.leadName,
+          title: idea.title,
+          decision,
+          note: idea.decisionNote,
+        });
+      } catch (err) {
+        emailed = false;
+        console.error('[ideas] decision email failed:', err);
+      }
+      const verb = decision === 'approved' ? 'Approved' : decision === 'withheld' ? 'Withheld' : 'Declined';
+      flash = emailed
+        ? {
+            tone: 'ok',
+            text: `${verb}${decision === 'approved' ? pipelineNote : ''} - email sent to ${idea.leadEmail}.`,
+          }
+        : {
+            tone: 'error',
+            text: `${verb} and recorded${decision === 'approved' ? pipelineNote : ''}, but the email to ${idea.leadEmail} could not be sent.`,
+          };
+    }
+  }
+}
+
+const ideas = listIdeas();
+const pending = ideas.filter((i) => i.status === 'pending').length;
+
+const fmtDate = (t: number | null) =>
+  t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
+const ago = (t: number) => {
+  const d = Math.floor((Date.now() - t) / 86_400_000);
+  if (d === 0) return 'today';
+  if (d === 1) return 'yesterday';
+  return `${d} days ago`;
+};
+
+/** Field-by-field breakdown for the expanded view. */
+const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
+  ['Lead investigator', i.leadName],
+  ['Email', i.leadEmail],
+  ['Contact number', i.contactNumber],
+  ['Type of research', i.researchType],
+  ...(i.researchType === 'Database'
+    ? ([['Proposed database(s)', (i.databases ?? []).join(', ')]] as Array<[string, string]>)
+    : []),
+  ['Population (P)', i.population],
+  ['Intervention / exposure (I)', i.intervention],
+  ['Control / comparison (C)', i.comparison],
+  ['Outcomes (O)', i.outcomes],
+  ['Rationale', i.rationale],
+  ...((i.researchType === 'Database'
+    ? [
+        ['Proposed study design', i.studyDesign],
+        ['Prior published studies', i.priorStudies],
+        ['Latest study on topic', i.latestStudy],
+      ]
+    : [
+        ['Previous meta-analysis conducted', i.previousMetaDate],
+        ['New studies planned for inclusion', i.newStudies],
+        ['Approx. sample-size increase', i.sampleSizeIncrease],
+      ]) as Array<[string, string]>),
+  ['Target conference', CONFERENCE_LABELS[i.conference]],
+  ['Manuscript commitment', COMMITMENT_LABELS[i.researchType][i.commitment]],
+  ['Supporting document', i.attachmentName ?? '- none -'],
+];
+---
+
+<AppLayout title="Ideas" heading="Research ideas" user={me} active="ideas">
+  <div class="adm">
+    {flash && (
+      <div class:list={['adm-flash', `adm-flash--${flash.tone}`]} role="status">
+        <p>{flash.text}</p>
+      </div>
+    )}
+
+    {preview ? (
+      <div class="mailprev">
+        <h2 class="mailprev__title">
+          Preview - {preview.decision === 'approved' ? 'approval' : preview.decision === 'withheld' ? 'hold' : 'decline'} email
+        </h2>
+        <dl class="mailprev__head">
+          <div><dt>To</dt><dd>{preview.to}</dd></div>
+          <div><dt>Subject</dt><dd>{preview.subject}</dd></div>
+        </dl>
+
+        <iframe class="mailprev__frame" srcdoc={preview.html} title="Email preview" sandbox=""></iframe>
+
+        <form method="post" class="mailprev__form">
+          <input type="hidden" name="ideaId" value={preview.ideaId} />
+          <input type="hidden" name="decision" value={preview.decision} />
+          <label class="idea__notelabel" for="prev-note">Comments to the submitter</label>
+          <textarea class="idea__note" id="prev-note" name="note" rows="3"
+            placeholder="Add or edit comments, then refresh the preview.">{preview.note}</textarea>
+          <div class="mailprev__actions">
+            <button class="adm-btn" type="submit"
+              name="action" value={`preview-${preview.decision === 'approved' ? 'approve' : preview.decision === 'withheld' ? 'withhold' : 'decline'}`}>
+              Refresh preview
+            </button>
+            <button
+              class:list={['btn', preview.decision === 'approved' ? 'idea__approve' : preview.decision === 'withheld' ? 'idea__withhold' : 'btn--red']}
+              type="submit" name="action" value="confirm">
+              Send email &amp; {preview.decision === 'approved' ? 'approve' : preview.decision === 'withheld' ? 'withhold' : 'decline'}
+            </button>
+            <a class="mailprev__cancel" href="/admin/ideas">Cancel</a>
+          </div>
+        </form>
+      </div>
+    ) : (
+      <>
+    <p class="ideas__count">
+      <strong>{pending}</strong> awaiting review · {ideas.length} total
+    </p>
+
+    {ideas.length === 0 && <p class="adm-hint">No idea submissions yet.</p>}
+
+    <div class="ideas__list">
+      {ideas.map((i) => (
+        <details class="idea">
+          <summary class="idea__summary">
+            <span class:list={['idea__pill', `idea__pill--${i.status}`]}>{i.status}</span>
+            <span class="idea__title">{i.title}</span>
+            <span class="idea__meta">
+              {i.leadName} · {i.researchType} · {i.conference === 'none' ? 'no conference' : i.conference === 'flexible' ? 'conf. flexible' : i.conference} · {ago(i.submittedAt)}
+            </span>
+            <span class="idea__chev" aria-hidden="true">▾</span>
+          </summary>
+
+          <div class="idea__body">
+            <dl class="idea__dl">
+              {detailRows(i).map(([k, v]) => (
+                <div class="idea__pair">
+                  <dt>{k}</dt>
+                  <dd>{v}</dd>
+                </div>
+              ))}
+            </dl>
+
+            {i.status === 'pending' ? (
+              <form method="post" class="idea__decide">
+                <input type="hidden" name="ideaId" value={i.id} />
+                <label class="idea__notelabel" for={`note-${i.id}`}>Comments to the submitter (optional)</label>
+                <textarea class="idea__note" id={`note-${i.id}`} name="note" rows="2"
+                  placeholder="e.g. which database to use, or why it wasn't taken forward. You'll see the full email before it sends."></textarea>
+                <div class="idea__actions">
+                  <button class="btn idea__approve" name="action" value="preview-approve" type="submit">Approve &amp; add to pipeline…</button>
+                  <button class="btn idea__withhold" name="action" value="preview-withhold" type="submit">Withhold…</button>
+                  <button class="btn btn--red" name="action" value="preview-decline" type="submit">Decline…</button>
+                </div>
+                <p class="idea__hint-inline">Next step shows the email to review before it's sent.</p>
+              </form>
+            ) : (
+              <div class:list={['idea__decision', `idea__decision--${i.status}`]}>
+                <p><strong>{i.status === 'approved' ? 'Approved' : i.status === 'withheld' ? 'Withheld' : 'Declined'}</strong> by {i.reviewedBy} · {fmtDate(i.reviewedAt)}</p>
+                {i.decisionNote && <p class="idea__decision-note">“{i.decisionNote}”</p>}
+              </div>
+            )}
+          </div>
+        </details>
+      ))}
+    </div>
+      </>
+    )}
+  </div>
+</AppLayout>
+
+<style>
+  .ideas__count { font-size: 0.86rem; color: var(--text-muted); }
+  .ideas__count strong { color: var(--text-strong); }
+  .ideas__list { display: grid; gap: 0.6rem; }
+
+  .idea {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .idea[open] { border-color: var(--border); }
+
+  .idea__summary {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: 'pill title chev' 'pill meta chev';
+    gap: 0.15rem 0.75rem;
+    align-items: center;
+    padding: 0.9rem 1.1rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  .idea__summary::-webkit-details-marker { display: none; }
+  .idea__summary:hover { background: var(--bg-tint); }
+
+  .idea__pill {
+    grid-area: pill;
+    align-self: start;
+    margin-top: 0.1rem;
+    font-size: 0.64rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding: 0.2rem 0.5rem;
+    border-radius: 0;
+  }
+  .idea__pill--pending { color: var(--warn); background: var(--warn-bg); }
+  .idea__pill--approved { color: var(--ok); background: var(--ok-bg); }
+  .idea__pill--withheld { color: var(--warn); background: var(--warn-bg); }
+  .idea__pill--declined { color: var(--red); background: var(--red-wash); }
+
+  .idea__title { grid-area: title; font-weight: 600; color: var(--text-strong); font-size: 0.95rem; line-height: 1.35; }
+  .idea__meta { grid-area: meta; font-size: 0.78rem; color: var(--text-muted); }
+  .idea__chev { grid-area: chev; color: var(--text-muted); transition: transform 0.2s var(--ease); }
+  .idea[open] .idea__chev { transform: rotate(180deg); }
+
+  .idea__body { padding: 0.4rem 1.1rem 1.2rem; border-top: 1px solid var(--border-soft); }
+
+  .idea__dl { display: grid; gap: 0; margin: 0.6rem 0 0; }
+  .idea__pair {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 0.75rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .idea__pair dt {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+  }
+  .idea__pair dd { margin: 0; font-size: 0.88rem; line-height: 1.6; color: var(--text); white-space: pre-wrap; }
+  @media (max-width: 640px) { .idea__pair { grid-template-columns: 1fr; gap: 0.15rem; } }
+
+  .idea__decide { margin-top: var(--space-m); display: grid; gap: 0.5rem; }
+  .idea__notelabel { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text); }
+  .idea__note {
+    width: 100%;
+    padding: 0.65rem 0.85rem;
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    font-size: 0.9rem;
+    line-height: 1.55;
+    resize: vertical;
+  }
+  .idea__note:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--accent-wash-strong); }
+  .idea__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.2rem; }
+  .idea__approve { --btn-bg: var(--ok); --btn-bd: var(--ok); }
+  .idea__withhold { --btn-bg: var(--warn); --btn-bd: var(--warn); }
+
+  .idea__decision {
+    margin-top: var(--space-m);
+    padding: 0.8rem 1rem;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  .idea__decision--approved { background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok); }
+  .idea__decision--withheld { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn); }
+  .idea__decision--declined { background: var(--red-wash); border: 1px solid var(--red-border); color: var(--red); }
+  .idea__decision-note { margin-top: 0.3rem; font-style: italic; color: var(--text); }
+</style>
