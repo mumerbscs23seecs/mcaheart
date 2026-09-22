@@ -68,13 +68,16 @@ const base = '/assets/research/hero-layers';
   }
 
   /* The supplied artwork (background photo + all 9 layers) is fixed light/
-     white artwork with no dark-mode version - left as-is, it's a glaring
-     white block between the black header and dark sections around it,
-     which reads as a "blink" every time it scrolls past. Dim the whole
-     stage with a dark scrim in dark mode instead of leaving it raw white -
-     the art stays legible, just toned down to sit in a dark page. */
-  .lshero__scrim { position: absolute; inset: 0; z-index: 85; pointer-events: none; opacity: 0; }
-  :root[data-theme='dark'] .lshero__scrim { opacity: 1; background: rgba(6, 6, 6, 0.86); }
+     white artwork with black linework and no dark-mode version. A flat
+     dark scrim (an earlier attempt) stopped the white background from
+     blinding, but it also darkened the black logo/linework into the new
+     dark background, making it unreadable. Inverting the whole stage's
+     lightness instead flips white->dark and black->light together, so
+     the linework stays high-contrast against its own background; the
+     hue-rotate cancels out on the artwork's white/black/gray content and
+     approximately restores the crimson accent's original hue. */
+  :root[data-theme='dark'] .lshero__stage { filter: invert(1) hue-rotate(180deg); }
+  .lshero__scrim { display: none; }
 
   .lslayer {
     position: absolute;
