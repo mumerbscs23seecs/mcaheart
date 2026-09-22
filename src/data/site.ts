@@ -118,6 +118,14 @@ export const stats = [
   { value: '100+', label: 'active group members' },
 ] as const;
 
+/** Landing page - second stat row, same numbers as the research page's
+ * "Publications" section (manuscripts/abstracts/researchers a year). */
+export const researchStats = [
+  { value: '75+', label: 'manuscripts published a year' },
+  { value: '150+', label: 'abstracts presented a year' },
+  { value: '300+', label: 'active researchers & trainees' },
+] as const;
+
 export const societies = [
   {
     name: 'SCAI - Society for Cardiovascular Angiography & Interventions',

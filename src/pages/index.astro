@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import CTABanner from '../components/CTABanner.astro';
-import { director, stats, societies } from '../data/site';
+import { director, stats, researchStats, societies } from '../data/site';
 
 // Icon-only profile-link buttons on the director card. X and LinkedIn are
 // single-color (currentColor) SVGs, so they follow the button's own text
@@ -137,6 +137,15 @@ const DIRECTOR_ICONS: Record<string, string> = {
 
       <dl class="impact__grid">
         {stats.map((s, i) => (
+          <div class="stat" data-reveal style={`--reveal-delay:${i * 100}ms`}>
+            <dt class="stat__value" data-count={s.value}>{s.value}</dt>
+            <dd class="stat__label">{s.label}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <dl class="impact__grid impact__grid--research">
+        {researchStats.map((s, i) => (
           <div class="stat" data-reveal style={`--reveal-delay:${i * 100}ms`}>
             <dt class="stat__value" data-count={s.value}>{s.value}</dt>
             <dd class="stat__label">{s.label}</dd>
@@ -521,6 +530,11 @@ const DIRECTOR_ICONS: Record<string, string> = {
 
   @media (max-width: 860px) { .impact__grid { grid-template-columns: repeat(2, 1fr); } }
   @media (max-width: 460px) { .impact__grid { grid-template-columns: 1fr; } }
+
+  /* Second row, same tile language - the research page's manuscript/
+     abstract/researcher counts, three compartments instead of four. */
+  .impact__grid--research { grid-template-columns: repeat(3, 1fr); margin-top: var(--space-s); }
+  @media (max-width: 700px) { .impact__grid--research { grid-template-columns: 1fr; } }
 
   /* ------------------------------------------------------------- Pillars */
   .pillars__title { font-size: var(--step-3); margin-top: var(--space-s); }

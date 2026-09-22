@@ -81,20 +81,6 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
         ))}
       </ul>
 
-      <dl class="pub__stats" data-reveal style="--reveal-delay:120ms">
-        <div class="pub__stat">
-          <dt>75+</dt>
-          <dd>manuscripts published a year</dd>
-        </div>
-        <div class="pub__stat">
-          <dt>150+</dt>
-          <dd>abstracts presented a year</dd>
-        </div>
-        <div class="pub__stat">
-          <dt>300+</dt>
-          <dd>active researchers &amp; trainees</dd>
-        </div>
-      </dl>
     </div>
   </section>
 
@@ -361,43 +347,6 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
   .paper__link svg { width: 11px; height: 11px; transition: transform 0.2s var(--ease-out); }
   .paper:hover .paper__link svg,
   .paper__link:focus-visible svg { transform: translate(2px, -2px); }
-
-  .pub__stats {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    margin-top: var(--space-xl);
-    border-left: 1px solid var(--border-soft);
-  }
-  .pub__stat {
-    min-height: 148px;
-    padding: var(--space-s);
-    border-right: 1px solid var(--border-soft);
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-  }
-  .pub__stat:last-child { border-right: 0; }
-  .pub__stat dt {
-    font-family: var(--font-serif);
-    font-size: var(--step-4);
-    font-weight: 700;
-    color: var(--blue);
-    line-height: 1;
-  }
-  .pub__stat dd {
-    margin-top: 0.6rem;
-    font-size: var(--step--1);
-    line-height: 1.35;
-    color: var(--text-muted);
-  }
-
-  @media (max-width: 760px) {
-    .pub__stats { grid-template-columns: 1fr; border-left: 0; border-top: 1px solid var(--border-soft); }
-    .pub__stat { border-right: 0; border-bottom: 1px solid var(--border-soft); min-height: auto; padding-block: var(--space-m); }
-    .pub__stat:last-child { border-bottom: 0; }
-  }
 
   /* --------------------------------------------------------------- Societies */
   .societies { padding-block: var(--space-l); border-bottom: 1px solid var(--border-soft); }
