@@ -148,17 +148,6 @@ const bucketTotal = Object.values(buckets).reduce((a, b) => a + b, 0);
 const bucketMax = Math.max(1, ...Object.values(buckets));
 const trendMax = Math.max(1, ...trend.map((t) => t.n));
 
-const R = 68;
-const CIRC = 2 * Math.PI * R;
-let acc = 0;
-const donutSegs = PHASES.map((p) => {
-  const n = buckets[p.key] ?? 0;
-  const pct = bucketTotal ? n / bucketTotal : 0;
-  const seg = { ...p, n, pct, dash: pct * CIRC, gap: CIRC - pct * CIRC, offset: -acc * CIRC };
-  acc += pct;
-  return seg;
-});
-
 const initials =
   me.name
     .split(/\s+/)
@@ -169,6 +158,40 @@ const initials =
     .toUpperCase() || 'A';
 
 const fmtDay = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+
+// ---- Activity Trend: a real line chart with axis scales, not just bars.
+function niceMax(n: number): number {
+  if (n <= 5) return 5;
+  const pow = 10 ** Math.floor(Math.log10(n));
+  for (const step of [1, 2, 2.5, 5, 10]) {
+    const candidate = step * pow;
+    if (candidate >= n) return candidate;
+  }
+  return Math.ceil(n / pow) * pow;
+}
+const CHART_W = 600;
+const CHART_H = 200;
+const CHART_PAD = { top: 10, right: 14, bottom: 24, left: 30 };
+const plotW = CHART_W - CHART_PAD.left - CHART_PAD.right;
+const plotH = CHART_H - CHART_PAD.top - CHART_PAD.bottom;
+const chartMax = niceMax(trendMax);
+const yTicks = [0, 0.5, 1].map((f) => Math.round(chartMax * f));
+const xAt = (i: number) => CHART_PAD.left + (trend.length > 1 ? (i / (trend.length - 1)) * plotW : plotW / 2);
+const yAt = (n: number) => CHART_PAD.top + (1 - n / chartMax) * plotH;
+const trendPoints = trend.map((t, i) => ({ x: xAt(i), y: yAt(t.n), day: t.day, n: t.n }));
+const linePath = trendPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+const areaPath =
+  trendPoints.length > 0
+    ? `${linePath} L${trendPoints[trendPoints.length - 1].x.toFixed(1)},${(CHART_PAD.top + plotH).toFixed(1)} ` +
+      `L${trendPoints[0].x.toFixed(1)},${(CHART_PAD.top + plotH).toFixed(1)} Z`
+    : '';
+// A handful of evenly-spaced x-axis day labels - every single day would
+// crowd a 90-day range.
+const xLabelCount = Math.min(trend.length, 5);
+const xLabelIdx =
+  trend.length <= 1
+    ? [0]
+    : Array.from({ length: xLabelCount }, (_, i) => Math.round((i * (trend.length - 1)) / (xLabelCount - 1)));
 ---
 
 <AppLayout title="Dashboard" heading="Dashboard" user={me} active="dashboard">
@@ -318,64 +341,55 @@ const fmtDay = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('
       </section>
 
       <section class="adash-card">
-        <h2 class="adash-card__title">Submission Status</h2>
-        {bucketTotal === 0 ? (
-          <p class="adash-empty">Nothing to show yet.</p>
+        <div class="adash-trend__head">
+          <h2 class="adash-card__title">Activity Trend</h2>
+          <form method="get">
+            {phaseFilter && <input type="hidden" name="phase" value={phaseFilter} />}
+            {q && <input type="hidden" name="q" value={q} />}
+            <select name="range" aria-label="Date range" onchange="this.form.submit()">
+              <option value="7" selected={rangeDays === 7}>Last 7 Days</option>
+              <option value="30" selected={rangeDays === 30}>Last 30 Days</option>
+              <option value="90" selected={rangeDays === 90}>Last 90 Days</option>
+            </select>
+          </form>
+        </div>
+        {trend.every((t) => t.n === 0) ? (
+          <p class="adash-empty">No recorded events in this range.</p>
         ) : (
-          <div class="adash-donut">
-            <svg viewBox="0 0 160 160" width="150" height="150" role="img" aria-label={`${bucketTotal} submissions by phase`}>
-              <circle cx="80" cy="80" r={R} fill="none" stroke="var(--adash-track)" stroke-width="20" />
-              {donutSegs.filter((s) => s.n > 0).map((s) => (
-                <circle
-                  cx="80" cy="80" r={R} fill="none" stroke={s.color} stroke-width="20"
-                  stroke-dasharray={`${s.dash} ${s.gap}`} stroke-dashoffset={s.offset}
-                  transform="rotate(-90 80 80)" stroke-linecap="butt"
-                >
-                  <title>{`${s.label}: ${s.n} (${Math.round(s.pct * 100)}%)`}</title>
-                </circle>
-              ))}
-            </svg>
-            <div class="adash-donut__center"><b>{bucketTotal}</b><span>Total</span></div>
-            <ul class="adash-legend">
-              {PHASES.map((p) => (
-                <li>
-                  <span class="adash-legend__dot" style={`background:${p.color}`}></span>
-                  <span class="adash-legend__label">{p.label}</span>
-                  <span class="adash-legend__n">{buckets[p.key]} ({bucketTotal ? Math.round((buckets[p.key] / bucketTotal) * 100) : 0}%)</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <svg
+            class="adash-linechart"
+            viewBox={`0 0 ${CHART_W} ${CHART_H}`}
+            role="img"
+            aria-label={`Events per day, last ${rangeDays} days`}
+          >
+            {yTicks.map((v) => (
+              <g>
+                <line
+                  x1={CHART_PAD.left} x2={CHART_W - CHART_PAD.right}
+                  y1={yAt(v)} y2={yAt(v)}
+                  class="adash-linechart__grid"
+                />
+                <text x={CHART_PAD.left - 8} y={yAt(v)} class="adash-linechart__ytick">{v}</text>
+              </g>
+            ))}
+            {xLabelIdx.map((i) => (
+              <text x={xAt(i)} y={CHART_H - 6} class="adash-linechart__xtick">{fmtDay(trend[i].day)}</text>
+            ))}
+            <path d={areaPath} class="adash-linechart__area" />
+            <path d={linePath} class="adash-linechart__line" />
+            {trendPoints.map((p, i) => (
+              <circle
+                cx={p.x} cy={p.y}
+                r={i === trendPoints.length - 1 ? 3.5 : 2.2}
+                class="adash-linechart__dot"
+              >
+                <title>{`${fmtDay(p.day)}: ${p.n} event${p.n === 1 ? '' : 's'}`}</title>
+              </circle>
+            ))}
+          </svg>
         )}
       </section>
     </div>
-
-    {/* ------------------------------------------------------ Activity trend */}
-    <section class="adash-card">
-      <div class="adash-trend__head">
-        <h2 class="adash-card__title">Activity Trend</h2>
-        <form method="get">
-          {phaseFilter && <input type="hidden" name="phase" value={phaseFilter} />}
-          {q && <input type="hidden" name="q" value={q} />}
-          <select name="range" aria-label="Date range" onchange="this.form.submit()">
-            <option value="7" selected={rangeDays === 7}>Last 7 Days</option>
-            <option value="30" selected={rangeDays === 30}>Last 30 Days</option>
-            <option value="90" selected={rangeDays === 90}>Last 90 Days</option>
-          </select>
-        </form>
-      </div>
-      {trend.every((t) => t.n === 0) ? (
-        <p class="adash-empty">No recorded events in this range.</p>
-      ) : (
-        <div class="adash-trendchart" role="img" aria-label={`Events per day, last ${rangeDays} days`}>
-          {trend.map((t) => (
-            <span class="adash-trendchart__col" title={`${fmtDay(t.day)}: ${t.n} event${t.n === 1 ? '' : 's'}`}>
-              <span class="adash-trendchart__bar" style={`height:${Math.max(3, (t.n / trendMax) * 100)}%`}></span>
-            </span>
-          ))}
-        </div>
-      )}
-    </section>
 
     {/* ------------------------------------------------------- Reminders */}
     <section class="adash-card">
@@ -573,33 +587,24 @@ const fmtDay = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('
   .adash-bar__fill { display: block; height: 100%; border-radius: 999px; }
   .adash-bar__n { text-align: right; font-variant-numeric: tabular-nums; color: var(--adash-muted); }
 
-  .adash-donut { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
-  .adash-donut svg { position: relative; }
-  .adash-donut { position: relative; }
-  .adash-donut__center {
-    position: absolute; left: 0; top: 0; width: 150px; height: 150px;
-    display: grid; place-items: center; text-align: center; pointer-events: none;
-  }
-  .adash-donut__center b { display: block; font-size: 1.7rem; font-weight: 800; color: var(--adash-ink); }
-  .adash-donut__center span { font-size: 0.72rem; color: var(--adash-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-  .adash-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; font-size: 0.84rem; flex: 1; min-width: 180px; }
-  .adash-legend li { display: flex; align-items: center; gap: 8px; }
-  .adash-legend__dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-  .adash-legend__label { color: var(--adash-ink); flex: 1; }
-  .adash-legend__n { color: var(--adash-muted); font-variant-numeric: tabular-nums; }
-
   .adash-trend__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
   .adash-trend__head select {
     background: var(--adash-surface); border: 1px solid var(--adash-border); border-radius: 10px; padding: 7px 12px;
     font: inherit; font-size: 0.84rem; color: var(--adash-ink); cursor: pointer;
   }
-  .adash-trendchart { display: flex; align-items: flex-end; gap: 3px; height: 140px; }
-  .adash-trendchart__col { flex: 1; height: 100%; display: flex; align-items: flex-end; min-width: 2px; }
-  .adash-trendchart__bar {
-    display: block; width: 100%; min-height: 3px; border-radius: 3px 3px 0 0;
-    background: var(--adash-blue); opacity: 0.85; transition: opacity 0.15s ease;
+
+  .adash-linechart { width: 100%; height: 200px; overflow: visible; }
+  .adash-linechart__grid { stroke: var(--adash-track); stroke-width: 1; }
+  .adash-linechart__ytick {
+    font-size: 9px; font-variant-numeric: tabular-nums; fill: var(--adash-muted);
+    text-anchor: end; dominant-baseline: middle;
   }
-  .adash-trendchart__col:hover .adash-trendchart__bar { opacity: 1; background: var(--adash-ink); }
+  .adash-linechart__xtick {
+    font-size: 9px; fill: var(--adash-muted); text-anchor: middle;
+  }
+  .adash-linechart__area { fill: color-mix(in srgb, var(--adash-red) 12%, transparent); stroke: none; }
+  .adash-linechart__line { fill: none; stroke: var(--adash-red); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  .adash-linechart__dot { fill: var(--adash-surface); stroke: var(--adash-red); stroke-width: 1.6; }
 
   .adash-reminders__actions { display: flex; gap: 8px; }
   .adash-btn {

@@ -18,7 +18,10 @@ export interface PublicationRecord {
 }
 
 const CACHE_MS = 30 * 60 * 1000; // 30 minutes
-const SEARCH_TERM = 'Alraies MC[Author]';
+// Matches the free-text search the site's own "View Our Publications" link
+// already uses (pubmed.ncbi.nlm.nih.gov/?term=chadi+alraies&sort=date) -
+// same result set, not the stricter [Author]-field search.
+const SEARCH_TERM = 'chadi alraies';
 let cache: { at: number; papers: PublicationRecord[] } | null = null;
 
 function fmtDate(pubdate: string): string {
