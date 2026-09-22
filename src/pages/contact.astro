@@ -45,7 +45,7 @@ const marqueePhrases = [
   </section>
 
   {/* --------------------------------------------------------------- Intents */}
-  <section class="section--tight intents">
+  <section class="section intents">
     <div class="shell shell--wide intents__grid">
       {contactIntents.map((c, i) => (
         <article class="intent" data-reveal style={`--reveal-delay:${i * 110}ms`}>
@@ -153,6 +153,10 @@ const marqueePhrases = [
   }
 
   /* --------------------------------------------------------------- Intents */
+  /* Extra push so the tiles start below a typical viewport and their
+     scroll-reveal (data-reveal) actually plays, instead of resolving
+     instantly because they were already on-screen at load. */
+  .intents { margin-top: var(--space-xl); }
   .intents__grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
