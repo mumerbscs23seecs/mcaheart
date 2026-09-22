@@ -6,6 +6,19 @@
  * center wordmark, right panel, anatomical heart) so they can drift apart
  * as the visitor scrolls, then read as one flat composition at rest.
  *
+ * Design, deliberately: the JS below does the least possible amount of
+ * work. It computes a single number each frame (the eased pin progress)
+ * and writes it to one CSS custom property on the stage. Every layer's
+ * motion is a plain CSS calc() off that one property, and a short CSS
+ * transition on each layer absorbs the frame-to-frame smoothing - not a
+ * hand-rolled JS lerp. There is no per-layer imperative style write, no
+ * manual GPU-layer promotion/demotion bookkeeping, and no mutable
+ * animation state that two script instances (e.g. a stray HMR reload)
+ * could ever disagree about - both would compute the same target from
+ * the same scrollY and write the same value. That's what makes this
+ * version robust against the blank-flash bug earlier attempts had:
+ * there's nothing left to desync.
+ *
  * Respects prefers-reduced-motion (everything sits at rest, no listener
  * attached) and skips the scroll-lock height on narrow screens, where a
  * long pinned scroll fights the page instead of introducing it.
@@ -23,14 +36,14 @@ const base = '/assets/research/hero-layers';
       <h1 class="visually-hidden">{title}</h1>
       <div class="lshero__stage" id="lsheroStage">
         <img class="lslayer" id="ls-bg" src={`${base}/00_background.jpg`} alt="" fetchpriority="high" />
-        <img class="lslayer" id="ls-tl" src={`${base}/01_top_left_orbit.png`} alt="" />
-        <img class="lslayer" id="ls-ecg" src={`${base}/02_ecg.png`} alt="" />
-        <img class="lslayer" id="ls-blorbit" src={`${base}/03_bottom_left_orbit.png`} alt="" />
-        <img class="lslayer" id="ls-bl" src={`${base}/04_bottom_left_stent_scene.png`} alt="" />
+        <img class="lslayer lslayer--side" id="ls-tl" src={`${base}/01_top_left_orbit.png`} alt="" />
+        <img class="lslayer lslayer--side" id="ls-ecg" src={`${base}/02_ecg.png`} alt="" />
+        <img class="lslayer lslayer--side" id="ls-blorbit" src={`${base}/03_bottom_left_orbit.png`} alt="" />
+        <img class="lslayer lslayer--side" id="ls-bl" src={`${base}/04_bottom_left_stent_scene.png`} alt="" />
         <img class="lslayer" id="ls-logo" src={`${base}/05_center_logo.png`} alt="" />
-        <img class="lslayer" id="ls-rorbit" src={`${base}/06_right_orbit.png`} alt="" />
-        <img class="lslayer" id="ls-panel" src={`${base}/07_right_panel.png`} alt="" />
-        <img class="lslayer" id="ls-heart" src={`${base}/08_right_heart.png`} alt="" />
+        <img class="lslayer lslayer--side" id="ls-rorbit" src={`${base}/06_right_orbit.png`} alt="" />
+        <img class="lslayer lslayer--side" id="ls-panel" src={`${base}/07_right_panel.png`} alt="" />
+        <img class="lslayer lslayer--side" id="ls-heart" src={`${base}/08_right_heart.png`} alt="" />
       </div>
     </div>
   </div>
@@ -59,11 +72,15 @@ const base = '/assets/research/hero-layers';
   }
 
   /* Full-bleed - no side gutters, no max-width cap. The stage always
-     spans the entire window width; height follows from the aspect ratio. */
+     spans the entire window width; height follows from the aspect ratio.
+     --p / --pSide (written by the script below) live here so every child
+     layer can read them - a single write per frame instead of nine. */
   .lshero__stage {
     position: relative;
     width: 100%;
     aspect-ratio: 1672 / 941;
+    --p: 0;
+    --pside: 0;
   }
 
   /* The supplied artwork (background photo + all 9 layers) is fixed light
@@ -82,15 +99,10 @@ const base = '/assets/research/hero-layers';
     pointer-events: none;
     user-select: none;
     transform-origin: center center;
-    /* No permanent transform/will-change here. Forcing all 9 large,
-       fully-overlapping images into their own GPU compositing layer at
-       all times (an earlier attempt) keeps 9 large textures resident in
-       GPU memory even when nothing is animating - under memory pressure
-       the browser evicts and re-uploads a layer's backing store, which
-       is exactly what showed up as a layer briefly going blank and
-       reappearing. Layers are promoted only while the scroll script is
-       actually animating them (see the script below) and released once
-       the pin settles. */
+    /* The browser smooths every frame-to-frame jump on its own timeline -
+       a single dropped or duplicate JS write just gets interpolated away
+       instead of snapping the layer to a wildly different state. */
+    transition: transform 120ms linear, opacity 120ms linear;
   }
   #ls-bg { z-index: 0; }
   #ls-tl { z-index: 10; }
@@ -102,11 +114,53 @@ const base = '/assets/research/hero-layers';
   #ls-panel { z-index: 70; }
   #ls-heart { z-index: 80; }
 
+  /* Each side layer's exit motion, expressed once as calc() off the two
+     shared custom properties instead of nine separate JS style writes
+     per frame. Side art exits fully off-stage by 55% of the pin - the
+     script maps that window into --pside so this is just 0..1 here. */
+  #ls-tl {
+    transform: translate3d(calc(var(--pside) * -160%), calc(var(--pside) * -70%), 0)
+      scale(calc(1 + var(--pside) * 0.08));
+  }
+  #ls-ecg {
+    transform: translate3d(calc(var(--pside) * -170%), calc(var(--pside) * 20%), 0)
+      scale(calc(1 + var(--pside) * 0.03));
+  }
+  #ls-blorbit {
+    transform: translate3d(calc(var(--pside) * -150%), calc(var(--pside) * 90%), 0)
+      rotate(calc(var(--pside) * -3deg));
+  }
+  #ls-bl {
+    transform: translate3d(calc(var(--pside) * -140%), calc(var(--pside) * 110%), 0)
+      scale(calc(1 + var(--pside) * 0.12));
+  }
+  #ls-rorbit {
+    transform: translate3d(calc(var(--pside) * 150%), calc(var(--pside) * -70%), 0)
+      rotate(calc(var(--pside) * 3deg));
+  }
+  #ls-panel {
+    transform: translate3d(calc(var(--pside) * 160%), calc(var(--pside) * 20%), 0)
+      scale(calc(1 + var(--pside) * 0.08));
+  }
+  #ls-heart {
+    transform: translate3d(calc(var(--pside) * 175%), calc(var(--pside) * -40%), 0)
+      scale(calc(1 + var(--pside) * 0.16)) rotate(calc(var(--pside) * 4deg));
+  }
+  .lslayer--side { opacity: calc(1 - var(--pside)); }
+
+  /* The wordmark rises on its own, slower and more contained than the
+     side art leaving - it settles near the top, still fully readable,
+     rather than exiting the frame. */
+  #ls-logo {
+    transform: translate3d(0, calc(var(--p) * -46%), 0) scale(calc(1 - var(--p) * 0.08));
+  }
+
   /* Reduced motion / narrow screens: freeze the hero at rest, no scroll-
      lock, no per-layer transforms. */
   @media (prefers-reduced-motion: reduce), (max-width: 760px) {
     .lshero__pin { position: relative; height: auto; max-height: none; padding-block: var(--space-xl); }
     .lshero__space { height: auto; }
+    .lslayer { transition: none; }
   }
 </style>
 
@@ -117,107 +171,32 @@ const base = '/assets/research/hero-layers';
   const narrow = matchMedia('(max-width: 760px)').matches;
 
   if (space && stage && !reduced && !narrow) {
-    const layers = {
-      tl: document.getElementById('ls-tl'),
-      ecg: document.getElementById('ls-ecg'),
-      blOrbit: document.getElementById('ls-blorbit'),
-      bl: document.getElementById('ls-bl'),
-      logo: document.getElementById('ls-logo'),
-      rOrbit: document.getElementById('ls-rorbit'),
-      panel: document.getElementById('ls-panel'),
-      heart: document.getElementById('ls-heart'),
-    } as Record<string, HTMLImageElement>;
-
-    const allLayers = Object.values(layers);
-
-    let current = 0; // smoothed hero-pin progress, 0..1
-    let raf = 0;
-    let promoted = false;
-
-    /** Only keep layers on their own GPU compositing layer while they're
-     *  actually being animated - holding 9 large, fully-overlapping
-     *  images permanently promoted keeps 9 textures resident in GPU
-     *  memory even at rest, and under memory pressure the browser can
-     *  evict + re-upload one, which is what showed up as a layer
-     *  flashing blank for a moment mid-scroll. */
-    function setPromoted(on: boolean) {
-      if (on === promoted) return;
-      promoted = on;
-      for (const el of allLayers) el.style.willChange = on ? 'transform, opacity' : 'auto';
-    }
-
     const clamp = (v: number, min = 0, max = 1) => Math.min(max, Math.max(min, v));
     const ease = (v: number) => (v < 0.5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2);
-    /** Remap p from [start,end] to [0,1] - lets one layer's motion run on
-     *  its own window of the scroll instead of the full 0-1 range. */
-    const remap = (p: number, start: number, end: number) => clamp((p - start) / (end - start));
 
-    function pinEnd() {
-      return Math.max(0, space!.offsetHeight - window.innerHeight);
-    }
     function pinProgress() {
-      const max = pinEnd();
+      const max = Math.max(0, space!.offsetHeight - window.innerHeight);
       return max <= 0 ? 0 : clamp(window.scrollY / max);
     }
 
-    function render() {
-      const targetP = ease(pinProgress());
-      current += (targetP - current) * 0.16;
-      if (Math.abs(targetP - current) < 0.0005) current = targetP;
-      const p = current;
-
-      // Side art exits fully off-stage (percentages, so it scales with the
-      // stage's own size) - finished by 55% of the pin.
-      const pSide = remap(p, 0, 0.55);
-      // translate3d (not translate) on every layer, matching the logo below -
-      // mixing 2D and 3D transforms across these 9 stacked, overlapping
-      // layers made the browser re-decide GPU compositing/paint order every
-      // scroll frame, which showed up as a visible flicker/strobe.
-      layers.tl.style.transform = `translate3d(${-160 * pSide}%, ${-70 * pSide}%, 0) scale(${1 + 0.08 * pSide})`;
-      layers.ecg.style.transform = `translate3d(${-170 * pSide}%, ${20 * pSide}%, 0) scale(${1 + 0.03 * pSide})`;
-      layers.blOrbit.style.transform = `translate3d(${-150 * pSide}%, ${90 * pSide}%, 0) rotate(${-3 * pSide}deg)`;
-      layers.bl.style.transform = `translate3d(${-140 * pSide}%, ${110 * pSide}%, 0) scale(${1 + 0.12 * pSide})`;
-      layers.rOrbit.style.transform = `translate3d(${150 * pSide}%, ${-70 * pSide}%, 0) rotate(${3 * pSide}deg)`;
-      layers.panel.style.transform = `translate3d(${160 * pSide}%, ${20 * pSide}%, 0) scale(${1 + 0.08 * pSide})`;
-      layers.heart.style.transform = `translate3d(${175 * pSide}%, ${-40 * pSide}%, 0) scale(${1 + 0.16 * pSide}) rotate(${4 * pSide}deg)`;
-
-      layers.tl.style.opacity = `${1 - pSide}`;
-      layers.ecg.style.opacity = `${1 - pSide}`;
-      layers.blOrbit.style.opacity = `${1 - pSide}`;
-      layers.bl.style.opacity = `${1 - pSide}`;
-      layers.rOrbit.style.opacity = `${1 - pSide}`;
-      layers.panel.style.opacity = `${1 - pSide}`;
-      layers.heart.style.opacity = `${1 - pSide}`;
-
-      // The wordmark rises on its own, slower and more contained than the
-      // side art leaving - it settles near the top, still fully readable,
-      // rather than exiting the frame.
-      layers.logo.style.transform = `translate3d(0, ${-46 * p}%, 0) scale(${1 - 0.08 * p})`;
-
-      // Once the pin has fully released, everything here is settled - stop
-      // spending a frame budget on it for the rest of the page. Scrolling
-      // back up re-arms the loop via the listener below.
-      const settled = window.scrollY > pinEnd() + 200;
-      if (settled) {
-        looping = false;
-        setPromoted(false);
-        return;
-      }
-      raf = requestAnimationFrame(render);
+    let ticking = false;
+    function update() {
+      ticking = false;
+      const p = ease(pinProgress());
+      const pSide = clamp(p / 0.55);
+      // One write, two properties - every layer's own calc() picks these
+      // up on the next style recalc. No per-layer JS, nothing to desync.
+      stage!.style.setProperty('--p', String(p));
+      stage!.style.setProperty('--pside', String(pSide));
+    }
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(update);
     }
 
-    let looping = false;
-    function ensureLooping() {
-      if (looping) return;
-      looping = true;
-      setPromoted(true);
-      render();
-    }
-
-    ensureLooping();
-    window.addEventListener('scroll', ensureLooping, { passive: true });
-    window.addEventListener('resize', ensureLooping);
-
-    document.addEventListener('astro:before-swap', () => cancelAnimationFrame(raf), { once: true });
+    update();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
   }
 </script>
