@@ -43,6 +43,11 @@ import { director } from '../data/site';
 </BaseLayout>
 
 <style>
+  /* Match the Contact page's hero scale - the other two Get Involved
+     pages share its background now, so the heading should read at the
+     same size instead of PageHero's larger default (--step-5). */
+  :global(.phero h1.phero__title) { font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem); }
+
   .idea-intro { display: grid; gap: var(--space-s); color: var(--text); line-height: 1.75; }
   .idea-intro strong { color: var(--text-strong); }
   .idea-intro__note {
