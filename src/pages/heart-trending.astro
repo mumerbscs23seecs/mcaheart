@@ -25,7 +25,7 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
     bg="/assets/trending/hero-layers/bg.jpg"
     layer1={{ src: '/assets/trending/hero-layers/logo.webp', alt: 'Heart Trending logo mark' }}
     layer2={{ src: '/assets/trending/hero-layers/wordmark.webp', alt: 'Heart Trending' }}
-    tagline="Through expert interviews, research discussions, and educational webinars, we explore new ideas, examine the evidence behind evolving practices, and share insights that help advance cardiovascular knowledge and patient care."
+    tagline="Advancing Cardiovascular Education Through Conversation and Evidence"
     finalTitle="Every beat tells a story."
     finalSub="Heart Trending"
     accent="#e2001f"
@@ -34,6 +34,24 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
     ctaPrimary={{ label: 'Watch Episodes', href: '#gallery' }}
     ctaSecondary={{ label: 'Subscribe on YouTube', href: site.youtube }}
   />
+
+  {/* -------------------------------------------------------------- Intro */}
+  <section class="section--tight trending-intro">
+    <div class="shell shell--narrow">
+      <div class="prose center">
+        <p>
+          MCA Heart Trending is a cardiovascular education platform led by Dr. M. Chadi Alraies,
+          featuring conversations with cardiologists, researchers, and other experts on emerging
+          evidence, clinical practice, and important developments in cardiovascular medicine.
+        </p>
+        <p>
+          Through expert interviews, research discussions, and educational webinars, we explore new
+          ideas, examine the evidence behind evolving practices, and share insights that help advance
+          cardiovascular knowledge and patient care.
+        </p>
+      </div>
+    </div>
+  </section>
 
   {/* ------------------------------------------------------------- Just in */}
   {latestVideos.length > 0 && (
