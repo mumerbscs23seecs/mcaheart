@@ -26,7 +26,7 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
     layer1={{ src: '/assets/trending/hero-layers/logo.webp', alt: 'Heart Trending logo mark' }}
     layer2={{ src: '/assets/trending/hero-layers/wordmark.webp', alt: 'Heart Trending' }}
     tagline="Advancing Cardiovascular Education Through Conversation and Evidence"
-    finalTitle="Every beat tells a story."
+    finalTitle="Conversations that move cardiology forward"
     finalSub="Heart Trending"
     accent="#e2001f"
     navy="#0a1d33"
@@ -40,7 +40,6 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
     <div class="shell shell--wide trending-intro__grid">
       <header class="trending-intro__head" data-reveal>
         <p class="eyebrow">About the series</p>
-        <h2 class="display trending-intro__title">Conversations that move cardiology forward</h2>
       </header>
       <div class="prose trending-intro__body" data-reveal style="--reveal-delay:100ms">
         <p>
@@ -108,12 +107,16 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
     gap: clamp(2rem, 1rem + 4vw, 5rem);
     align-items: start;
   }
-  .trending-intro__title { font-size: var(--step-2); margin-top: var(--space-s); }
   .trending-intro__body {
     padding-left: clamp(1.3rem, 0.8rem + 2vw, 2.4rem);
     border-left: 2px solid var(--blue);
   }
-  .trending-intro__body p { text-align: left; }
+  .trending-intro__body p {
+    text-align: left;
+    font-weight: 500;
+    line-height: 1.65;
+    color: var(--text-strong);
+  }
 
   @media (max-width: 760px) {
     .trending-intro__grid { grid-template-columns: 1fr; }
