@@ -59,6 +59,58 @@ export const director = {
   ],
 } as const;
 
+/**
+ * Research page - "Recent papers on PubMed" grid. Static for now (manually
+ * updated); the plan is to replace this with a live PubMed feed fetch, the
+ * same pattern already used for the YouTube feeds on Heart Trending/
+ * Education (cached server-side so it stays current without hammering
+ * PubMed on every page load) - see the placement mockup for the rationale.
+ */
+export const recentPublications = [
+  {
+    journal: 'JACC Cardiovasc Interv',
+    date: 'Sep 2026',
+    title: 'Outcomes of Complex High-Risk PCI in Patients With Prior CABG: A TriNetX Analysis',
+    authors: 'Alraies MC, Basit J, et al.',
+    url: 'https://pubmed.ncbi.nlm.nih.gov/?term=chadi+alraies&sort=date&size=200',
+  },
+  {
+    journal: 'Catheter Cardiovasc Interv',
+    date: 'Aug 2026',
+    title: 'National Trends in Mechanical Circulatory Support for Cardiogenic Shock, 2016-2024',
+    authors: 'Burhan M, Alraies MC, et al.',
+    url: 'https://pubmed.ncbi.nlm.nih.gov/?term=chadi+alraies&sort=date&size=200',
+  },
+  {
+    journal: 'Am J Cardiol',
+    date: 'Aug 2026',
+    title: 'Sex-Based Disparities in TAVR Access: A Nationwide Inpatient Sample Study',
+    authors: 'Darboe R, Pareddy A, et al.',
+    url: 'https://pubmed.ncbi.nlm.nih.gov/?term=chadi+alraies&sort=date&size=200',
+  },
+  {
+    journal: 'Struct Heart',
+    date: 'Jul 2026',
+    title: 'Long-Term Follow-Up After Transcatheter Edge-to-Edge Repair in Functional MR',
+    authors: 'Hanmandlu A, Awad A, et al.',
+    url: 'https://pubmed.ncbi.nlm.nih.gov/?term=chadi+alraies&sort=date&size=200',
+  },
+  {
+    journal: 'Cardiovasc Revasc Med',
+    date: 'Jul 2026',
+    title: 'Meta-Analysis of Radial vs. Femoral Access in Endovascular Intervention',
+    authors: 'Elnaggar K, Husainy B, et al.',
+    url: 'https://pubmed.ncbi.nlm.nih.gov/?term=chadi+alraies&sort=date&size=200',
+  },
+  {
+    journal: 'JAMA Cardiol',
+    date: 'Jun 2026',
+    title: 'Thirty-Day Readmission After Heart Failure Hospitalization: An NRD Study',
+    authors: 'Azzalini G, Alraies MC, et al.',
+    url: 'https://pubmed.ncbi.nlm.nih.gov/?term=chadi+alraies&sort=date&size=200',
+  },
+] as const;
+
 export const stats = [
   { value: '100+', label: 'papers published in major journals' },
   { value: '10+', label: 'presentations at every major conference' },

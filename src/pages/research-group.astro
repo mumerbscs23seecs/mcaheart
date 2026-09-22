@@ -2,7 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import LayeredScrollHero from '../components/LayeredScrollHero.astro';
 import CTABanner from '../components/CTABanner.astro';
-import { testimonials, missionVision, societies } from '../data/site';
+import { testimonials, missionVision, societies, recentPublications } from '../data/site';
 ---
 
 <BaseLayout
@@ -52,6 +52,22 @@ import { testimonials, missionVision, societies } from '../data/site';
           View Our Publications <span class="pub__cta-arrow" aria-hidden="true">&rarr;</span>
         </a>
       </div>
+
+      <ul class="pub__papers" data-reveal style="--reveal-delay:80ms">
+        {recentPublications.map((p) => (
+          <li class="paper">
+            <p class="paper__meta">{p.journal} <span class="paper__dot">&middot;</span> <span class="paper__date">{p.date}</span></p>
+            <h3 class="paper__title">{p.title}</h3>
+            <p class="paper__authors">{p.authors}</p>
+            <a class="paper__link" href={p.url} target="_blank" rel="noopener noreferrer">
+              Read on PubMed
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M7 17 17 7M9 7h8v8" />
+              </svg>
+            </a>
+          </li>
+        ))}
+      </ul>
 
       <dl class="pub__stats" data-reveal style="--reveal-delay:120ms">
         <div class="pub__stat">
@@ -273,6 +289,64 @@ import { testimonials, missionVision, societies } from '../data/site';
   .pub__cta-arrow { transition: transform 0.25s var(--ease-out); }
   .pub__cta:hover .pub__cta-arrow,
   .pub__cta:focus-visible .pub__cta-arrow { transform: translateX(4px); }
+
+  .pub__papers {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    margin: var(--space-xl) 0 0;
+    padding: 0;
+    list-style: none;
+    background: var(--border-soft);
+    border: 1px solid var(--border-soft);
+  }
+  @media (max-width: 860px) { .pub__papers { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 600px) { .pub__papers { grid-template-columns: 1fr; } }
+
+  .paper {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    min-height: 190px;
+    padding: var(--space-s);
+    background: var(--surface);
+  }
+  .paper__meta {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--blue);
+  }
+  .paper__dot { color: var(--text-faint); font-weight: 400; }
+  .paper__date { color: var(--text-faint); font-weight: 600; letter-spacing: 0.02em; text-transform: none; }
+  .paper__title {
+    margin: 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.98rem;
+    line-height: 1.4;
+    letter-spacing: -0.005em;
+    color: var(--text-strong);
+  }
+  .paper__authors { margin: 0; font-size: 0.78rem; line-height: 1.5; color: var(--text-muted); }
+  .paper__link {
+    margin-top: auto;
+    padding-top: 0.3rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    font-family: var(--font-sans);
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--text-strong);
+    text-decoration: none;
+  }
+  .paper__link svg { width: 11px; height: 11px; transition: transform 0.2s var(--ease-out); }
+  .paper:hover .paper__link svg,
+  .paper__link:focus-visible svg { transform: translate(2px, -2px); }
 
   .pub__stats {
     display: grid;
