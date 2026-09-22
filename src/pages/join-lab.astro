@@ -41,6 +41,11 @@ import RecruitmentForm from '../components/RecruitmentForm.astro';
      pages share its background now, so the heading should read at the
      same size instead of PageHero's larger default (--step-5). */
   :global(.phero h1.phero__title) { font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem); }
+  /* This page's subtitle is longer than Contact's/Submit an Idea's - the
+     shared .lede 42ch cap wrapped it into 6 short lines, pushing this
+     hero taller than the other two Get Involved pages and breaking the
+     shared bottom-border position. Wider cap, same full text, fewer lines. */
+  :global(.phero p.phero__sub) { max-width: 62ch; }
 
   .join-intro { display: grid; gap: var(--space-s); color: var(--text); line-height: 1.75; }
   .join-intro strong { color: var(--text-strong); }

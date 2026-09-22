@@ -80,10 +80,19 @@ const marqueePhrases = [
 
 <style>
   /* ------------------------------------------------------------------ Hero */
+  /* Same box model as PageHero's .phero (join-lab/submit-idea) - fixed
+     viewport-relative min-height instead of purely content-driven, so
+     the hero's bottom border lands at the same place on all 3 Get
+     Involved pages regardless of how much title/subtitle text each has. */
   .chero {
     position: relative;
     isolation: isolate;
-    padding-block: calc(var(--header-h) + var(--space-l)) 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    min-height: clamp(46vh, 30vh + 22vw, 68vh);
+    padding-block: calc(var(--header-h) + var(--space-l)) var(--space-xl);
+    border-bottom: 2px solid var(--ink);
     overflow: hidden;
   }
   .chero__bg { position: absolute; inset: 0; z-index: -1; }
@@ -101,7 +110,7 @@ const marqueePhrases = [
       color-mix(in srgb, var(--bg) 80%, transparent) 100%
     );
   }
-  .chero__inner { padding-bottom: var(--space-xl); }
+  .chero__inner { padding-bottom: var(--space-l); }
   .chero__title {
     margin-top: var(--space-s);
     font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem);
