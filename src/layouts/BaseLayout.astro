@@ -52,11 +52,22 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=300, stale-while-re
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:url" content={canonical} />
-    <meta property="og:image" content={new URL(ogImage, Astro.site ?? site.url).href} />
+    {/* Root-relative, not absolute - most pages here are statically
+        prerendered, so an absolute URL built from Astro.site/Astro.url
+        always bakes in the configured production domain (mcaheart.com)
+        at build time, regardless of which host actually serves the page.
+        Right now mcaheart.com's DNS still points at an old Wix site, not
+        this app, so an absolute og:image 404s there and crawlers fall
+        back to scraping the page for a different image entirely. Every
+        major crawler (Facebook/iMessage/WhatsApp/LinkedIn/Twitter)
+        resolves a relative og:image against whatever URL it actually
+        fetched, so this works correctly both on the current Render
+        preview URL and once DNS is pointed at this app. */}
+    <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:image" content={new URL(ogImage, Astro.site ?? site.url).href} />
+    <meta name="twitter:image" content={ogImage} />
 
     <link rel="icon" href="/favicon.png" type="image/png" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
