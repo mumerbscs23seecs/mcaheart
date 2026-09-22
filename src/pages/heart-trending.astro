@@ -35,17 +35,6 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
     ctaSecondary={{ label: 'Subscribe on YouTube', href: site.youtube }}
   />
 
-  {/* -------------------------------------------------------------- Intro */}
-  <section class="section--tight trending-intro">
-    <div class="shell shell--narrow">
-      <p class="prose center">
-        Through expert interviews, research discussions, and educational webinars, we explore new
-        ideas, examine the evidence behind evolving practices, and share insights that help advance
-        cardiovascular knowledge and patient care.
-      </p>
-    </div>
-  </section>
-
   {/* ------------------------------------------------------------- Just in */}
   {latestVideos.length > 0 && (
     <section class="section justin" id="gallery">
