@@ -31,7 +31,7 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
     bg="/assets/education/hero-layers/bg.jpg"
     layer1={{ src: '/assets/education/hero-layers/heart.webp', alt: 'Anatomical heart illustration' }}
     layer2={{ src: '/assets/education/hero-layers/text.webp', alt: 'The Heart of the Matter' }}
-    tagline="A closer look at the science of the heart"
+    tagline="Understanding the Evidence Behind Modern Cardiology"
     finalTitle="Every beat tells a story."
     finalSub="The Heart of the Matter"
     accent="#a51c30"
@@ -58,7 +58,9 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
             height="399"
           />
         </span>
-        <p class="prose series__body">{series.body}</p>
+        <div class="prose series__body">
+          {series.body.map((para) => <p>{para}</p>)}
+        </div>
         <p class="series__cadence">{series.cadence}</p>
       </div>
 
