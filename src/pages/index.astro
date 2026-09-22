@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import CTABanner from '../components/CTABanner.astro';
-import { director, stats, researchStats, societies } from '../data/site';
+import { director, researchStats, societies } from '../data/site';
 
 // Icon-only profile-link buttons on the director card. X and LinkedIn are
 // single-color (currentColor) SVGs, so they follow the button's own text
@@ -134,15 +134,6 @@ const DIRECTOR_ICONS: Record<string, string> = {
       <header class="impact__head section-head" data-reveal>
         <h2 class="display impact__title">Impact<br />through<br />excellence</h2>
       </header>
-
-      <dl class="impact__grid">
-        {stats.map((s, i) => (
-          <div class="stat" data-reveal style={`--reveal-delay:${i * 100}ms`}>
-            <dt class="stat__value" data-count={s.value}>{s.value}</dt>
-            <dd class="stat__label">{s.label}</dd>
-          </div>
-        ))}
-      </dl>
 
       <dl class="impact__grid impact__grid--research">
         {researchStats.map((s, i) => (
@@ -533,7 +524,7 @@ const DIRECTOR_ICONS: Record<string, string> = {
 
   /* Second row, same tile language - the research page's manuscript/
      abstract/researcher counts, three compartments instead of four. */
-  .impact__grid--research { grid-template-columns: repeat(3, 1fr); margin-top: var(--space-s); }
+  .impact__grid--research { grid-template-columns: repeat(3, 1fr); }
   @media (max-width: 700px) { .impact__grid--research { grid-template-columns: 1fr; } }
 
   /* ------------------------------------------------------------- Pillars */
