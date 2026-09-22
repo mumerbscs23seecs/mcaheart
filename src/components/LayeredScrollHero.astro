@@ -82,6 +82,11 @@ const base = '/assets/research/hero-layers';
     pointer-events: none;
     user-select: none;
     transform-origin: center center;
+    /* Pre-promote every layer to its own GPU compositing layer up front
+       (not just the ones the scroll script animates) so none of the 9
+       stacked, overlapping images ever gets promoted/demoted mid-scroll -
+       that churn was the source of the flicker. */
+    transform: translate3d(0, 0, 0);
     will-change: transform, opacity;
     backface-visibility: hidden;
   }
@@ -147,13 +152,17 @@ const base = '/assets/research/hero-layers';
       // Side art exits fully off-stage (percentages, so it scales with the
       // stage's own size) - finished by 55% of the pin.
       const pSide = remap(p, 0, 0.55);
-      layers.tl.style.transform = `translate(${-160 * pSide}%, ${-70 * pSide}%) scale(${1 + 0.08 * pSide})`;
-      layers.ecg.style.transform = `translate(${-170 * pSide}%, ${20 * pSide}%) scale(${1 + 0.03 * pSide})`;
-      layers.blOrbit.style.transform = `translate(${-150 * pSide}%, ${90 * pSide}%) rotate(${-3 * pSide}deg)`;
-      layers.bl.style.transform = `translate(${-140 * pSide}%, ${110 * pSide}%) scale(${1 + 0.12 * pSide})`;
-      layers.rOrbit.style.transform = `translate(${150 * pSide}%, ${-70 * pSide}%) rotate(${3 * pSide}deg)`;
-      layers.panel.style.transform = `translate(${160 * pSide}%, ${20 * pSide}%) scale(${1 + 0.08 * pSide})`;
-      layers.heart.style.transform = `translate(${175 * pSide}%, ${-40 * pSide}%) scale(${1 + 0.16 * pSide}) rotate(${4 * pSide}deg)`;
+      // translate3d (not translate) on every layer, matching the logo below -
+      // mixing 2D and 3D transforms across these 9 stacked, overlapping
+      // layers made the browser re-decide GPU compositing/paint order every
+      // scroll frame, which showed up as a visible flicker/strobe.
+      layers.tl.style.transform = `translate3d(${-160 * pSide}%, ${-70 * pSide}%, 0) scale(${1 + 0.08 * pSide})`;
+      layers.ecg.style.transform = `translate3d(${-170 * pSide}%, ${20 * pSide}%, 0) scale(${1 + 0.03 * pSide})`;
+      layers.blOrbit.style.transform = `translate3d(${-150 * pSide}%, ${90 * pSide}%, 0) rotate(${-3 * pSide}deg)`;
+      layers.bl.style.transform = `translate3d(${-140 * pSide}%, ${110 * pSide}%, 0) scale(${1 + 0.12 * pSide})`;
+      layers.rOrbit.style.transform = `translate3d(${150 * pSide}%, ${-70 * pSide}%, 0) rotate(${3 * pSide}deg)`;
+      layers.panel.style.transform = `translate3d(${160 * pSide}%, ${20 * pSide}%, 0) scale(${1 + 0.08 * pSide})`;
+      layers.heart.style.transform = `translate3d(${175 * pSide}%, ${-40 * pSide}%, 0) scale(${1 + 0.16 * pSide}) rotate(${4 * pSide}deg)`;
 
       layers.tl.style.opacity = `${1 - pSide}`;
       layers.ecg.style.opacity = `${1 - pSide}`;
