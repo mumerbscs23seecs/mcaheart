@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import BaseLayout from '../layouts/BaseLayout.astro';
-import PageHero from '../components/PageHero.astro';
+import ParallaxVideoHero from '../components/ParallaxVideoHero.astro';
 import VideoCard from '../components/VideoCard.astro';
 import VideoLightbox from '../components/VideoLightbox.astro';
 import CTABanner from '../components/CTABanner.astro';
@@ -25,15 +25,21 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
   description="Learn with MCA Heart - in-depth reviews of cardiology research through Heart of the Matter and the monthly webinar series."
   transparentHeader
 >
-  <PageHero
-    title="Learn with MCA Heart"
-    subtitle="Explore in-depth reviews of groundbreaking cardiology research articles."
-    image="/assets/education/hero-bg.jpg"
-  >
-    <a class="btn phero__cta" href="#series">
-      Explore the series <span class="btn__arrow" aria-hidden="true">&rarr;</span>
-    </a>
-  </PageHero>
+  <ParallaxVideoHero
+    title="The Heart of the Matter"
+    layout="stacked"
+    bg="/assets/education/hero-layers/bg.jpg"
+    layer1={{ src: '/assets/education/hero-layers/heart.webp', alt: 'Anatomical heart illustration' }}
+    layer2={{ src: '/assets/education/hero-layers/text.webp', alt: 'The Heart of the Matter' }}
+    tagline="A closer look at the science of the heart"
+    finalTitle="Every beat tells a story."
+    finalSub="The Heart of the Matter"
+    accent="#a51c30"
+    navy="#002449"
+    navyDeep="#00081a"
+    ctaPrimary={{ label: 'Watch Episodes', href: '#series' }}
+    ctaSecondary={{ label: 'Get in Touch', href: '/contact' }}
+  />
 
   {/* ------------------------------------------------------ Heart of the Matter */}
   <section class="section series" id="series">

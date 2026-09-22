@@ -2,7 +2,7 @@
 export const prerender = false;
 
 import BaseLayout from '../layouts/BaseLayout.astro';
-import PageHero from '../components/PageHero.astro';
+import ParallaxVideoHero from '../components/ParallaxVideoHero.astro';
 import VideoCard from '../components/VideoCard.astro';
 import VideoLightbox from '../components/VideoLightbox.astro';
 import { site } from '../data/site';
@@ -19,15 +19,21 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
   description="MCA Heart Trending is a cardiovascular education platform led by Dr. M. Chadi Alraies, featuring conversations with cardiologists, researchers, and other experts on emerging evidence, clinical practice, and important developments in cardiovascular medicine."
   transparentHeader
 >
-  <PageHero
+  <ParallaxVideoHero
     title="Heart Trending"
-    subtitle="Advancing cardiovascular education through conversation and evidence. MCA Heart Trending is a cardiovascular education platform led by Dr. M. Chadi Alraies, featuring conversations with cardiologists, researchers, and other experts on emerging evidence, clinical practice, and important developments in cardiovascular medicine."
-    image="/assets/trending/hero-bg.webp"
-  >
-    <a class="btn phero__cta" href={site.youtube} target="_blank" rel="noopener noreferrer">
-      Subscribe on YouTube <span class="btn__arrow" aria-hidden="true">&rarr;</span>
-    </a>
-  </PageHero>
+    layout="lockup"
+    bg="/assets/trending/hero-layers/bg.jpg"
+    layer1={{ src: '/assets/trending/hero-layers/logo.webp', alt: 'Heart Trending logo mark' }}
+    layer2={{ src: '/assets/trending/hero-layers/wordmark.webp', alt: 'Heart Trending' }}
+    tagline="Interviews · Research · Journal Reviews · Webinars"
+    finalTitle="Every beat tells a story."
+    finalSub="Heart Trending"
+    accent="#e2001f"
+    navy="#0a1d33"
+    navyDeep="#040d1c"
+    ctaPrimary={{ label: 'Watch Episodes', href: '#gallery' }}
+    ctaSecondary={{ label: 'Subscribe on YouTube', href: site.youtube }}
+  />
 
   {/* -------------------------------------------------------------- Intro */}
   <section class="section--tight trending-intro">
@@ -42,7 +48,7 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
 
   {/* ------------------------------------------------------------- Just in */}
   {latestVideos.length > 0 && (
-    <section class="section justin">
+    <section class="section justin" id="gallery">
       <div class="shell shell--wide">
         <header class="library__head" data-reveal>
           <h2 class="display library__title">Just uploaded</h2>

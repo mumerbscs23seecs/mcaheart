@@ -1,0 +1,354 @@
+---
+/**
+ * Scroll-locked layered-parallax video-series hero, built from the
+ * client-supplied reference mockups (heart-trending/ and
+ * heart-of-the-matter/ in the "backggg images" zip) - same sticky-stage
+ * mechanic as LayeredScrollHero.astro, ported to their exact animation
+ * curves: bg drifts + zooms slowly, the mark/wordmark layers rise and fade
+ * as the visitor scrolls, an ECG trace draws itself across the mid-point,
+ * then a tagline and finally a title/subtitle/CTA fade in as the pin
+ * releases. Two layouts, matching the two reference builds:
+ *   "lockup"  - a small mark above a wordmark, both centered (Heart Trending)
+ *   "stacked" - two full-bleed layers on top of each other (Heart of the Matter)
+ */
+interface Layer { src: string; alt: string }
+interface CTA { label: string; href: string }
+interface Props {
+  title: string;
+  layout: 'lockup' | 'stacked';
+  bg: string;
+  layer1: Layer;
+  layer2: Layer;
+  tagline: string;
+  finalTitle: string;
+  finalSub: string;
+  accent: string;
+  navy: string;
+  navyDeep: string;
+  ctaPrimary: CTA;
+  ctaSecondary: CTA;
+}
+const {
+  title,
+  layout,
+  bg,
+  layer1,
+  layer2,
+  tagline,
+  finalTitle,
+  finalSub,
+  accent,
+  navy,
+  navyDeep,
+  ctaPrimary,
+  ctaSecondary,
+} = Astro.props;
+---
+
+<section class="pvh" style={`--pvh-accent:${accent}; --pvh-navy:${navy}; --pvh-navy-deep:${navyDeep}`}>
+  <div class="pvh__track" id={`pvhTrack-${layout}`}>
+    <div class="pvh__stage">
+      <h1 class="visually-hidden">{title}</h1>
+
+      <div class="pvh__layer pvh__bg" id={`pvh-bg-${layout}`}>
+        <img src={bg} alt="" fetchpriority="high" />
+      </div>
+
+      {layout === 'stacked' ? (
+        <>
+          <div class="pvh__layer pvh__full" id={`pvh-1-${layout}`}>
+            <img src={layer1.src} alt={layer1.alt} />
+          </div>
+          <div class="pvh__layer pvh__full" id={`pvh-2-${layout}`}>
+            <img src={layer2.src} alt={layer2.alt} />
+          </div>
+        </>
+      ) : (
+        <div class="pvh__lockup" id={`pvh-lockup-${layout}`}>
+          <div class="pvh__mark" id={`pvh-1-${layout}`}>
+            <img src={layer1.src} alt={layer1.alt} />
+          </div>
+          <div class="pvh__wordmark" id={`pvh-2-${layout}`}>
+            <img src={layer2.src} alt={layer2.alt} />
+          </div>
+        </div>
+      )}
+
+      <div class="pvh__particles" id={`pvh-particles-${layout}`}></div>
+
+      <div class="pvh__ecg" id={`pvh-ecg-${layout}`}>
+        <svg viewBox="0 0 1000 120" preserveAspectRatio="none">
+          <path
+            class="pvh__ecg-line"
+            d="M0,60 L120,60 L150,60 L170,20 L190,100 L210,60 L260,60 L280,40 L300,60 L500,60
+               L620,60 L650,60 L670,20 L690,100 L710,60 L760,60 L780,40 L800,60 L1000,60
+               L1120,60 L1150,60 L1170,20 L1190,100 L1210,60 L1260,60 L1280,40 L1300,60 L1500,60
+               L1620,60 L1650,60 L1670,20 L1690,100 L1710,60 L1760,60 L1780,40 L1800,60 L2000,60"
+          ></path>
+        </svg>
+      </div>
+
+      <p class="pvh__caption pvh__tagline" id={`pvh-tagline-${layout}`}>{tagline}</p>
+      <p class="pvh__caption pvh__final-title" id={`pvh-finaltitle-${layout}`}>{finalTitle}</p>
+      <p class="pvh__caption pvh__final-sub" id={`pvh-finalsub-${layout}`}>{finalSub}</p>
+
+      <div class="pvh__cta" id={`pvh-cta-${layout}`}>
+        <a class="pvh__btn pvh__btn--solid" href={ctaPrimary.href}>{ctaPrimary.label}</a>
+        <a class="pvh__btn" href={ctaSecondary.href}>{ctaSecondary.label}</a>
+      </div>
+
+      <p class="pvh__hint" id={`pvh-hint-${layout}`}>Scroll</p>
+    </div>
+  </div>
+</section>
+
+<style>
+  .pvh {
+    position: relative;
+    background: var(--pvh-navy-deep);
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .pvh__track { position: relative; height: 400vh; }
+  @media (max-width: 760px) { .pvh__track { height: 210vh; } }
+
+  .pvh__stage {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    max-height: 960px;
+    width: 100%;
+    overflow: hidden;
+    background: var(--pvh-navy);
+  }
+
+  .pvh__layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    will-change: transform, opacity;
+  }
+  .pvh__layer img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .pvh__bg img { transform: scale(1.15); }
+  .pvh__full { display: flex; align-items: center; justify-content: center; }
+  .pvh__full img { width: min(90vw, 900px); height: auto; object-fit: contain; }
+
+  .pvh__lockup {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+  }
+  .pvh__mark, .pvh__wordmark { display: block; will-change: transform, opacity; }
+  .pvh__mark img { width: min(40vw, 270px); height: auto; object-fit: contain; filter: drop-shadow(0 10px 40px rgba(0, 0, 0, 0.5)); }
+  .pvh__wordmark img { width: min(80vw, 620px); height: auto; object-fit: contain; }
+
+  .pvh__vignette-fallback { position: absolute; inset: 0; pointer-events: none; }
+
+  .pvh::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    background: radial-gradient(ellipse at 50% 44%, transparent 25%, rgba(2, 6, 15, 0.86) 100%);
+  }
+
+  .pvh__particles { position: absolute; inset: 0; pointer-events: none; }
+  .pvh__particle {
+    position: absolute;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #6fa8dc, #1c4c86 70%);
+    opacity: 0.55;
+    animation: pvh-drift linear infinite;
+  }
+  @keyframes pvh-drift {
+    from { transform: translateY(0) translateX(0); }
+    to { transform: translateY(-30px) translateX(10px); }
+  }
+
+  .pvh__ecg { position: absolute; left: 0; right: 0; top: 63%; height: 120px; overflow: hidden; }
+  .pvh__ecg svg { width: 200%; height: 100%; }
+  .pvh__ecg-line {
+    fill: none;
+    stroke: var(--pvh-accent);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 6px color-mix(in srgb, var(--pvh-accent) 70%, transparent));
+    animation: pvh-scroll-line 4s linear infinite;
+  }
+  @keyframes pvh-scroll-line { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+  .pvh__caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    margin: 0;
+    text-align: center;
+    color: #fff;
+    font-family: var(--font-sans);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .pvh__tagline { top: 73%; font-size: clamp(13px, 2.2vw, 20px); color: #c9d6e8; opacity: 0; letter-spacing: 0.15em; }
+  .pvh__final-title {
+    top: 33%;
+    font-size: clamp(22px, 5vw, 48px);
+    opacity: 0;
+    text-shadow: 0 0 30px color-mix(in srgb, var(--pvh-accent) 55%, transparent);
+  }
+  .pvh__final-sub { top: 45%; font-size: clamp(12px, 1.8vw, 16px); color: var(--pvh-accent); opacity: 0; letter-spacing: 0.3em; }
+
+  .pvh__cta { position: absolute; left: 50%; top: 55%; transform: translateX(-50%); display: flex; gap: 16px; opacity: 0; }
+  .pvh__btn {
+    padding: 12px 28px;
+    border-radius: 999px;
+    border: 1.5px solid #fff;
+    color: #fff;
+    text-decoration: none;
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: background 0.2s, color 0.2s;
+    white-space: nowrap;
+  }
+  .pvh__btn:hover { background: #fff; color: var(--pvh-navy-deep); }
+  .pvh__btn--solid { background: var(--pvh-accent); border-color: var(--pvh-accent); }
+  .pvh__btn--solid:hover { background: color-mix(in srgb, var(--pvh-accent) 80%, black); color: #fff; }
+
+  .pvh__hint {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    margin: 0;
+    color: #c9d6e8;
+    font-family: var(--font-sans);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    animation: pvh-bob 1.8s ease-in-out infinite;
+  }
+  @keyframes pvh-bob { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 8px); } }
+
+  @media (prefers-reduced-motion: reduce), (max-width: 760px) {
+    /* The bg/mark/wordmark layers are all position:absolute, so with no
+       aspect-ratio the stage has nothing in normal flow to size itself
+       against - it collapsed to just its own padding, clipping the
+       wordmark. Give it a real height here instead. */
+    .pvh__stage {
+      position: relative;
+      height: auto;
+      aspect-ratio: 4 / 5;
+      max-height: none;
+      padding-block: var(--space-l);
+    }
+    .pvh__track { height: auto; }
+    .pvh__particles, .pvh__ecg, .pvh__cta, .pvh__hint { display: none; }
+    .pvh__tagline, .pvh__final-title, .pvh__final-sub { position: static; opacity: 1; margin-top: 0.4em; }
+    .pvh__final-title { text-shadow: none; }
+  }
+</style>
+
+<script define:vars={{ layout }}>
+  (() => {
+    const suffix = layout;
+    const track = document.getElementById(`pvhTrack-${suffix}`);
+    const bg = document.getElementById(`pvh-bg-${suffix}`);
+    const l1 = document.getElementById(`pvh-1-${suffix}`);
+    const l2 = document.getElementById(`pvh-2-${suffix}`);
+    const ecg = document.getElementById(`pvh-ecg-${suffix}`);
+    const tagline = document.getElementById(`pvh-tagline-${suffix}`);
+    const finalTitle = document.getElementById(`pvh-finaltitle-${suffix}`);
+    const finalSub = document.getElementById(`pvh-finalsub-${suffix}`);
+    const cta = document.getElementById(`pvh-cta-${suffix}`);
+    const hint = document.getElementById(`pvh-hint-${suffix}`);
+    const particlesWrap = document.getElementById(`pvh-particles-${suffix}`);
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const narrow = matchMedia('(max-width: 760px)').matches;
+
+    if (!track || !bg || !l1 || !l2 || reduced || narrow) return;
+
+    for (let i = 0; i < 18; i++) {
+      const d = document.createElement('div');
+      const s = 3 + Math.random() * 6;
+      d.className = 'pvh__particle';
+      d.style.width = d.style.height = `${s}px`;
+      d.style.left = `${Math.random() * 100}%`;
+      d.style.top = `${20 + Math.random() * 70}%`;
+      d.style.animationDuration = `${4 + Math.random() * 6}s`;
+      d.style.animationDirection = Math.random() > 0.5 ? 'alternate' : 'alternate-reverse';
+      particlesWrap?.appendChild(d);
+    }
+
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const smooth = (v, lo, hi) => clamp((v - lo) / (hi - lo), 0, 1);
+    const bgImg = bg.querySelector('img');
+
+    function render() {
+      const max = track.offsetHeight - window.innerHeight;
+      const p = max > 0 ? clamp(window.scrollY / max, 0, 1) : 0;
+
+      bg.style.transform = `translateY(${p * -40}px)`;
+      if (bgImg) bgImg.style.transform = `scale(${1.15 + p * 0.1})`;
+
+      if (layout === 'stacked') {
+        l1.style.transform = `translateY(${p * -50}px) scale(${1 + p * 1.2})`;
+        l1.style.opacity = `${1 - smooth(p, 0.15, 0.55) * 0.85}`;
+        l2.style.transform = `translateY(${p * -220}px) scale(${1 + p * 0.25})`;
+        l2.style.opacity = `${1 - smooth(p, 0.05, 0.35)}`;
+      } else {
+        l1.style.transform = `translateY(${p * -90}px) scale(${1 + p * 0.9})`;
+        l1.style.opacity = `${1 - smooth(p, 0.15, 0.5) * 0.9}`;
+        l2.style.transform = `translateY(${p * -160}px) scale(${1 + p * 0.2})`;
+        l2.style.opacity = `${1 - smooth(p, 0.1, 0.35)}`;
+      }
+
+      const ecgOpacity = smooth(p, 0.3, 0.45) * (1 - smooth(p, 0.6, 0.75));
+      if (ecg) ecg.style.opacity = `${ecgOpacity}`;
+
+      if (tagline) {
+        tagline.style.opacity = `${smooth(p, 0.32, 0.45) * (1 - smooth(p, 0.6, 0.72))}`;
+        tagline.style.transform = `translateY(${(1 - smooth(p, 0.32, 0.45)) * 20}px)`;
+      }
+
+      const finalP = smooth(p, 0.72, 0.9);
+      if (finalTitle) {
+        finalTitle.style.opacity = `${finalP}`;
+        finalTitle.style.transform = `translateY(${(1 - finalP) * 20}px)`;
+      }
+      if (finalSub) finalSub.style.opacity = `${finalP}`;
+      if (cta) cta.style.opacity = `${finalP}`;
+      if (hint) hint.style.opacity = `${1 - smooth(p, 0, 0.08)}`;
+
+      const settled = window.scrollY > max + 200;
+      if (settled) {
+        looping = false;
+        return;
+      }
+      raf = requestAnimationFrame(render);
+    }
+
+    let raf = 0;
+    let looping = false;
+    function ensureLooping() {
+      if (looping) return;
+      looping = true;
+      render();
+    }
+
+    ensureLooping();
+    window.addEventListener('scroll', ensureLooping, { passive: true });
+    window.addEventListener('resize', ensureLooping);
+    document.addEventListener('astro:before-swap', () => cancelAnimationFrame(raf), { once: true });
+  })();
+</script>
