@@ -82,16 +82,15 @@ const base = '/assets/research/hero-layers';
     pointer-events: none;
     user-select: none;
     transform-origin: center center;
-    /* Pre-promote every layer to its own GPU compositing layer up front
-       (not just the ones the scroll script animates) so none of the 9
-       stacked, overlapping images ever gets promoted/demoted mid-scroll. */
-    transform: translate3d(0, 0, 0);
-    /* backface-visibility: hidden was a leftover from a 3D-flip pattern
-       this hero doesn't use (nothing rotates on X/Y) - combined with
-       will-change: opacity on 9 simultaneously-animating images, it's a
-       known Chrome/Safari GPU-compositing bug that makes a layer briefly
-       vanish and repaint mid-animation. That's the actual flicker. */
-    will-change: transform;
+    /* No permanent transform/will-change here. Forcing all 9 large,
+       fully-overlapping images into their own GPU compositing layer at
+       all times (an earlier attempt) keeps 9 large textures resident in
+       GPU memory even when nothing is animating - under memory pressure
+       the browser evicts and re-uploads a layer's backing store, which
+       is exactly what showed up as a layer briefly going blank and
+       reappearing. Layers are promoted only while the scroll script is
+       actually animating them (see the script below) and released once
+       the pin settles. */
   }
   #ls-bg { z-index: 0; }
   #ls-tl { z-index: 10; }
@@ -129,8 +128,23 @@ const base = '/assets/research/hero-layers';
       heart: document.getElementById('ls-heart'),
     } as Record<string, HTMLImageElement>;
 
+    const allLayers = Object.values(layers);
+
     let current = 0; // smoothed hero-pin progress, 0..1
     let raf = 0;
+    let promoted = false;
+
+    /** Only keep layers on their own GPU compositing layer while they're
+     *  actually being animated - holding 9 large, fully-overlapping
+     *  images permanently promoted keeps 9 textures resident in GPU
+     *  memory even at rest, and under memory pressure the browser can
+     *  evict + re-upload one, which is what showed up as a layer
+     *  flashing blank for a moment mid-scroll. */
+    function setPromoted(on: boolean) {
+      if (on === promoted) return;
+      promoted = on;
+      for (const el of allLayers) el.style.willChange = on ? 'transform, opacity' : 'auto';
+    }
 
     const clamp = (v: number, min = 0, max = 1) => Math.min(max, Math.max(min, v));
     const ease = (v: number) => (v < 0.5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2);
@@ -186,6 +200,7 @@ const base = '/assets/research/hero-layers';
       const settled = window.scrollY > pinEnd() + 200;
       if (settled) {
         looping = false;
+        setPromoted(false);
         return;
       }
       raf = requestAnimationFrame(render);
@@ -195,6 +210,7 @@ const base = '/assets/research/hero-layers';
     function ensureLooping() {
       if (looping) return;
       looping = true;
+      setPromoted(true);
       render();
     }
 
