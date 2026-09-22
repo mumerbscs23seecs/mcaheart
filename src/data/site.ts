@@ -335,14 +335,6 @@ export const contactIntents = [
     ctaLabel: "Let's Connect",
     href: '/contact#enquiry',
   },
-  {
-    id: 'team',
-    icon: '\u{2709}\u{FE0F}',
-    title: 'Contact the Team',
-    body: 'For inquiries related to M. Chadi Alraies, MD, MPH, the MCA Heart Research Lab, research collaborations, or educational initiatives:',
-    ctaLabel: 'researchoperations@mcaheart.com',
-    href: 'mailto:researchoperations@mcaheart.com',
-  },
 ] as const;
 
 export const footerLinks = {

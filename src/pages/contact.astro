@@ -2,6 +2,12 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ContactForm from '../components/ContactForm.astro';
 import { contactIntents } from '../data/site';
+
+const marqueePhrases = [
+  'Advancing Cardiovascular Research',
+  'Educating the Next Generation',
+  'Improving Cardiovascular Care',
+];
 ---
 
 <BaseLayout
@@ -26,9 +32,14 @@ import { contactIntents } from '../data/site';
 
     <div class="marquee" aria-hidden="true">
       <div class="marquee__track">
-        {Array.from({ length: 4 }).map(() => (
-          <span class="marquee__item">Advancing Cardiovascular Research &bull; Educating the Next Generation &bull; Improving Cardiovascular Care</span>
-        ))}
+        {Array.from({ length: 4 }).map(() =>
+          marqueePhrases.map((phrase) => (
+            <span class="marquee__item">
+              {phrase}
+              <span class="marquee__dot"></span>
+            </span>
+          )),
+        )}
       </div>
     </div>
   </section>
@@ -40,13 +51,7 @@ import { contactIntents } from '../data/site';
         <article class="intent" data-reveal style={`--reveal-delay:${i * 110}ms`}>
           <span class="intent__icon" aria-hidden="true">{c.icon}</span>
           <h2 class="intent__title">{c.title}</h2>
-          <p class="intent__body">
-            {c.id === 'team' ? (
-              <>For inquiries related to <strong>M. Chadi Alraies, MD, MPH</strong>, the MCA Heart Research Lab, research collaborations, or educational initiatives:</>
-            ) : (
-              c.body
-            )}
-          </p>
+          <p class="intent__body">{c.body}</p>
           <a class="intent__cta link-underline" href={c.href}>
             {c.ctaLabel} <span aria-hidden="true">&rarr;</span>
           </a>
@@ -116,11 +121,13 @@ import { contactIntents } from '../data/site';
   }
   .marquee__track {
     display: flex;
+    align-items: center;
     width: max-content;
-    gap: 2.5rem;
     animation: slide 36s linear infinite;
   }
   .marquee__item {
+    display: inline-flex;
+    align-items: center;
     font-family: var(--font-serif);
     font-size: var(--step-2);
     font-weight: 800;
@@ -129,10 +136,13 @@ import { contactIntents } from '../data/site';
     color: var(--text-strong);
     white-space: nowrap;
   }
-  .marquee__item::after {
-    content: '\2022';
-    margin-left: 2.5rem;
-    color: var(--blue);
+  .marquee__dot {
+    width: 6px;
+    height: 6px;
+    margin-inline: 1.75rem;
+    border-radius: 50%;
+    background: var(--blue);
+    flex-shrink: 0;
   }
   @keyframes slide {
     from { transform: translateX(0); }
