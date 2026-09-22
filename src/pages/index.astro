@@ -525,6 +525,10 @@ const DIRECTOR_ICONS: Record<string, string> = {
   /* Second row, same tile language - the research page's manuscript/
      abstract/researcher counts, three compartments instead of four. */
   .impact__grid--research { grid-template-columns: repeat(3, 1fr); }
+  /* Wider tiles (3 columns instead of 4) - let the label use the room
+     instead of wrapping at the general 22ch cap. */
+  .impact__grid--research .stat__label { max-width: none; white-space: nowrap; }
+  @media (max-width: 700px) { .impact__grid--research .stat__label { white-space: normal; } }
   @media (max-width: 700px) { .impact__grid--research { grid-template-columns: 1fr; } }
 
   /* ------------------------------------------------------------- Pillars */
