@@ -1,8 +1,20 @@
 ---
+// Live PubMed sync (fetchRecentPublications) needs to run per-request, not
+// just once at build time - see src/lib/pubmed-feed.ts.
+export const prerender = false;
+
 import BaseLayout from '../layouts/BaseLayout.astro';
 import LayeredScrollHero from '../components/LayeredScrollHero.astro';
 import CTABanner from '../components/CTABanner.astro';
-import { testimonials, missionVision, societies, recentPublications } from '../data/site';
+import { testimonials, missionVision, societies, recentPublications as fallbackPublications } from '../data/site';
+import { fetchRecentPublications } from '../lib/pubmed-feed';
+
+// Fall back to the static seed list only if PubMed has never once answered
+// successfully (no cache yet, and this fetch also failed) - once a real
+// fetch has ever succeeded, the live list (however small) is always shown
+// instead of quietly reverting to stale placeholder titles.
+const livePublications = await fetchRecentPublications(6);
+const recentPublications = livePublications.length > 0 ? livePublications : fallbackPublications;
 ---
 
 <BaseLayout
@@ -292,25 +304,27 @@ import { testimonials, missionVision, societies, recentPublications } from '../d
 
   .pub__papers {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1px;
+    grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+    gap: var(--space-m);
     margin: var(--space-xl) 0 0;
     padding: 0;
     list-style: none;
-    background: var(--border-soft);
-    border: 1px solid var(--border-soft);
   }
-  @media (max-width: 860px) { .pub__papers { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 600px) { .pub__papers { grid-template-columns: 1fr; } }
 
+  /* Same card language as the testimonials below (.voice): its own full
+     border, real breathing room between tiles, border darkens on hover -
+     not a hairline-seam grid where the tiles touch. */
   .paper {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
-    min-height: 190px;
-    padding: var(--space-s);
+    gap: var(--space-s);
+    min-height: 200px;
+    padding: var(--space-m);
     background: var(--surface);
+    border: 1px solid var(--border);
+    transition: border-color 0.3s var(--ease);
   }
+  .paper:hover { border-color: var(--ink); }
   .paper__meta {
     margin: 0;
     font-family: var(--font-sans);
@@ -324,17 +338,17 @@ import { testimonials, missionVision, societies, recentPublications } from '../d
   .paper__date { color: var(--text-faint); font-weight: 600; letter-spacing: 0.02em; text-transform: none; }
   .paper__title {
     margin: 0;
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 0.98rem;
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: var(--step-0);
     line-height: 1.4;
-    letter-spacing: -0.005em;
     color: var(--text-strong);
   }
   .paper__authors { margin: 0; font-size: 0.78rem; line-height: 1.5; color: var(--text-muted); }
   .paper__link {
     margin-top: auto;
-    padding-top: 0.3rem;
+    padding-top: var(--space-s);
+    border-top: 1px solid var(--border-soft);
     display: inline-flex;
     align-items: center;
     gap: 0.35em;
