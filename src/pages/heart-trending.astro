@@ -36,13 +36,13 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
   />
 
   {/* -------------------------------------------------------------- Intro */}
-  <section class="section--tight trending-intro">
-    <div class="shell shell--narrow">
+  <section class="section trending-intro">
+    <div class="shell shell--wide trending-intro__grid">
       <header class="trending-intro__head" data-reveal>
-        <p class="eyebrow eyebrow--center">About the series</p>
+        <p class="eyebrow">About the series</p>
         <h2 class="display trending-intro__title">Conversations that move cardiology forward</h2>
       </header>
-      <div class="prose center trending-intro__body" data-reveal style="--reveal-delay:100ms">
+      <div class="prose trending-intro__body" data-reveal style="--reveal-delay:100ms">
         <p>
           MCA Heart Trending is a cardiovascular education platform led by Dr. M. Chadi Alraies,
           featuring conversations with cardiologists, researchers, and other experts on emerging
@@ -102,9 +102,29 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
 <style>
   .phero__cta { margin-top: var(--space-l); }
 
-  .trending-intro__head { text-align: center; }
+  .trending-intro__grid {
+    display: grid;
+    grid-template-columns: 0.85fr 1.15fr;
+    gap: clamp(2rem, 1rem + 4vw, 5rem);
+    align-items: start;
+  }
   .trending-intro__title { font-size: var(--step-2); margin-top: var(--space-s); }
-  .trending-intro__body { margin-top: var(--space-l); }
+  .trending-intro__body {
+    padding-left: clamp(1.3rem, 0.8rem + 2vw, 2.4rem);
+    border-left: 2px solid var(--blue);
+  }
+  .trending-intro__body p { text-align: left; }
+
+  @media (max-width: 760px) {
+    .trending-intro__grid { grid-template-columns: 1fr; }
+    .trending-intro__body {
+      margin-top: var(--space-m);
+      padding-left: 0;
+      padding-top: var(--space-m);
+      border-left: none;
+      border-top: 2px solid var(--blue);
+    }
+  }
 
   .library__title { font-size: var(--step-3); margin-top: var(--space-s); }
   .library__note { margin-top: var(--space-s); }
