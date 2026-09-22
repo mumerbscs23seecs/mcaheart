@@ -110,7 +110,10 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
     color: var(--blue);
     text-align: center;
   }
-  .trending-intro__body { margin-top: var(--space-s); }
+  /* .prose caps width at --measure but doesn't center itself within its
+     container - left the paragraph block sitting off-center relative to
+     the (full-width) quote mark above it. */
+  .trending-intro__body { margin-top: var(--space-s); margin-inline: auto; }
   .trending-intro__body p {
     text-align: center;
     font-weight: 500;
