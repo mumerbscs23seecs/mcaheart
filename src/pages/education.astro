@@ -91,11 +91,7 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
     <section class="section playlist">
       <div class="shell shell--wide">
         <header class="playlist__head" data-reveal>
-          <p class="eyebrow">Playlist</p>
           <h2 class="display playlist__title">Education</h2>
-          <p class="prose playlist__note">
-            From our Education playlist on YouTube, kept in sync automatically.
-          </p>
         </header>
 
         <div class="playlist__grid">
@@ -212,9 +208,10 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
     align-items: center;
   }
   .series__plate {
-    display: inline-block;
+    display: block;
+    width: fit-content;
+    margin: 0 auto var(--space-m);
     padding: 1rem 1.5rem;
-    margin-bottom: var(--space-m);
     background: var(--dark);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow);

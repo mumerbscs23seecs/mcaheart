@@ -38,7 +38,11 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
   {/* -------------------------------------------------------------- Intro */}
   <section class="section--tight trending-intro">
     <div class="shell shell--narrow">
-      <div class="prose center">
+      <header class="trending-intro__head" data-reveal>
+        <p class="eyebrow eyebrow--center">About the series</p>
+        <h2 class="display trending-intro__title">Conversations that move cardiology forward</h2>
+      </header>
+      <div class="prose center trending-intro__body" data-reveal style="--reveal-delay:100ms">
         <p>
           MCA Heart Trending is a cardiovascular education platform led by Dr. M. Chadi Alraies,
           featuring conversations with cardiologists, researchers, and other experts on emerging
@@ -59,10 +63,6 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
       <div class="shell shell--wide">
         <header class="library__head" data-reveal>
           <h2 class="display library__title">Just uploaded</h2>
-          <p class="prose library__note">
-            Pulled automatically from the channel - no editing needed on our end
-            when a new episode goes up.
-          </p>
         </header>
 
         <div class="library__grid">
@@ -101,6 +101,10 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
 
 <style>
   .phero__cta { margin-top: var(--space-l); }
+
+  .trending-intro__head { text-align: center; }
+  .trending-intro__title { font-size: var(--step-2); margin-top: var(--space-s); }
+  .trending-intro__body { margin-top: var(--space-l); }
 
   .library__title { font-size: var(--step-3); margin-top: var(--space-s); }
   .library__note { margin-top: var(--space-s); }
