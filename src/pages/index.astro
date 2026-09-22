@@ -25,23 +25,11 @@ const DIRECTOR_ICONS: Record<string, string> = {
   {/* ---------------------------------------------------------------- Hero */}
   <section class="hero grid-ground">
     <div class="shell shell--wide hero__inner">
-      <div class="hero__copy">
-        <h1 class="display hero__title">
-          <span class="hero__line">Charting</span>
-          <span class="hero__line">New Paths</span>
-          <span class="hero__line">in <em>Cardiology</em></span>
-        </h1>
-        <p class="lede hero__lede">
-          A collaboration of more than three hundred researcher-physicians,
-          publishing, presenting, and teaching at the frontiers of cardiovascular medicine.
-        </p>
-        <div class="hero__actions">
-          <a class="btn" href="/research-group">
-            Explore the group <span class="btn__arrow" aria-hidden="true">&rarr;</span>
-          </a>
-          <a class="btn btn--ghost" href="/heart-trending">Watch Heart Trending</a>
-        </div>
-      </div>
+      <h1 class="display hero__title">
+        <span class="hero__line">Charting</span>
+        <span class="hero__line">New Paths</span>
+        <span class="hero__line">in <em>Cardiology</em></span>
+      </h1>
 
       <div class="hero__art" aria-hidden="true">
         <img
@@ -52,6 +40,19 @@ const DIRECTOR_ICONS: Record<string, string> = {
           width="381"
           height="690"
         />
+      </div>
+
+      <div class="hero__rest">
+        <p class="lede hero__lede">
+          A collaboration of more than three hundred researcher-physicians,
+          publishing, presenting, and teaching at the frontiers of cardiovascular medicine.
+        </p>
+        <div class="hero__actions">
+          <a class="btn" href="/research-group">
+            Explore the group <span class="btn__arrow" aria-hidden="true">&rarr;</span>
+          </a>
+          <a class="btn btn--ghost" href="/heart-trending">Watch Heart Trending</a>
+        </div>
       </div>
     </div>
   </section>
@@ -255,15 +256,21 @@ const DIRECTOR_ICONS: Record<string, string> = {
     overflow: hidden;
   }
 
+  /* Three named grid items (title / art / rest, "rest" being the lede +
+     buttons) instead of one bundled copy block, so the art can share a
+     row with just the title on mobile instead of sitting above the
+     whole copy stack. */
   .hero__inner {
     display: grid;
     grid-template-columns: 1.05fr 0.95fr;
+    grid-template-areas: 'title art' 'rest art';
     gap: var(--space-l);
     align-items: center;
     width: 100%;
   }
 
   .hero__title {
+    grid-area: title;
     margin-top: -6px;
     /* Sized so the longest line ("in CARDIOLOGY") never wraps. */
     font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem);
@@ -279,6 +286,7 @@ const DIRECTOR_ICONS: Record<string, string> = {
     color: transparent;
   }
 
+  .hero__rest { grid-area: rest; }
   .hero__lede { margin-top: var(--space-m); }
 
   .hero__actions {
@@ -289,6 +297,7 @@ const DIRECTOR_ICONS: Record<string, string> = {
   }
 
   .hero__art {
+    grid-area: art;
     position: relative;
     justify-self: center;
     animation: float 9s ease-in-out infinite;
@@ -322,11 +331,25 @@ const DIRECTOR_ICONS: Record<string, string> = {
 
   @media (max-width: 900px) {
     .hero { min-height: auto; }
-    .hero__inner { grid-template-columns: 1fr; gap: var(--space-m); }
-    /* Keep the art from eating the whole first screen so the headline
-       still lands above the fold on a phone. */
-    .hero__art { order: -1; justify-self: start; }
-    .hero__art img { height: min(34svh, 290px); }
+    /* The heart sits beside the title, not above the whole copy block -
+       title takes the wider column, art the narrower one, and the lede +
+       buttons drop to a full-width row underneath both. */
+    .hero__inner {
+      grid-template-columns: 1fr min(34vw, 190px);
+      grid-template-areas: 'title art' 'rest rest';
+      column-gap: var(--space-s);
+      row-gap: var(--space-m);
+    }
+    .hero__title { align-self: start; }
+    .hero__art { justify-self: end; align-self: start; }
+    .hero__art img { height: auto; width: 100%; }
+  }
+
+  @media (max-width: 460px) {
+    /* Below this the title's own font-size clamp has shrunk enough that
+       a fixed-fraction art column starts crowding "in Cardiology" - drop
+       back to a fixed, smaller art column instead of a viewport-relative one. */
+    .hero__inner { grid-template-columns: 1fr 120px; }
   }
 
   /* ----------------------------------------------------------- Societies */
