@@ -17,12 +17,10 @@ import { contactIntents } from '../data/site';
 
     <div class="shell shell--wide chero__inner">
       <p class="eyebrow">Contact</p>
-      <h1 class="display chero__title">
-        Your next big<br /><em>opportunity</em><br />starts here
-      </h1>
+      <h1 class="display chero__title">Connect With <em>MCA Heart</em></h1>
       <p class="lede chero__sub">
-        Join a community of experts shaping the future of cardiology. Publish,
-        present, and lead the way in cardiovascular research.
+        Have a question about the lab, a research idea, or a potential collaboration? Reach out to
+        our team.
       </p>
     </div>
 
@@ -42,7 +40,16 @@ import { contactIntents } from '../data/site';
         <article class="intent" data-reveal style={`--reveal-delay:${i * 110}ms`}>
           <span class="intent__icon" aria-hidden="true">{c.icon}</span>
           <h2 class="intent__title">{c.title}</h2>
-          <p class="intent__body">{c.body}</p>
+          <p class="intent__body">
+            {c.id === 'team' ? (
+              <>For inquiries related to <strong>M. Chadi Alraies, MD, MPH</strong>, the MCA Heart Research Lab, research collaborations, or educational initiatives:</>
+            ) : (
+              c.body
+            )}
+          </p>
+          <a class="intent__cta link-underline" href={c.href}>
+            {c.ctaLabel} <span aria-hidden="true">&rarr;</span>
+          </a>
         </article>
       ))}
     </div>
@@ -157,6 +164,16 @@ import { contactIntents } from '../data/site';
     font-size: var(--step--1);
     line-height: 1.7;
     color: var(--text-muted);
+  }
+  .intent__body strong { color: var(--text-strong); }
+  .intent__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4em;
+    margin-top: var(--space-s);
+    font-size: var(--step--1);
+    font-weight: 700;
+    color: var(--blue);
   }
 
   /* ------------------------------------------------------------------ Form */

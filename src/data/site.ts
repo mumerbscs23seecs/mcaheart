@@ -322,14 +322,26 @@ export const contactIntents = [
   {
     id: 'join',
     icon: '\u{1FA7A}',
-    title: 'Looking to join us?',
-    body: 'Passionate about cardiology? Whether you are a researcher, physician, or medical student, the MCA Heart Research Lab is the place to grow your skills and contribute to impactful research.',
+    title: 'Interested in Joining the Lab?',
+    body: 'MCA Heart brings together medical students, residents, fellows, physicians, and researchers working on cardiovascular research. Learn more about the lab and our application process.',
+    ctaLabel: 'Join the Lab',
+    href: '/join-lab',
   },
   {
     id: 'collaborate',
     icon: '\u{1F4E2}',
-    title: 'Want to collaborate?',
-    body: 'We welcome partnerships with researchers, institutions and industry leaders. Let us work together on groundbreaking cardiovascular studies.',
+    title: 'Interested in Collaborating?',
+    body: 'We work with researchers, physicians, institutions, and other organizations on cardiovascular research and education. For collaboration inquiries, contact our team and tell us a little about what you have in mind.',
+    ctaLabel: "Let's Connect",
+    href: '/contact#enquiry',
+  },
+  {
+    id: 'team',
+    icon: '\u{2709}\u{FE0F}',
+    title: 'Contact the Team',
+    body: 'For inquiries related to M. Chadi Alraies, MD, MPH, the MCA Heart Research Lab, research collaborations, or educational initiatives:',
+    ctaLabel: 'researchoperations@mcaheart.com',
+    href: 'mailto:researchoperations@mcaheart.com',
   },
 ] as const;
 
