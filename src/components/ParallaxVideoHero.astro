@@ -43,6 +43,35 @@ const {
   ctaPrimary,
   ctaSecondary,
 } = Astro.props;
+
+// A real P-Q-R-S-T cycle (not just a spike) - baseline with a small rounded
+// P wave, a flat PR segment, a sharp QRS complex (small Q dip, tall R peak,
+// S dip), a flat ST segment, then a broader rounded T wave before the next
+// beat. One cycle is 250 units wide; tiled 8x across a 2000-wide path so it
+// loops seamlessly when the 200%-wide <svg> scrolls by exactly -50% (one
+// full 1000-unit shift = exactly 4 whole cycles).
+const BASELINE = 60;
+function ecgCycle(ox: number): string {
+  return (
+    `L${ox + 10},${BASELINE} ` +
+    `Q${ox + 20},${BASELINE} ${ox + 27},${BASELINE - 8} ` +
+    `Q${ox + 34},${BASELINE} ${ox + 40},${BASELINE} ` + // P wave
+    `L${ox + 55},${BASELINE} ` + // PR segment
+    `L${ox + 58},${BASELINE + 6} ` + // Q
+    `L${ox + 62},${BASELINE - 52} ` + // R
+    `L${ox + 68},${BASELINE + 18} ` + // S
+    `L${ox + 75},${BASELINE} ` + // back to baseline
+    `L${ox + 110},${BASELINE} ` + // ST segment
+    `Q${ox + 125},${BASELINE} ${ox + 132},${BASELINE - 14} ` +
+    `Q${ox + 140},${BASELINE} ${ox + 160},${BASELINE} ` + // T wave
+    `L${ox + 250},${BASELINE} ` // TP segment to next beat
+  );
+}
+const ECG_CYCLE_WIDTH = 250;
+const ECG_CYCLES = 8; // 2000 / 250
+const ecgPath =
+  `M0,${BASELINE} ` +
+  Array.from({ length: ECG_CYCLES }, (_, i) => ecgCycle(i * ECG_CYCLE_WIDTH)).join('');
 ---
 
 <section class="pvh" style={`--pvh-accent:${accent}; --pvh-navy:${navy}; --pvh-navy-deep:${navyDeep}`}>
@@ -78,13 +107,7 @@ const {
 
       <div class="pvh__ecg" id={`pvh-ecg-${layout}`}>
         <svg viewBox="0 0 1000 120" preserveAspectRatio="none">
-          <path
-            class="pvh__ecg-line"
-            d="M0,60 L120,60 L150,60 L170,20 L190,100 L210,60 L260,60 L280,40 L300,60 L500,60
-               L620,60 L650,60 L670,20 L690,100 L710,60 L760,60 L780,40 L800,60 L1000,60
-               L1120,60 L1150,60 L1170,20 L1190,100 L1210,60 L1260,60 L1280,40 L1300,60 L1500,60
-               L1620,60 L1650,60 L1670,20 L1690,100 L1710,60 L1760,60 L1780,40 L1800,60 L2000,60"
-          ></path>
+          <path class="pvh__ecg-line" d={ecgPath}></path>
         </svg>
       </div>
 
