@@ -3,8 +3,6 @@ import { defineConfig } from 'astro/config';
 import sitemap from '@astrojs/sitemap';
 import node from '@astrojs/node';
 
-import react from '@astrojs/react';
-
 export default defineConfig({
   site: 'https://www.mcaheart.com',
   // Every page prerenders to static HTML; only routes that opt out with
@@ -23,7 +21,7 @@ export default defineConfig({
     // in each route - this only turns off the extra Origin-header check.
     checkOrigin: false,
   },
-  integrations: [sitemap(), react()],
+  integrations: [sitemap()],
   // Prefetches a linked page's HTML as soon as its link scrolls into view,
   // so by the time someone actually clicks it the navigation is close to
   // instant. Astro dedupes/cancels automatically - no extra requests for
