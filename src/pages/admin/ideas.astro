@@ -20,6 +20,24 @@ let session = await getPipelineSession(Astro.request, Astro.cookies);
 session = session ?? (await bridgeAdminSession(Astro.request, Astro.cookies));
 const supabase = session?.supabase ?? null;
 
+// The real, dated conference instances an approved idea can be sent to
+// (e.g. "TCT 2026") - distinct from the idea form's own conference field,
+// which is just a general preference (TCT/SCAI/ACC/flexible/none).
+const { data: allConferences } = supabase
+  ? await supabase.from('conferences').select('name,abstract_deadline').order('abstract_deadline', { ascending: false })
+  : { data: null };
+const conferenceOptions: string[] = (allConferences ?? []).map((c: any) => c.name);
+
+/** Best-guess default for the "send to conference" picker - the nearest
+ *  upcoming named conference whose series matches what the submitter asked
+ *  for (e.g. idea.conference "TCT" -> conference row "TCT 2026"). */
+function defaultConferenceFor(idea: IdeaRecord): string {
+  if (idea.conference === 'TCT' || idea.conference === 'SCAI' || idea.conference === 'ACC') {
+    return conferenceOptions.find((n) => n.toUpperCase().startsWith(idea.conference.toUpperCase())) ?? '';
+  }
+  return '';
+}
+
 /** idea.researchType/databases -> the pipeline's fixed study_type enum. */
 function studyTypeFor(idea: IdeaRecord): string {
   if (idea.researchType === 'Meta-analysis') return 'SRMA';
@@ -39,6 +57,8 @@ type Preview = {
   to: string;
   subject: string;
   html: string;
+  /** Only meaningful when decision === 'approved'. */
+  conference: string;
 };
 let flash: Flash | null = null;
 let preview: Preview | null = null;
@@ -55,6 +75,7 @@ if (Astro.request.method === 'POST') {
   const action = String(form.get('action') ?? '');
   const ideaId = String(form.get('ideaId') ?? '');
   const note = String(form.get('note') ?? '');
+  const conference = String(form.get('conference') ?? '');
   const decision: Decision =
     (['approved', 'withheld', 'declined'] as const).find((d) => d === form.get('decision')) ??
     decisionFromAction(action);
@@ -64,7 +85,9 @@ if (Astro.request.method === 'POST') {
     const idea = getIdea(ideaId);
     if (!idea) flash = { tone: 'error', text: 'Idea not found.' };
     else if (idea.status !== 'pending') flash = { tone: 'error', text: `That idea was already ${idea.status}.` };
-    else {
+    else if (decision === 'approved' && !conference) {
+      flash = { tone: 'error', text: 'Choose which conference to send this to before approving.' };
+    } else {
       const { subject, html } = renderIdeaDecisionEmail({
         to: idea.leadEmail,
         leadName: idea.leadName,
@@ -72,12 +95,15 @@ if (Astro.request.method === 'POST') {
         decision,
         note: note.trim() || null,
       });
-      preview = { ideaId, decision, note, to: idea.leadEmail, subject, html };
+      preview = { ideaId, decision, note, to: idea.leadEmail, subject, html, conference };
     }
   }
 
   // --- Phase 2: confirmed - record + send --------------------------------
   if (action === 'confirm') {
+    if (decision === 'approved' && !conference) {
+      flash = { tone: 'error', text: 'Choose which conference to send this to before approving.' };
+    } else {
     const result = decideIdea(ideaId, decision, me.name, note);
     if (!result.ok || !result.idea) {
       flash = { tone: 'error', text: result.error ?? 'Could not record that decision.' };
@@ -93,17 +119,54 @@ if (Astro.request.method === 'POST') {
             .select('id')
             .ilike('email', idea.leadEmail)
             .maybeSingle();
-          const { error: createErr } = await supabase.rpc('create_project_from_idea', {
+          const { data: created, error: createErr } = await supabase.rpc('create_project_from_idea', {
             p_title: idea.title,
             p_study_type: studyTypeFor(idea),
             p_lead_id: person?.id ?? null,
             p_submitter_label: `${idea.leadName} <${idea.leadEmail}>`,
           });
-          pipelineNote = createErr
-            ? ` (pipeline project not created: ${createErr.message})`
-            : person?.id
+          if (createErr) {
+            pipelineNote = ` (pipeline project not created: ${createErr.message})`;
+          } else {
+            // The RPC's return shape isn't pinned down here (scalar id, a
+            // row, or nothing) - fall back to looking the new project up by
+            // the exact title/submitter we just created it with if it
+            // didn't hand back a usable id directly.
+            let newProjectId: string | null =
+              typeof created === 'string'
+                ? created
+                : Array.isArray(created)
+                  ? (created[0]?.id ?? null)
+                  : (created?.id ?? null);
+            if (!newProjectId) {
+              const { data: justCreated } = await supabase
+                .from('projects')
+                .select('id')
+                .eq('title', idea.title)
+                .eq('submitter_label', `${idea.leadName} <${idea.leadEmail}>`)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+              newProjectId = justCreated?.id ?? null;
+            }
+
+            const leadNote = person?.id
               ? ' - added to the pipeline as the lead'
               : ' - added to the pipeline, but no lead was assigned (no pipeline account for that email yet)';
+
+            if (!newProjectId) {
+              pipelineNote = `${leadNote} (could not find it again to send it to ${conference} - open it in the pipeline and use "Send to conference")`;
+            } else {
+              const { error: gateErr } = await supabase.rpc('gate1_send_to_conference', {
+                p_project: newProjectId,
+                p_conference: conference,
+                p_recycled_from: null,
+              });
+              pipelineNote = gateErr
+                ? `${leadNote}, but could not send it to ${conference}: ${gateErr.message}`
+                : `${leadNote} and sent to ${conference}`;
+            }
+          }
         }
       }
       let emailed = true;
@@ -129,6 +192,7 @@ if (Astro.request.method === 'POST') {
             tone: 'error',
             text: `${verb} and recorded${decision === 'approved' ? pipelineNote : ''}, but the email to ${idea.leadEmail} could not be sent.`,
           };
+    }
     }
   }
 }
@@ -199,6 +263,10 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
         <form method="post" class="mailprev__form">
           <input type="hidden" name="ideaId" value={preview.ideaId} />
           <input type="hidden" name="decision" value={preview.decision} />
+          {preview.decision === 'approved' && (
+            <p class="mailprev__target">Sending to pipeline, targeting <strong>{preview.conference}</strong>.</p>
+          )}
+          <input type="hidden" name="conference" value={preview.conference} />
           <label class="idea__notelabel" for="prev-note">Comments to the submitter</label>
           <textarea class="idea__note" id="prev-note" name="note" rows="3"
             placeholder="Add or edit comments, then refresh the preview.">{preview.note}</textarea>
@@ -249,13 +317,18 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
             {i.status === 'pending' ? (
               <form method="post" class="idea__decide">
                 <input type="hidden" name="ideaId" value={i.id} />
+                <label class="idea__notelabel" for={`conf-${i.id}`}>Send to conference (required to approve)</label>
+                <select class="idea__note" id={`conf-${i.id}`} name="conference" required>
+                  <option value="" selected={!defaultConferenceFor(i)}>Choose…</option>
+                  {conferenceOptions.map((c) => <option value={c} selected={c === defaultConferenceFor(i)}>{c}</option>)}
+                </select>
                 <label class="idea__notelabel" for={`note-${i.id}`}>Comments to the submitter (optional)</label>
                 <textarea class="idea__note" id={`note-${i.id}`} name="note" rows="2"
                   placeholder="e.g. which database to use, or why it wasn't taken forward. You'll see the full email before it sends."></textarea>
                 <div class="idea__actions">
                   <button class="btn idea__approve" name="action" value="preview-approve" type="submit">Approve &amp; add to pipeline…</button>
-                  <button class="btn idea__withhold" name="action" value="preview-withhold" type="submit">Withhold…</button>
-                  <button class="btn btn--red" name="action" value="preview-decline" type="submit">Decline…</button>
+                  <button class="btn idea__withhold" name="action" value="preview-withhold" type="submit" formnovalidate>Withhold…</button>
+                  <button class="btn btn--red" name="action" value="preview-decline" type="submit" formnovalidate>Decline…</button>
                 </div>
                 <p class="idea__hint-inline">Next step shows the email to review before it's sent.</p>
               </form>

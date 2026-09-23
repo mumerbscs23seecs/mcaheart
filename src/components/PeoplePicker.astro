@@ -18,19 +18,25 @@ const { name, label, roster, selectedId = null, selectedName = null, placeholder
 ---
 
 <div class="ppick" data-ppick>
-  <label class="pl-field">
-    <span>{label}</span>
-    <input
-      type="text"
-      class="ppick__input"
-      autocomplete="off"
-      placeholder={placeholder}
-      value={selectedName ?? ''}
-      data-ppick-input
-    />
-  </label>
-  <input type="hidden" name={name} value={selectedId ?? ''} data-ppick-value />
-  <ul class="ppick__menu" data-ppick-menu hidden></ul>
+  <div class="ppick__field">
+    <label class="pl-field">
+      <span>{label}</span>
+      <input
+        type="text"
+        class="ppick__input"
+        autocomplete="off"
+        placeholder={placeholder}
+        value={selectedName ?? ''}
+        data-ppick-input
+      />
+    </label>
+    <input type="hidden" name={name} value={selectedId ?? ''} data-ppick-value />
+    {/* Anchored to this field wrapper specifically (not the outer .ppick,
+        which also contains the "add new person" panel below) - so the
+        suggestion list always sits right under the textbox, even while
+        that panel is open and taller than usual. */}
+    <ul class="ppick__menu" data-ppick-menu hidden></ul>
+  </div>
 
   <div class="ppick__create" data-ppick-create hidden>
     <p class="ppick__create-label">New person</p>
@@ -48,6 +54,7 @@ const { name, label, roster, selectedId = null, selectedName = null, placeholder
 
 <style>
   .ppick { position: relative; }
+  .ppick__field { position: relative; }
   .ppick__menu {
     position: absolute;
     z-index: 20;
@@ -84,6 +91,11 @@ const { name, label, roster, selectedId = null, selectedName = null, placeholder
     border-radius: 6px;
     background: var(--bg-tint, #f4f2ee);
   }
+  /* The class above's own `display: grid` otherwise beats the browser's
+     default `[hidden] { display: none }` rule, so setting .hidden = true
+     in JS had no visual effect - the "add new person" panel stayed on
+     screen (and pushed the suggestion list below it) even when "hidden". */
+  .ppick__create[hidden] { display: none; }
   .ppick__create-label { margin: 0; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
   .ppick__create input {
     padding: 6px 8px;
@@ -166,13 +178,19 @@ const { name, label, roster, selectedId = null, selectedName = null, placeholder
     if (!input) return;
     const container = input.closest<HTMLElement>('[data-ppick]')!;
     container.querySelector<HTMLInputElement>('[data-ppick-value]')!.value = '';
+    container.querySelector<HTMLElement>('[data-ppick-create]')!.hidden = true;
     renderMenu(container, input.value);
   });
 
   document.addEventListener('focusin', (e) => {
     const input = (e.target as HTMLElement | null)?.closest<HTMLInputElement>('[data-ppick-input]');
     if (!input) return;
-    renderMenu(input.closest<HTMLElement>('[data-ppick]')!, input.value);
+    const container = input.closest<HTMLElement>('[data-ppick]')!;
+    // Re-focusing this field's own textbox (e.g. after backing out of "add
+    // new person") should go back to plain suggestions, not leave the
+    // create panel open below and pushed further away from the textbox.
+    container.querySelector<HTMLElement>('[data-ppick-create]')!.hidden = true;
+    renderMenu(container, input.value);
   });
 
   document.addEventListener('click', (e) => {
