@@ -9,7 +9,7 @@ import { getPipelineTasks } from '../lib/pipeline-tasks';
 
 interface Props {
   title: string;
-  active?: 'conferences' | 'ongoing' | 'submissions' | 'published' | 'tasks';
+  active?: 'conferences' | 'ongoing' | 'submissions' | 'published' | 'tasks' | 'ideas';
 }
 const { title, active } = Astro.props;
 const { supabase, person } = Astro.locals;
@@ -65,6 +65,9 @@ const tabs: Tab[] = [
     ? [{ key: 'published', label: 'Published', href: '/pipeline/published', count: pubN.count ?? null }]
     : []),
   taskTab,
+  // No count: this one is an action ("propose one"), not a queue of work -
+  // a number beside it would read as "N new ideas".
+  { key: 'ideas', label: 'New Idea', href: '/pipeline/ideas', count: null },
 ];
 ---
 

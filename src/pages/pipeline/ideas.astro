@@ -1,0 +1,102 @@
+---
+/**
+ * Propose a research idea, from inside the members portal.
+ *
+ * Same intake form and same review queue as the public /submit-idea page -
+ * the only difference is that a signed-in member doesn't retype their name
+ * and email (IdeaForm's `prefill`), and gets to see what happened to the
+ * ideas they've already sent in. Admins still approve/withhold/decline at
+ * /admin/ideas; nothing is decided here.
+ */
+import PipelineLayout from '../../layouts/PipelineLayout.astro';
+import IdeaForm from '../../components/IdeaForm.astro';
+import { listIdeas } from '../../lib/ideas';
+import { CONFERENCE_LABELS } from '../../lib/idea-schema';
+
+export const prerender = false;
+const { person } = Astro.locals;
+
+// The store is keyed by submitter email, so this is everything they've sent
+// in - from here or from the public form, before they had an account.
+const mine = listIdeas().filter(
+  (i) => i.leadEmail.toLowerCase() === person.email.toLowerCase(),
+);
+
+const STATUS_LABEL: Record<string, string> = {
+  pending: 'Awaiting review',
+  approved: 'Approved',
+  withheld: 'Held for later',
+  declined: 'Not taken forward',
+};
+
+const fmt = (t: number | null) => {
+  if (!t) return '-';
+  const d = new Date(t);
+  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}-${d.getFullYear()}`;
+};
+---
+
+<PipelineLayout title="Ideas" active="ideas">
+  <h1 class="pl-h1">Research ideas</h1>
+  <p class="pl-sub">
+    Propose a database or meta-analysis project. You're signed in, so your name and
+    email are already attached - just describe the idea. The research team reviews
+    each one and emails you the outcome, usually within five working days.
+  </p>
+
+  {mine.length > 0 && (
+    <>
+      <h2 class="pl-sech">Your submissions <span class="pl-h1__count">({mine.length})</span></h2>
+      <div class="pl-tablewrap">
+        <table class="pl-table">
+          <thead>
+            <tr>
+              <th>Idea</th>
+              <th>Type</th>
+              <th>Target</th>
+              <th>Submitted</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {mine.map((i) => (
+              <tr>
+                <td class="pl-t__title" data-th="Idea">
+                  {i.title}
+                  {i.decisionNote && <span class="pl-t__ref">Reviewer: “{i.decisionNote}”</span>}
+                </td>
+                <td data-th="Type">{i.researchType}</td>
+                <td class="pl-t__venue" data-th="Target">{CONFERENCE_LABELS[i.conference]}</td>
+                <td class="pl-t__date" data-th="Submitted">{fmt(i.submittedAt)}</td>
+                <td data-th="Status">
+                  <span class:list={['pl-status', i.status === 'pending' && 'pl-status--warn']}>
+                    {STATUS_LABEL[i.status] ?? i.status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )}
+
+  <h2 class="pl-sech pl-ideaform__head">Propose a new idea</h2>
+  <div class="pl-ideaform">
+    <IdeaForm prefill={{ name: person.full_name, email: person.email }} />
+  </div>
+</PipelineLayout>
+
+<style>
+  .pl-ideaform__head { margin-top: 36px; }
+  /* The intake form is shared with the public page, which sets it on a tinted
+     card. In the portal it sits directly on the page like every other
+     pipeline surface, so drop the outer padding and let the fieldsets carry
+     the structure. */
+  .pl-ideaform :global(.iform) { gap: 22px; }
+  .pl-ideaform :global(.iform__group) { border-color: var(--border); }
+  /* The public page sets these at marketing-headline size; the portal runs a
+     denser type scale, so bring the step numbers down to section-heading. */
+  .pl-ideaform :global(.iform__legend) { font-size: 1.05rem; gap: 0.55rem; }
+  .pl-ideaform :global(.iform__legend span) { font-size: 0.7em; }
+</style>
