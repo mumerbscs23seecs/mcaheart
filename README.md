@@ -9,7 +9,7 @@ on-demand API route for the contact form, no client framework.
 > **Which project is this?** The whole mcaheart.com website — all five pages.
 > "Heart Trending" is the name of *one page* on it (the video series), not the
 > project. If the local folder is still called `Heart Trending`, rename it to
-> `MCAHeart-Website` to match the repo.
+> `mcaheart` to match the repo.
 
 ---
 
