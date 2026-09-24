@@ -41,7 +41,7 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=300, stale-while-re
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <ThemeInit />
     <title>{pageTitle}</title>
     <meta name="description" content={description} />
@@ -104,28 +104,12 @@ Astro.response.headers.set('Cache-Control', 'public, max-age=300, stale-while-re
     <Footer />
 
     <script>
-      // Reveal-on-scroll. Progressive enhancement: without JS everything is
-      // painted by the .is-visible fallback applied immediately below.
-      const items = document.querySelectorAll('[data-reveal]');
-      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) {
-        const io = new IntersectionObserver(
-          (entries) => {
-            for (const entry of entries) {
-              if (entry.isIntersecting) {
-                entry.target.classList.add('is-visible');
-                io.unobserve(entry.target);
-              }
-            }
-          },
-          { rootMargin: '0px 0px -8% 0px', threshold: 0.08 },
-        );
-        items.forEach((el) => io.observe(el));
-      } else {
-        items.forEach((el) => el.classList.add('is-visible'));
-      }
+      // Reveal, exit, parallax, word scrub, stacking cards, rails - see
+      // src/scripts/effects.ts. Without JS everything renders final-state.
+      import '../scripts/effects';
     </script>
     <noscript>
-      <style>[data-reveal] { opacity: 1 !important; transform: none !important; }</style>
+      <style>[data-reveal] { --rv: 1 !important; opacity: 1 !important; translate: none !important; }</style>
     </noscript>
   </body>
 </html>

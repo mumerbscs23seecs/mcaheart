@@ -152,8 +152,25 @@ const year = new Date().getFullYear();
     .foot__mark { display: none; }
   }
   @media (max-width: 700px) {
-    .foot__inner { grid-template-columns: 1fr 1fr; }
+    .foot__inner { grid-template-columns: 1fr 1fr; column-gap: var(--space-m); row-gap: var(--space-l); }
     .foot__brand { grid-column: 1 / -1; }
     .foot__base { justify-content: flex-start; }
+  }
+
+  /* Touch: each link gets a ~44px-tall hit area. The spacing between rows
+     moves into that padding so the list keeps its drawn rhythm. */
+  @media (max-width: 760px), (pointer: coarse) {
+    .foot__head { font-size: 0.75rem; margin-bottom: 0.35rem; }
+    .foot__socials { gap: 0; margin-top: var(--space-s); }
+    .foot__social { min-height: 44px; }
+    .foot__list { gap: 0; }
+    .foot__list a { padding-block: 0.6rem; }
+    .foot__legal a { display: inline-block; padding-block: 0.7rem; }
+    .foot__list a::after,
+    .foot__legal a::after { bottom: 0.45rem; }
+    .foot__base { row-gap: 0; padding-bottom: var(--space-m); }
+    .foot__social:active,
+    .foot__list a:active,
+    .foot__legal a:active { color: var(--on-dark-accent); }
   }
 </style>

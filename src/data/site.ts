@@ -160,54 +160,164 @@ export type Video = {
   blurb: string;
 };
 
+// Newest upload first - this is also the fallback list heart-trending.astro
+// shows as "Just uploaded" if the live YouTube feed ever fails. Pulled from
+// the real @hearttrendingwithchadi channel (youtube.com/feeds/videos.xml was
+// down site-wide when this was written, so the channel's own /videos page
+// was scraped directly; every id/title/date was checked against the video's
+// real YouTube watch page). Re-check dates the same way before editing this
+// list, and keep new entries sorted newest-first.
 export const videos: Video[] = [
   {
-    title: 'NCVH 2024 Interviews',
-    youtubeId: 'Si95Wgru8hY',
-    thumb: '/assets/trending/video-1.jpg',
-    blurb: 'Faculty interviews recorded on the floor at New Cardiovascular Horizons.',
+    title: 'THE HEART OF THE MATTER | EDITION II - EPISODE 05',
+    youtubeId: '3m7yDmsmE0E',
+    thumb: 'https://i.ytimg.com/vi/3m7yDmsmE0E/hqdefault.jpg',
+    blurb: 'Uploaded Aug 2, 2026',
   },
   {
-    title: 'Pulmonary Embolism',
-    youtubeId: '0i0CelwftRk',
-    thumb: '/assets/trending/video-2.jpg',
-    blurb: 'A focused discussion on contemporary PE management and intervention.',
+    title: 'THE HEART OF THE MATTER | EDITION II - EPISODE 04',
+    youtubeId: 'DCpGiiP2aAU',
+    thumb: 'https://i.ytimg.com/vi/DCpGiiP2aAU/hqdefault.jpg',
+    blurb: 'Uploaded Jun 28, 2026',
   },
   {
-    title: 'TCT 2024 Wrap Up',
-    youtubeId: 'k7JguFN_BAY',
-    thumb: '/assets/trending/video-3.jpg',
-    blurb: 'The trials, the data and the takeaways from Transcatheter Cardiovascular Therapeutics.',
+    title: 'FACET Webinar | February 2026 | Dr. Lorenzo Azzalini',
+    youtubeId: 'w9-jnEb2cR0',
+    thumb: 'https://i.ytimg.com/vi/w9-jnEb2cR0/hqdefault.jpg',
+    blurb: 'Uploaded May 12, 2026',
   },
   {
-    title: 'NYEVS 2024',
-    youtubeId: 'tCDK0wvu6RE',
-    thumb: '/assets/trending/video-4.jpg',
-    blurb: 'Highlights from the New York Endovascular Symposium.',
+    title: 'SIF Conversations with Dr. Gregg Stone | What’s New in Mitral Valve Transcatheter Interventions',
+    youtubeId: 'rZBdPQ_kRQM',
+    thumb: 'https://i.ytimg.com/vi/rZBdPQ_kRQM/hqdefault.jpg',
+    blurb: 'Uploaded May 12, 2026',
   },
   {
-    title: 'SCAI 2024',
-    youtubeId: 'yp0oDs7AHZ0',
-    thumb: '/assets/trending/video-5.jpg',
-    blurb: 'Conversations with interventional leaders at the SCAI Scientific Sessions.',
+    title: 'THE HEART OF THE MATTER | EDITION II - EPISODE 03',
+    youtubeId: 'gin56IbR5Xo',
+    thumb: 'https://i.ytimg.com/vi/gin56IbR5Xo/hqdefault.jpg',
+    blurb: 'Uploaded May 9, 2026',
   },
   {
-    title: 'ESC Congress 2024 Interviews',
-    youtubeId: 'uveL7Xj_ObE',
-    thumb: '/assets/trending/video-6.jpg',
-    blurb: 'European Society of Cardiology congress coverage and investigator interviews.',
+    title: 'FACET Webinar | December 2025 | Dr. Nicolas Van Mieghem',
+    youtubeId: 'i5Yr32f1_dE',
+    thumb: 'https://i.ytimg.com/vi/i5Yr32f1_dE/hqdefault.jpg',
+    blurb: 'Uploaded May 8, 2026',
   },
   {
-    title: 'TCT Presenters Promo',
-    youtubeId: 'PW1UN0ZBgHI',
-    thumb: '/assets/trending/video-7.jpg',
-    blurb: 'Meet the MCA researchers presenting their work at TCT.',
+    title: 'FACET Webinar | January 2026 | Dr. Evan Shlofmitz',
+    youtubeId: 'oyGxJ8kXbNc',
+    thumb: 'https://i.ytimg.com/vi/oyGxJ8kXbNc/hqdefault.jpg',
+    blurb: 'Uploaded May 8, 2026',
   },
   {
-    title: 'Monthly Webinar',
-    youtubeId: 'z36YGMAaBwk',
-    thumb: '/assets/trending/video-8.jpg',
-    blurb: 'Recent publications on interventional, endovascular and structural technique.',
+    title: 'SIF Conversations with Dr. Morton Kern | SIF 2026',
+    youtubeId: 'gOIPkMIodZk',
+    thumb: 'https://i.ytimg.com/vi/gOIPkMIodZk/hqdefault.jpg',
+    blurb: 'Uploaded May 2, 2026',
+  },
+  {
+    title: '🌟 Meet Our Team | MCA Research Group | SCAI 2026, Montreal, Canada 🌟',
+    youtubeId: '6J9iRoJ_0SM',
+    thumb: 'https://i.ytimg.com/vi/6J9iRoJ_0SM/hqdefault.jpg',
+    blurb: 'Uploaded Apr 19, 2026',
+  },
+  {
+    title: 'RSH 2026 | Dr Misabahul Ferdous & Dr Chadi Alraies',
+    youtubeId: 'CmurhEnpf_I',
+    thumb: 'https://i.ytimg.com/vi/CmurhEnpf_I/hqdefault.jpg',
+    blurb: 'Uploaded Apr 7, 2026',
+  },
+  {
+    title: 'RSH 2026 | Dr Ihab Sulaiman & Dr Chadi Alraies',
+    youtubeId: '1JWtIvSgcV0',
+    thumb: 'https://i.ytimg.com/vi/1JWtIvSgcV0/hqdefault.jpg',
+    blurb: 'Uploaded Mar 9, 2026',
+  },
+  {
+    title: 'RSH 2026 | Dr Gilbert Tang & Dr Chadi Alraies',
+    youtubeId: 'uDwftvoVVBg',
+    thumb: 'https://i.ytimg.com/vi/uDwftvoVVBg/hqdefault.jpg',
+    blurb: 'Uploaded Mar 9, 2026',
+  },
+];
+
+// The Heart of the Matter playlist's own fallback, same rule as `videos`
+// above but scraped from the playlist page (youtube.com/playlist?list=...)
+// so it only ever shows real Heart of the Matter episodes, not the whole
+// channel - what education.astro's playlist fetch would return live.
+export const heartOfTheMatterEpisodes: Video[] = [
+  {
+    title: 'THE HEART OF THE MATTER | EDITION II - EPISODE 05',
+    youtubeId: '3m7yDmsmE0E',
+    thumb: 'https://i.ytimg.com/vi/3m7yDmsmE0E/hqdefault.jpg',
+    blurb: 'Uploaded Aug 2, 2026',
+  },
+  {
+    title: 'THE HEART OF THE MATTER | EDITION II - EPISODE 04',
+    youtubeId: 'DCpGiiP2aAU',
+    thumb: 'https://i.ytimg.com/vi/DCpGiiP2aAU/hqdefault.jpg',
+    blurb: 'Uploaded Jun 28, 2026',
+  },
+  {
+    title: 'THE HEART OF THE MATTER | EDITION II - EPISODE 02',
+    youtubeId: 'rpajuc8yMxM',
+    thumb: 'https://i.ytimg.com/vi/rpajuc8yMxM/hqdefault.jpg',
+    blurb: 'Uploaded Jan 25, 2026',
+  },
+  {
+    title: 'THE HEART OF THE MATTER | EDITION II - EPISODE 1',
+    youtubeId: 'FmUxnAo202o',
+    thumb: 'https://i.ytimg.com/vi/FmUxnAo202o/hqdefault.jpg',
+    blurb: 'Uploaded Jan 10, 2026',
+  },
+  {
+    title: 'THE HEART OF THE MATTER | EPISODE 12',
+    youtubeId: 'RaMfunXynaE',
+    thumb: 'https://i.ytimg.com/vi/RaMfunXynaE/hqdefault.jpg',
+    blurb: 'Uploaded Aug 31, 2025',
+  },
+  {
+    title: 'THE HEART OF THE MATTER | EPISODE 11',
+    youtubeId: 'xGo0cRT9YMU',
+    thumb: 'https://i.ytimg.com/vi/xGo0cRT9YMU/hqdefault.jpg',
+    blurb: 'Uploaded Aug 29, 2025',
+  },
+  {
+    title: 'THE HEART OF THE MATTER | EPISODE 10',
+    youtubeId: '8wctXY8Z9Zk',
+    thumb: 'https://i.ytimg.com/vi/8wctXY8Z9Zk/hqdefault.jpg',
+    blurb: 'Uploaded May 31, 2025',
+  },
+  {
+    title: 'THE HEART OF THE MATTER | EPISODE 9',
+    youtubeId: 'gM6B6kahM1c',
+    thumb: 'https://i.ytimg.com/vi/gM6B6kahM1c/hqdefault.jpg',
+    blurb: 'Uploaded May 17, 2025',
+  },
+  {
+    title: 'THE HEART OF THE MATTER | EPISODE 8',
+    youtubeId: 'nUbFf064DvA',
+    thumb: 'https://i.ytimg.com/vi/nUbFf064DvA/hqdefault.jpg',
+    blurb: 'Uploaded Apr 20, 2025',
+  },
+  {
+    title: 'THE HEART OF THE MATTER | EPISODE 7',
+    youtubeId: 'XvM2f3HZXdw',
+    thumb: 'https://i.ytimg.com/vi/XvM2f3HZXdw/hqdefault.jpg',
+    blurb: 'Uploaded Apr 8, 2025',
+  },
+  {
+    title: 'THE HEART OF THE MATTER | EPISODE 6',
+    youtubeId: 'C8xb-kTrkFI',
+    thumb: 'https://i.ytimg.com/vi/C8xb-kTrkFI/hqdefault.jpg',
+    blurb: 'Uploaded Mar 25, 2025',
+  },
+  {
+    title: 'THE HEART OF THE MATTER | EPISODE 5',
+    youtubeId: 'AMtC6iYvLpE',
+    thumb: 'https://i.ytimg.com/vi/AMtC6iYvLpE/hqdefault.jpg',
+    blurb: 'Uploaded Mar 9, 2025',
   },
 ];
 

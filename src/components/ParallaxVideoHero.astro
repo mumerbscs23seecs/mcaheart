@@ -21,7 +21,11 @@ interface Props {
   layer2: Layer;
   tagline: string;
   finalTitle: string;
-  finalSub: string;
+  /** Small caps line above the final title - optional, since it just repeats
+   *  the wordmark already shown earlier in the same hero (dropped on the
+   *  Heart Trending page for exactly that reason; still used on Education,
+   *  where it names the series rather than restating the page). */
+  finalSub?: string;
   accent: string;
   navy: string;
   navyDeep: string;
@@ -74,7 +78,7 @@ const ecgPath =
   Array.from({ length: ECG_CYCLES }, (_, i) => ecgCycle(i * ECG_CYCLE_WIDTH)).join('');
 ---
 
-<section class="pvh" style={`--pvh-accent:${accent}; --pvh-navy:${navy}; --pvh-navy-deep:${navyDeep}`}>
+<section class="pvh" data-pvh={layout} style={`--pvh-accent:${accent}; --pvh-navy:${navy}; --pvh-navy-deep:${navyDeep}`}>
   <div class="pvh__track" id={`pvhTrack-${layout}`}>
     <div class="pvh__stage">
       <h1 class="visually-hidden">{title}</h1>
@@ -113,7 +117,7 @@ const ecgPath =
 
       <p class="pvh__caption pvh__tagline" id={`pvh-tagline-${layout}`}>{tagline}</p>
       <p class="pvh__caption pvh__final-title" id={`pvh-finaltitle-${layout}`}>{finalTitle}</p>
-      <p class="pvh__caption pvh__final-sub" id={`pvh-finalsub-${layout}`}>{finalSub}</p>
+      {finalSub && <p class="pvh__caption pvh__final-sub" id={`pvh-finalsub-${layout}`}>{finalSub}</p>}
 
       <div class="pvh__cta" id={`pvh-cta-${layout}`}>
         <a class="pvh__btn pvh__btn--solid" href={ctaPrimary.href}>{ctaPrimary.label}</a>
@@ -133,7 +137,6 @@ const ecgPath =
   }
 
   .pvh__track { position: relative; height: 400vh; }
-  @media (max-width: 760px) { .pvh__track { height: 210vh; } }
 
   .pvh__stage {
     position: sticky;
@@ -170,8 +173,6 @@ const ecgPath =
   .pvh__mark img { width: min(40vw, 270px); height: auto; object-fit: contain; filter: drop-shadow(0 10px 40px rgba(0, 0, 0, 0.5)); }
   .pvh__wordmark img { width: min(80vw, 620px); height: auto; object-fit: contain; }
 
-  .pvh__vignette-fallback { position: absolute; inset: 0; pointer-events: none; }
-
   .pvh::after {
     content: '';
     position: absolute;
@@ -194,7 +195,7 @@ const ecgPath =
     to { transform: translateY(-30px) translateX(10px); }
   }
 
-  .pvh__ecg { position: absolute; left: 0; right: 0; top: 63%; height: 120px; overflow: hidden; }
+  .pvh__ecg { position: absolute; left: 0; right: 0; top: 63%; height: 120px; overflow: hidden; opacity: 0; }
   .pvh__ecg svg { width: 200%; height: 100%; }
   .pvh__ecg-line {
     fill: none;
@@ -211,6 +212,7 @@ const ecgPath =
     position: absolute;
     left: 0;
     right: 0;
+    z-index: 2;
     margin: 0;
     text-align: center;
     color: #fff;
@@ -243,7 +245,21 @@ const ecgPath =
   }
   .pvh__final-sub { top: 52%; font-size: clamp(12px, 1.8vw, 16px); color: var(--pvh-accent); opacity: 0; letter-spacing: 0.3em; }
 
-  .pvh__cta { position: absolute; left: 50%; top: 55%; transform: translateX(-50%); display: flex; gap: 16px; opacity: 0; }
+  /* Starts hidden and untappable - an invisible button used to sit over the
+     hero and swallow clicks until the scroll sequence faded it in. The
+     script switches it on as it appears. Sits a little lower than it used
+     to so it no longer collides with the subtitle on short windows. */
+  .pvh__cta {
+    position: absolute;
+    z-index: 2;
+    left: 50%;
+    top: 59%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 16px;
+    opacity: 0;
+    visibility: hidden;
+  }
   .pvh__btn {
     padding: 12px 28px;
     border-radius: 999px;
@@ -258,12 +274,15 @@ const ecgPath =
     transition: background 0.2s, color 0.2s;
     white-space: nowrap;
   }
-  .pvh__btn:hover { background: #fff; color: var(--pvh-navy-deep); }
+  .pvh__btn:hover,
+  .pvh__btn:active { background: #fff; color: var(--pvh-navy-deep); }
   .pvh__btn--solid { background: var(--pvh-accent); border-color: var(--pvh-accent); }
-  .pvh__btn--solid:hover { background: color-mix(in srgb, var(--pvh-accent) 80%, black); color: #fff; }
+  .pvh__btn--solid:hover,
+  .pvh__btn--solid:active { background: color-mix(in srgb, var(--pvh-accent) 80%, black); color: #fff; }
 
   .pvh__hint {
     position: absolute;
+    z-index: 2;
     bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
@@ -278,115 +297,279 @@ const ecgPath =
   }
   @keyframes pvh-bob { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 8px); } }
 
-  @media (prefers-reduced-motion: reduce), (max-width: 760px) {
-    /* The bg/mark/wordmark layers are all position:absolute, so with no
-       aspect-ratio the stage has nothing in normal flow to size itself
-       against - it collapsed to just its own padding, clipping the
-       wordmark. Give it a real height here instead. */
+  /* ================================================================ Phone
+     The same scroll sequence as desktop, re-composed for a portrait screen:
+     art centred in the space above the tab bar, the ECG trace across the
+     lower third, the headline high and the two actions stacked full-width
+     in thumb reach. Pixel distances in the script scale with the stage. */
+  @media (max-width: 760px) {
+    .pvh__track { height: 330svh; }
+    .pvh__stage { height: 100svh; max-height: none; }
+    .pvh__lockup { inset: 0 0 var(--dock-space); gap: 18px; }
+    .pvh__full { inset: 0 0 var(--dock-space); height: auto; }
+    .pvh__full img { width: 96vw; }
+    .pvh__mark img { width: min(46vw, 240px); }
+    .pvh__wordmark img { width: 82vw; }
+
+    .pvh__ecg { top: 56%; height: 90px; }
+    /* The glow filter is re-rasterised every frame of the moving trace -
+       too costly on a phone GPU for a decorative line. */
+    .pvh__ecg-line { filter: none; stroke-width: 3; }
+
+    .pvh__tagline { top: 68%; max-width: 84vw; font-size: 17px; line-height: 1.5; }
+    .pvh__final-sub { top: 27%; font-size: 12px; letter-spacing: 0.3em; }
+    .pvh__final-title {
+      top: calc(27% + 30px);
+      max-width: 90vw;
+      font-size: clamp(27px, 7.6vw, 36px);
+      line-height: 1.15;
+      letter-spacing: 0.05em;
+    }
+    .pvh__cta {
+      top: auto;
+      bottom: calc(var(--dock-space) + 8svh);
+      left: var(--gutter);
+      right: var(--gutter);
+      transform: none;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .pvh__btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 52px;
+      font-size: 13.5px;
+    }
+    .pvh__hint { bottom: calc(var(--dock-space) + var(--header-h) + 14px); }
+  }
+
+  /* ============================================================= At rest
+     Reduced motion, or a landscape phone too short to pin: no scroll-lock.
+     The stage becomes a normal block - the artwork in a fixed-height panel
+     (--art-h), the ECG trace as a divider, then the copy and both CTAs in
+     flow on the navy ground. Keep in sync with REST_QUERY in the script. */
+  @media (prefers-reduced-motion: reduce), (max-height: 520px) {
+    .pvh { --art-h: min(100vw, 58svh); }
+    .pvh__track { height: auto; }
     .pvh__stage {
       position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       height: auto;
-      aspect-ratio: 4 / 5;
       max-height: none;
-      padding-block: var(--space-l);
+      padding: var(--art-h) var(--gutter) var(--space-l);
     }
-    .pvh__track { height: auto; }
-    .pvh__particles, .pvh__ecg, .pvh__cta, .pvh__hint { display: none; }
-    .pvh__tagline, .pvh__final-title, .pvh__final-sub { position: static; opacity: 1; margin-top: 0.4em; }
-    .pvh__final-title { text-shadow: none; }
+    .pvh__layer,
+    .pvh__lockup { inset: 0 0 auto; height: var(--art-h); }
+    .pvh__layer { will-change: auto; }
+    /* Fade the photo into the navy ground so the panel has no hard edge. */
+    .pvh__bg,
+    .pvh::after {
+      -webkit-mask-image: linear-gradient(#000 62%, transparent);
+      mask-image: linear-gradient(#000 62%, transparent);
+    }
+    .pvh::after { bottom: auto; height: var(--art-h); }
+
+    .pvh__lockup { gap: 16px; }
+    .pvh__mark,
+    .pvh__wordmark { will-change: auto; }
+    .pvh__mark img { width: auto; max-width: 44vw; height: calc(var(--art-h) * 0.4); }
+    .pvh__wordmark img { width: min(78vw, 460px); max-height: calc(var(--art-h) * 0.26); }
+    .pvh__full img { width: min(84vw, 560px); max-height: calc(var(--art-h) * 0.9); }
+
+    .pvh__particles, .pvh__hint { display: none; }
+
+    .pvh__ecg {
+      position: relative;
+      order: 0;
+      top: auto;
+      flex: none;
+      width: 100vw;
+      height: 56px;
+      margin-top: -40px;
+      z-index: 2;
+      opacity: 1;
+    }
+    .pvh__ecg-line { filter: none; animation-duration: 5s; }
+
+    .pvh__caption {
+      position: relative;
+      top: auto;
+      opacity: 1;
+      transform: none;
+      max-width: 34ch;
+    }
+    .pvh__final-sub { order: 1; margin-top: var(--space-s); font-size: 0.75rem; letter-spacing: 0.24em; }
+    .pvh__final-title {
+      order: 2;
+      margin-top: var(--space-xs);
+      font-size: clamp(1.4rem, 1rem + 2.6vw, 1.9rem);
+      letter-spacing: 0.04em;
+      text-shadow: none;
+    }
+    .pvh__tagline { order: 3; margin-top: var(--space-s); font-size: 1rem; }
+
+    .pvh__cta {
+      position: relative;
+      order: 4;
+      inset: auto;
+      transform: none;
+      opacity: 1;
+      visibility: visible;
+      flex-direction: row;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      margin-top: var(--space-m);
+    }
+    .pvh__btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1 1 12rem;
+      max-width: 22rem;
+      min-height: 48px;
+      padding: 12px 20px;
+    }
   }
+
+  /* Landscape phones (motion allowed): a short entrance instead. */
+  @media (max-height: 520px) and (prefers-reduced-motion: no-preference) {
+    .pvh__full,
+    .pvh__mark,
+    .pvh__wordmark { animation: pvh-settle 1s var(--ease-out) both; }
+    .pvh__wordmark { animation-delay: 0.12s; }
+    .pvh__caption,
+    .pvh__cta { animation: pvh-lift 0.7s var(--ease-out) both; }
+    .pvh__final-sub { animation-delay: 0.3s; }
+    .pvh__final-title { animation-delay: 0.38s; }
+    .pvh__tagline { animation-delay: 0.46s; }
+    .pvh__cta { animation-delay: 0.54s; }
+  }
+  @keyframes pvh-settle { from { opacity: 0; transform: scale(1.05); } }
+  @keyframes pvh-lift { from { opacity: 0; transform: translateY(12px); } }
 </style>
 
-<script define:vars={{ layout }}>
-  (() => {
-    const suffix = layout;
-    const track = document.getElementById(`pvhTrack-${suffix}`);
-    const bg = document.getElementById(`pvh-bg-${suffix}`);
-    const l1 = document.getElementById(`pvh-1-${suffix}`);
-    const l2 = document.getElementById(`pvh-2-${suffix}`);
-    const ecg = document.getElementById(`pvh-ecg-${suffix}`);
-    const tagline = document.getElementById(`pvh-tagline-${suffix}`);
-    const finalTitle = document.getElementById(`pvh-finaltitle-${suffix}`);
-    const finalSub = document.getElementById(`pvh-finalsub-${suffix}`);
-    const cta = document.getElementById(`pvh-cta-${suffix}`);
-    const hint = document.getElementById(`pvh-hint-${suffix}`);
-    const particlesWrap = document.getElementById(`pvh-particles-${suffix}`);
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const narrow = matchMedia('(max-width: 760px)').matches;
+<script>
+  import { subscribe, clamp, docTop, follower } from '../scripts/motion';
 
-    if (!track || !bg || !l1 || !l2 || reduced || narrow) return;
+  const REST_QUERY = '(prefers-reduced-motion: reduce), (max-height: 520px)';
+  const atRest = matchMedia(REST_QUERY);
+  const phoneQ = matchMedia('(max-width: 760px)');
+  const band = (v: number, lo: number, hi: number) => clamp((v - lo) / (hi - lo));
 
-    for (let i = 0; i < 18; i++) {
-      const d = document.createElement('div');
-      const s = 3 + Math.random() * 6;
-      d.className = 'pvh__particle';
-      d.style.width = d.style.height = `${s}px`;
-      d.style.left = `${Math.random() * 100}%`;
-      d.style.top = `${20 + Math.random() * 70}%`;
-      d.style.animationDuration = `${4 + Math.random() * 6}s`;
-      d.style.animationDirection = Math.random() > 0.5 ? 'alternate' : 'alternate-reverse';
-      particlesWrap?.appendChild(d);
-    }
-
-    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-    const smooth = (v, lo, hi) => clamp((v - lo) / (hi - lo), 0, 1);
+  document.querySelectorAll<HTMLElement>('[data-pvh]').forEach((section) => {
+    const layout = section.dataset.pvh;
+    const q = <T extends HTMLElement = HTMLElement>(sel: string) => section.querySelector<T>(sel);
+    const track = q('.pvh__track');
+    const stage = q('.pvh__stage');
+    const bg = q('.pvh__bg');
+    const l1 = q('[id^="pvh-1-"]');
+    const l2 = q('[id^="pvh-2-"]');
+    if (!track || !stage || !bg || !l1 || !l2) return;
     const bgImg = bg.querySelector('img');
+    const ecg = q('.pvh__ecg');
+    const tagline = q('.pvh__tagline');
+    const finalTitle = q('.pvh__final-title');
+    const finalSub = q('.pvh__final-sub');
+    const cta = q('.pvh__cta');
+    const hint = q('.pvh__hint');
+    const particles = q('.pvh__particles');
+    const animated = [bg, bgImg, l1, l2, ecg, tagline, finalTitle, finalSub, cta, hint];
 
-    function render() {
-      const max = track.offsetHeight - window.innerHeight;
-      const p = max > 0 ? clamp(window.scrollY / max, 0, 1) : 0;
+    // Write a style only when its string changes.
+    const put = (el: HTMLElement | null, prop: 'transform' | 'opacity' | 'visibility', v: string) => {
+      if (!el || el.style[prop] === v) return;
+      el.style[prop] = v;
+    };
 
-      bg.style.transform = `translateY(${p * -40}px)`;
-      if (bgImg) bgImg.style.transform = `scale(${1.15 + p * 0.1})`;
-
-      if (layout === 'stacked') {
-        l1.style.transform = `translateY(${p * -50}px) scale(${1 + p * 1.2})`;
-        l1.style.opacity = `${1 - smooth(p, 0.15, 0.55) * 0.85}`;
-        l2.style.transform = `translateY(${p * -220}px) scale(${1 + p * 0.25})`;
-        l2.style.opacity = `${1 - smooth(p, 0.05, 0.35)}`;
-      } else {
-        l1.style.transform = `translateY(${p * -90}px) scale(${1 + p * 0.9})`;
-        l1.style.opacity = `${1 - smooth(p, 0.15, 0.5) * 0.9}`;
-        l2.style.transform = `translateY(${p * -160}px) scale(${1 + p * 0.2})`;
-        l2.style.opacity = `${1 - smooth(p, 0.1, 0.35)}`;
+    let particlesMade = false;
+    function makeParticles() {
+      if (particlesMade || !particles) return;
+      particlesMade = true;
+      const n = phoneQ.matches ? 10 : 18;
+      for (let i = 0; i < n; i++) {
+        const d = document.createElement('div');
+        const s = 3 + Math.random() * 6;
+        d.className = 'pvh__particle';
+        d.style.width = d.style.height = `${s}px`;
+        d.style.left = `${Math.random() * 100}%`;
+        d.style.top = `${20 + Math.random() * 70}%`;
+        d.style.animationDuration = `${4 + Math.random() * 6}s`;
+        d.style.animationDirection = Math.random() > 0.5 ? 'alternate' : 'alternate-reverse';
+        particles.appendChild(d);
       }
-
-      const ecgOpacity = smooth(p, 0.3, 0.45) * (1 - smooth(p, 0.6, 0.75));
-      if (ecg) ecg.style.opacity = `${ecgOpacity}`;
-
-      if (tagline) {
-        tagline.style.opacity = `${smooth(p, 0.32, 0.45) * (1 - smooth(p, 0.6, 0.72))}`;
-        tagline.style.transform = `translateY(${(1 - smooth(p, 0.32, 0.45)) * 20}px)`;
-      }
-
-      const finalP = smooth(p, 0.72, 0.9);
-      if (finalTitle) {
-        finalTitle.style.opacity = `${finalP}`;
-        finalTitle.style.transform = `translateY(${(1 - finalP) * 20}px)`;
-      }
-      if (finalSub) finalSub.style.opacity = `${finalP}`;
-      if (cta) cta.style.opacity = `${finalP}`;
-      if (hint) hint.style.opacity = `${1 - smooth(p, 0, 0.08)}`;
-
-      const settled = window.scrollY > max + 200;
-      if (settled) {
-        looping = false;
-        return;
-      }
-      raf = requestAnimationFrame(render);
     }
 
-    let raf = 0;
-    let looping = false;
-    function ensureLooping() {
-      if (looping) return;
-      looping = true;
-      render();
+    function clearInline() {
+      for (const el of animated) {
+        if (!el) continue;
+        el.style.transform = '';
+        el.style.opacity = '';
+        el.style.visibility = '';
+      }
     }
 
-    ensureLooping();
-    window.addEventListener('scroll', ensureLooping, { passive: true });
-    window.addEventListener('resize', ensureLooping);
-    document.addEventListener('astro:before-swap', () => cancelAnimationFrame(raf), { once: true });
-  })();
+    const smooth = follower(0.14);
+    let top = 0;
+    let travel = 1;
+    let k = 1;
+    let wasRest = false;
+
+    subscribe({
+      measure() {
+        top = docTop(track);
+        travel = Math.max(1, track.offsetHeight - stage.offsetHeight);
+        // Distances were tuned on a ~900px desktop stage; a phone stage is
+        // shorter, so the same choreography travels proportionally less.
+        k = Math.min(1, stage.offsetHeight / 900);
+      },
+      update({ y, dt }) {
+        if (atRest.matches) {
+          if (!wasRest) clearInline();
+          wasRest = true;
+          smooth.reset();
+          return;
+        }
+        wasRest = false;
+        makeParticles();
+        const target = clamp((y - top) / travel);
+        const p = smooth.step(target, dt);
+
+        put(bg, 'transform', `translateY(${(p * -40 * k).toFixed(1)}px)`);
+        put(bgImg, 'transform', `scale(${(1.15 + p * 0.1).toFixed(4)})`);
+
+        if (layout === 'stacked') {
+          put(l1, 'transform', `translateY(${(p * -50 * k).toFixed(1)}px) scale(${(1 + p * 1.2).toFixed(4)})`);
+          put(l1, 'opacity', (1 - band(p, 0.15, 0.55) * 0.85).toFixed(3));
+          put(l2, 'transform', `translateY(${(p * -220 * k).toFixed(1)}px) scale(${(1 + p * 0.25).toFixed(4)})`);
+          put(l2, 'opacity', (1 - band(p, 0.05, 0.35)).toFixed(3));
+        } else {
+          put(l1, 'transform', `translateY(${(p * -90 * k).toFixed(1)}px) scale(${(1 + p * 0.9).toFixed(4)})`);
+          put(l1, 'opacity', (1 - band(p, 0.15, 0.5) * 0.9).toFixed(3));
+          put(l2, 'transform', `translateY(${(p * -160 * k).toFixed(1)}px) scale(${(1 + p * 0.2).toFixed(4)})`);
+          put(l2, 'opacity', (1 - band(p, 0.1, 0.35)).toFixed(3));
+        }
+
+        put(ecg, 'opacity', (band(p, 0.3, 0.45) * (1 - band(p, 0.6, 0.75))).toFixed(3));
+
+        const tagIn = band(p, 0.32, 0.45);
+        put(tagline, 'opacity', (tagIn * (1 - band(p, 0.6, 0.72))).toFixed(3));
+        put(tagline, 'transform', `translateY(${((1 - tagIn) * 20).toFixed(1)}px)`);
+
+        const finalP = band(p, 0.72, 0.9);
+        put(finalTitle, 'opacity', finalP.toFixed(3));
+        put(finalTitle, 'transform', `translateY(${((1 - finalP) * 20).toFixed(1)}px)`);
+        put(finalSub, 'opacity', finalP.toFixed(3));
+        put(cta, 'opacity', finalP.toFixed(3));
+        put(cta, 'visibility', finalP > 0.02 ? 'visible' : 'hidden');
+        put(hint, 'opacity', (1 - band(p, 0, 0.08)).toFixed(3));
+
+        return p !== target;
+      },
+    });
+  });
 </script>

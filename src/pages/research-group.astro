@@ -6,7 +6,8 @@ export const prerender = false;
 import BaseLayout from '../layouts/BaseLayout.astro';
 import LayeredScrollHero from '../components/LayeredScrollHero.astro';
 import CTABanner from '../components/CTABanner.astro';
-import { testimonials, missionVision, societies, recentPublications as fallbackPublications } from '../data/site';
+import Societies from '../components/Societies.astro';
+import { testimonials, missionVision, recentPublications as fallbackPublications } from '../data/site';
 import { fetchRecentPublications } from '../lib/pubmed-feed';
 
 // Fall back to the static seed list only if PubMed has never once answered
@@ -25,7 +26,7 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
 
   {/* --------------------------------------------------------- Mission/Vision */}
   <section class="section--tight mv">
-    <div class="shell shell--wide mv__grid">
+    <div class="shell shell--wide mv__grid" data-stack>
       {missionVision.map((m, i) => (
         <article class="mv__card" data-reveal style={`--reveal-delay:${i * 120}ms`}>
           <div class="mv__figure">
@@ -65,9 +66,9 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
         </a>
       </div>
 
-      <ul class="pub__papers" data-reveal style="--reveal-delay:80ms">
+      <ul class="pub__papers" data-rail="publications">
         {recentPublications.map((p) => (
-          <li class="paper">
+          <li class="paper" data-reveal>
             <p class="paper__meta">{p.journal} <span class="paper__dot">&middot;</span> <span class="paper__date">{p.date}</span></p>
             <h3 class="paper__title">{p.title}</h3>
             <p class="paper__authors">{p.authors}</p>
@@ -84,24 +85,7 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
     </div>
   </section>
 
-  {/* --------------------------------------------------------------- Societies */}
-  <section class="section--tight societies">
-    <div class="shell shell--wide">
-      <p class="societies__label">Our work has been presented at</p>
-      <ul class="societies__list">
-        {societies.map((s) => (
-          <li class="societies__item">
-            <a href={s.url} target="_blank" rel="noopener noreferrer" aria-label={`${s.name} - view M Chadi Alraies' work indexed here`}>
-              <img class="societies__logo--light" src={s.logo} alt={s.name} loading="lazy" decoding="async" height="60" />
-              {s.logoDark && (
-                <img class="societies__logo--dark" src={s.logoDark} alt={s.name} loading="lazy" decoding="async" height="60" />
-              )}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
-  </section>
+  <Societies edge="bottom" />
 
   {/* ------------------------------------------------------------- Testimonials */}
   <section class="section voices" id="voices">
@@ -110,7 +94,7 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
         <h2 class="display voices__title">What our members say</h2>
       </header>
 
-      <div class="voices__grid">
+      <div class="voices__grid" data-rail="testimonials">
         {testimonials.map((t, i) => (
           <figure class="voice" data-reveal style={`--reveal-delay:${(i % 3) * 90}ms`}>
             <blockquote class="voice__quote">{t.quote}</blockquote>
@@ -139,12 +123,12 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
   {/* ---------------------------------------------------------------- Why us */}
   <section class="section--tall why dark-ground" id="why-us">
     <div class="why__bg" aria-hidden="true">
-      <img src="/assets/research/networking.jpg" alt="" loading="lazy" decoding="async" />
+      <img src="/assets/research/networking.jpg" alt="" loading="lazy" decoding="async" data-parallax="0.12" />
     </div>
 
     <div class="shell shell--narrow center" data-reveal>
       <h2 class="display why__title">A supportive ecosystem</h2>
-      <div class="prose why__body">
+      <div class="prose why__body" data-scrub>
         <p>
           Joining the MCA Heart Research Lab means becoming part of a dynamic ecosystem
           that values collaboration, innovation and excellence.
@@ -173,13 +157,13 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
 
 <style>
   /* ------------------------------------------------------- Mission / Vision */
+  /* Two columns only when each card has room for its image + a readable
+     text column - a fixed 2-up at 761-1000px squeezed the text to ~100px
+     and the cards overflowed the screen. */
   .mv__grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 30rem), 1fr));
     gap: var(--space-m);
-  }
-  @media (max-width: 760px) {
-    .mv__grid { grid-template-columns: 1fr; }
   }
   .mv__card {
     position: relative;
@@ -229,8 +213,20 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
     max-width: 70ch;
   }
 
+  /* Phones: the 48px card padding left a ~190px text column. Tighter frame,
+     and the illustration sits beside the heading instead of above it. */
   @media (max-width: 620px) {
-    .mv__card { grid-template-columns: 1fr; align-items: start; }
+    .mv__card {
+      grid-template-columns: auto 1fr;
+      grid-template-areas: 'fig kind' 'text text';
+      column-gap: var(--space-s);
+      row-gap: var(--space-s);
+      padding: var(--space-m) var(--space-s);
+    }
+    .mv__body { display: contents; }
+    .mv__figure { grid-area: fig; width: 72px; }
+    .mv__kind { grid-area: kind; }
+    .mv__text { grid-area: text; margin-top: 0; line-height: 1.65; }
   }
 
   /* ------------------------------------------------------------------ PubMed */
@@ -283,7 +279,8 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
     transition: background 0.25s var(--ease);
   }
   .pub__cta:hover,
-  .pub__cta:focus-visible { background: var(--blue-deep); }
+  .pub__cta:focus-visible,
+  .pub__cta:active { background: var(--blue-deep); }
   .pub__cta-arrow { transition: transform 0.25s var(--ease-out); }
   .pub__cta:hover .pub__cta-arrow,
   .pub__cta:focus-visible .pub__cta-arrow { transform: translateX(4px); }
@@ -347,49 +344,6 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
   .paper__link svg { width: 11px; height: 11px; transition: transform 0.2s var(--ease-out); }
   .paper:hover .paper__link svg,
   .paper__link:focus-visible svg { transform: translate(2px, -2px); }
-
-  /* --------------------------------------------------------------- Societies */
-  .societies { padding-block: var(--space-l); border-bottom: 1px solid var(--border-soft); }
-  .societies__label {
-    text-align: center;
-    font-size: var(--step--1);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.22em;
-    color: var(--text-faint);
-  }
-  .societies__list {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: clamp(2rem, 1rem + 5vw, 5.5rem);
-    margin-top: var(--space-m);
-  }
-  .societies__item a { display: block; line-height: 0; }
-  .societies__item img {
-    height: clamp(52px, 40px + 2vw, 76px);
-    width: auto;
-    filter: grayscale(1) contrast(1.1);
-    opacity: 0.8;
-    mix-blend-mode: multiply;
-    transition: opacity 0.4s var(--ease), filter 0.4s var(--ease);
-  }
-  .societies__item a:hover img,
-  .societies__item a:focus-visible img { opacity: 1; filter: grayscale(0); }
-  .societies__item a:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
-
-  /* Dark-mode logo variants: the default logos are dark ink on a transparent
-     background (mix-blend-mode:multiply relies on a light page behind them),
-     so on a dark ground they'd vanish. Swap to a white-on-transparent
-     version instead - no multiply blend, since white through "multiply"
-     is a no-op and would stay invisible too. */
-  .societies__logo--dark { display: none; }
-  :root[data-theme='dark'] .societies__logo--light { display: none; }
-  :root[data-theme='dark'] .societies__logo--dark {
-    display: inline-block;
-    mix-blend-mode: normal;
-  }
 
   /* ------------------------------------------------------------ Testimonials */
   .voices__title { font-size: var(--step-3); margin-top: var(--space-s); }
@@ -469,4 +423,33 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
 
   .why__title { font-size: var(--step-4); margin-top: var(--space-s); }
   .why__body { margin-top: var(--space-m); margin-inline: auto; }
+
+  /* ------------------------------------------------------------ Phones */
+  /* Kept last so it overrides the section rules above at equal specificity. */
+  @media (max-width: 760px) {
+    /* Mission / Vision stack like a deck (data-stack). */
+    .mv__grid { gap: var(--space-l); }
+
+    .pub__main { gap: var(--space-xs); }
+    /* Publications and testimonials become swipe rails (data-rail): one
+       card and a sliver of the next, snapping card by card. */
+    .pub__papers,
+    .voices__grid {
+      grid-template-columns: none;
+      gap: 12px;
+      margin: var(--space-l) calc(-1 * var(--gutter)) 0;
+    }
+    .voices__grid { margin-top: var(--space-m); }
+    .paper { min-height: 0; padding: var(--space-s) var(--space-s) 0; }
+    .paper__meta { font-size: 0.75rem; }
+    /* The whole bottom strip is the link on phones - a 44px target. */
+    .paper__link { min-height: 44px; padding-top: 0; font-size: 0.8125rem; }
+    .paper__link:active { color: var(--blue); }
+    .voice { padding: var(--space-s); gap: var(--space-s); }
+    .voice__affil { font-size: 0.8rem; }
+    .voice__future { font-size: 0.75rem; }
+  }
+  @media (max-width: 760px) and (prefers-reduced-motion: no-preference) {
+    .mv__card { position: sticky; }
+  }
 </style>

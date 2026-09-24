@@ -30,7 +30,7 @@ const marqueePhrases = [
     </div>
 
     <div class="marquee" aria-hidden="true">
-      <div class="marquee__track">
+      <div class="marquee__track" data-velocity="0.5">
         {Array.from({ length: 4 }).map(() =>
           marqueePhrases.map((phrase) => (
             <span class="marquee__item">
@@ -45,7 +45,7 @@ const marqueePhrases = [
 
   {/* --------------------------------------------------------------- Intents */}
   <section class="section intents">
-    <div class="shell shell--wide intents__grid">
+    <div class="shell shell--wide intents__grid" data-stack>
       {contactIntents.map((c, i) => (
         <article class="intent" data-reveal style={`--reveal-delay:${i * 110}ms`}>
           <span class="intent__icon" aria-hidden="true">{c.icon}</span>
@@ -197,6 +197,24 @@ const marqueePhrases = [
     font-size: var(--step--1);
     font-weight: 700;
     color: var(--blue);
+  }
+
+  @media (max-width: 760px) {
+    /* The hero is already a full screen tall on a phone, so the tiles are
+       below the fold anyway - the extra push only added a blank band. */
+    .intents { margin-top: 0; }
+    .intents__grid { gap: var(--space-l); }
+    .intent { min-height: 46svh; display: flex; flex-direction: column; }
+    .intent__cta { margin-top: auto; }
+    .chero__inner { padding-bottom: var(--space-m); }
+    .marquee { padding-block: 0.8rem; }
+    .marquee__item { font-size: var(--step-1); }
+    .marquee__dot { margin-inline: 1.1rem; }
+    .intent__cta { min-height: 44px; align-self: flex-start; padding-top: var(--space-s); }
+    .intent__cta::after { bottom: 0.55rem; }
+    .intent__icon { font-size: 2.4rem; }
+    .intent__title { font-size: 1.75rem; }
+    .intent__body { font-size: 1rem; }
   }
 
   /* ------------------------------------------------------------------ Form */

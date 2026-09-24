@@ -1,7 +1,8 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import CTABanner from '../components/CTABanner.astro';
-import { director, researchStats, societies } from '../data/site';
+import Societies from '../components/Societies.astro';
+import { director, researchStats } from '../data/site';
 
 // Icon-only profile-link buttons on the director card. X and LinkedIn are
 // single-color (currentColor) SVGs, so they follow the button's own text
@@ -23,12 +24,12 @@ const DIRECTOR_ICONS: Record<string, string> = {
 
 <BaseLayout title="Home" transparentHeader>
   {/* ---------------------------------------------------------------- Hero */}
-  <section class="hero grid-ground">
+  <section class="hero grid-ground" data-exit-scene>
     <div class="shell shell--wide hero__inner">
       <h1 class="display hero__title">
-        <span class="hero__line">Charting</span>
-        <span class="hero__line">New Paths</span>
-        <span class="hero__line">in <em>Cardiology</em></span>
+        <span class="hero__line" style="--k:0">Charting</span>
+        <span class="hero__line" style="--k:1">New Paths</span>
+        <span class="hero__line" style="--k:2">in <em>Cardiology</em></span>
       </h1>
 
       <div class="hero__art" aria-hidden="true">
@@ -61,6 +62,10 @@ const DIRECTOR_ICONS: Record<string, string> = {
   <section class="section director">
     <div class="shell shell--wide director__grid">
       <figure class="director__portrait" data-reveal>
+        {/* No data-parallax here: the parallax utility zooms an image ~16%
+            to buffer its drift, which cropped the head off this portrait -
+            headroom that's fine on a wide background photo isn't fine on a
+            tight headshot. */}
         <img
           src="/assets/home/alraies-portrait.webp"
           alt={`Portrait of ${director.name}`}
@@ -73,7 +78,7 @@ const DIRECTOR_ICONS: Record<string, string> = {
 
       <div class="director__copy" data-reveal style="--reveal-delay:120ms">
         <h2 class="director__name">
-          {director.name}<span class="director__creds">, {director.credentialsFull}</span>
+          {director.name}<span class="director__creds"><span class="director__comma">, </span>{director.credentialsFull}</span>
         </h2>
         <ul class="director__roles">
           {director.roles.map((r) => <li>{r}</li>)}
@@ -106,29 +111,12 @@ const DIRECTOR_ICONS: Record<string, string> = {
     </div>
   </section>
 
-  {/* ------------------------------------------------------------ Societies */}
-  <section class="section--tight societies">
-    <div class="shell shell--wide">
-      <p class="societies__label">Our work has been presented at</p>
-      <ul class="societies__list">
-        {societies.map((s) => (
-          <li class="societies__item">
-            <a href={s.url} target="_blank" rel="noopener noreferrer" aria-label={`${s.name} - view M Chadi Alraies' work indexed here`}>
-              <img class="societies__logo--light" src={s.logo} alt={s.name} loading="lazy" decoding="async" height="60" />
-              {s.logoDark && (
-                <img class="societies__logo--dark" src={s.logoDark} alt={s.name} loading="lazy" decoding="async" height="60" />
-              )}
-            </a>
-          </li>
-        ))}
-      </ul>
-    </div>
-  </section>
+  <Societies />
 
   {/* ------------------------------------------------------------------ Impact */}
   <section class="section--tall impact dark-ground">
     <div class="impact__bg" aria-hidden="true">
-      <img src="/assets/home/aorta.webp" alt="" loading="lazy" decoding="async" />
+      <img src="/assets/home/aorta.webp" alt="" loading="lazy" decoding="async" data-parallax="0.12" />
     </div>
 
     <div class="shell shell--wide">
@@ -154,7 +142,7 @@ const DIRECTOR_ICONS: Record<string, string> = {
         <h2 class="display pillars__title">Three arms, one mission</h2>
       </header>
 
-      <div class="pillars__grid">
+      <div class="pillars__grid" data-stack>
         <a class="pillar card" href="/research-group" data-reveal>
           <span class="media pillar__media">
             <img src="/assets/research/mca-research-lab-team.webp" alt="" loading="lazy" decoding="async" />
@@ -217,7 +205,7 @@ const DIRECTOR_ICONS: Record<string, string> = {
   if (nums.length && !reduced && 'IntersectionObserver' in window) {
     const run = (el: HTMLElement) => {
       const raw = el.dataset.count ?? '';
-      const target = parseInt(raw.replace(/D/g, ''), 10);
+      const target = parseInt(raw.replace(/\D/g, ''), 10);
       const suffix = raw.replace(/[0-9]/g, '');
       if (!target) return;
 
@@ -234,9 +222,17 @@ const DIRECTOR_ICONS: Record<string, string> = {
       requestAnimationFrame(tick);
     };
 
+    // Replays whenever the figures come back up from below, matching the
+    // reversible reveals around them.
+    const armed = new WeakSet<Element>(nums);
     const io = new IntersectionObserver((entries) => {
       for (const e of entries) {
-        if (e.isIntersecting) { run(e.target as HTMLElement); io.unobserve(e.target); }
+        if (e.isIntersecting && armed.has(e.target)) {
+          armed.delete(e.target);
+          run(e.target as HTMLElement);
+        } else if (!e.isIntersecting && e.boundingClientRect.top > 0) {
+          armed.add(e.target);
+        }
       }
     }, { threshold: 0.5 });
 
@@ -308,11 +304,25 @@ const DIRECTOR_ICONS: Record<string, string> = {
     max-width: 100%;
     object-fit: contain;
     mix-blend-mode: multiply;
-    filter: drop-shadow(0 34px 64px rgba(0, 0, 0, 0.20));
     /* Cardiac 'lub-dub': two quick contractions, then a long rest. */
     transform-origin: 50% 55%;
     animation: heartbeat 1.5s ease-in-out infinite;
     will-change: transform;
+  }
+
+  /* The heart's shadow is a painted ellipse, not filter: drop-shadow() - the
+     filter had to be re-rendered every frame while the heart scales and
+     turns on scroll-away, which cost ~10 dropped frames per pass. */
+  .hero__art::after {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    left: 14%;
+    right: 14%;
+    bottom: -3%;
+    height: 9%;
+    background: radial-gradient(closest-side, rgba(0, 0, 0, 0.26), transparent);
+    pointer-events: none;
   }
 
   @keyframes float {
@@ -335,65 +345,108 @@ const DIRECTOR_ICONS: Record<string, string> = {
        title takes the wider column, art the narrower one, and the lede +
        buttons drop to a full-width row underneath both. */
     .hero__inner {
-      grid-template-columns: 1fr min(34vw, 190px);
+      --art-col: clamp(84px, 26vw, 190px);
+      grid-template-columns: minmax(0, 1fr) var(--art-col);
       grid-template-areas: 'title art' 'rest rest';
       column-gap: var(--space-s);
       row-gap: var(--space-m);
     }
-    .hero__title { align-self: center; }
+    /* The lines never wrap, so the size is capped by what's left beside the
+       art: the longest line ("in Cardiology") is ~6.2em wide. Without the
+       cap the title pushed the grid past the screen below ~440px and the
+       lede + heart were clipped. */
+    .hero__title {
+      align-self: center;
+      font-size: min(
+        clamp(2.3rem, 1.35rem + 3.7vw, 5rem),
+        calc((100vw - 2 * var(--gutter) - var(--art-col) - var(--space-s)) / 6.5)
+      );
+    }
     .hero__art { justify-self: end; align-self: center; }
     .hero__art img { height: auto; width: 100%; }
   }
 
-  @media (max-width: 460px) {
-    /* Below this the title's own font-size clamp has shrunk enough that
-       a fixed-fraction art column starts crowding "in Cardiology" - drop
-       back to a fixed, smaller art column instead of a viewport-relative one. */
-    .hero__inner { grid-template-columns: 1fr 120px; }
+  /* Phone: a full-screen poster, not the desktop grid shrunk. The heart is
+     the image - large, bleeding off the right edge and tucked behind the
+     headline - with the headline set as big as the width allows, then the
+     lede and two full-width actions in thumb reach. */
+  @media (max-width: 760px) {
+    .hero {
+      align-items: stretch;
+      min-height: calc(100svh - var(--dock-space));
+      padding-block: calc(var(--header-h) + var(--space-2xs)) var(--space-m);
+    }
+    .hero__inner {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: minmax(28svh, 1fr) auto auto;
+      grid-template-areas: 'art' 'title' 'rest';
+      row-gap: var(--space-s);
+      align-items: end;
+    }
+    .hero__art {
+      align-self: stretch;
+      justify-self: stretch;
+      animation-name: float-sm;
+    }
+    .hero__art::after { left: auto; right: 2%; width: 58%; bottom: calc(-7svh - 1%); height: 7%; }
+    /* Absolutely placed so the 690px-tall source image never sizes the row. */
+    .hero__art img {
+      position: absolute;
+      right: calc(-0.06 * 100vw);
+      bottom: -7svh;
+      height: calc(100% + 7svh);
+      width: auto;
+      max-width: none;
+    }
+    .hero__title {
+      position: relative;
+      z-index: 1;
+      align-self: end;
+      margin-top: 0;
+      font-size: min(4.25rem, calc((100vw - 2 * var(--gutter)) / 6.35));
+      line-height: 0.94;
+    }
+    .hero__lede { margin-top: 0; font-size: 1.125rem; max-width: 36ch; }
+    .hero__actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 10px;
+      margin-top: var(--space-m);
+    }
+    .hero__actions .btn { min-height: 50px; font-size: 0.9375rem; }
+  }
+  @keyframes float-sm {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-8px); }
   }
 
-  /* ----------------------------------------------------------- Societies */
-  .societies { padding-block: var(--space-l); border-block: 1px solid var(--border-soft); }
-  .societies__label {
-    text-align: center;
-    font-size: var(--step--1);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.22em;
-    color: var(--text-faint);
+  /* Scroll-away (every size): as the hero leaves, the three headline lines
+     shear apart in alternating directions, the heart lifts, swells and
+     turns, and the copy lifts away. --xs is written by effects.ts. */
+  .hero__line {
+    translate: calc(var(--xs, 0) * var(--dir) * 42vw) 0;
   }
-  .societies__list {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: clamp(2rem, 1rem + 5vw, 5.5rem);
-    margin-top: var(--space-m);
+  .hero__line:nth-child(1) { --dir: -1; }
+  .hero__line:nth-child(2) { --dir: 0.8; }
+  .hero__line:nth-child(3) { --dir: -0.55; }
+  .hero__title { opacity: calc(1 - var(--xs, 0) * 1.2); }
+  .hero__art {
+    translate: 0 calc(var(--xs, 0) * -24svh);
+    scale: calc(1 + var(--xs, 0) * 0.3);
+    rotate: calc(var(--xs, 0) * -10deg);
   }
-  .societies__item a { display: block; line-height: 0; }
-  .societies__item img {
-    height: clamp(52px, 40px + 2vw, 76px);
-    width: auto;
-    filter: grayscale(1) contrast(1.1);
-    opacity: 0.8;
-    mix-blend-mode: multiply;
-    transition: opacity 0.4s var(--ease), filter 0.4s var(--ease);
+  .hero__rest {
+    opacity: calc(1 - var(--xs, 0) * 1.7);
+    translate: 0 calc(var(--xs, 0) * -56px);
   }
-  .societies__item a:hover img,
-  .societies__item a:focus-visible img { opacity: 1; filter: grayscale(0); }
 
-  /* Dark-mode logo variants: the default logos are dark ink on a transparent
-     background (mix-blend-mode:multiply relies on a light page behind them),
-     so on a dark ground they'd vanish. Swap to a white-on-transparent
-     version instead - no multiply blend, since white through "multiply"
-     is a no-op and would stay invisible too. */
-  .societies__logo--dark { display: none; }
-  :root[data-theme='dark'] .societies__logo--light { display: none; }
-  :root[data-theme='dark'] .societies__logo--dark {
-    display: inline-block;
-    mix-blend-mode: normal;
+  /* First paint: the lines slide in from their own exit direction. */
+  @media (prefers-reduced-motion: no-preference) {
+    .hero__line { animation: hero-line-in 1s var(--ease-out) both; animation-delay: calc(var(--k) * 90ms + 80ms); }
+    .hero__rest { animation: hero-rest-in 0.9s var(--ease-out) 0.38s both; }
   }
-  .societies__item a:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
+  @keyframes hero-line-in { from { opacity: 0; transform: translateX(calc(var(--dir) * 12%)); } }
+  @keyframes hero-rest-in { from { opacity: 0; transform: translateY(18px); } }
 
   /* ------------------------------------------------------------ Director */
   /* The hero already carries its own bottom padding, so stacking the
@@ -500,6 +553,51 @@ const DIRECTOR_ICONS: Record<string, string> = {
     .director__grid { grid-template-columns: 1fr; }
     .director__portrait { max-width: 420px; }
   }
+  /* Phone: a magazine cover - the portrait runs edge to edge and the name is
+     set over it, instead of a photo followed by a separate heading. The
+     copy column dissolves (display: contents) so its heading can share the
+     portrait's grid cell. */
+  @media (max-width: 760px) {
+    .director { padding-top: 0; }
+    .director__grid { row-gap: var(--space-m); }
+    .director__copy { display: contents; }
+    .director__portrait {
+      grid-area: 1 / 1;
+      max-width: none;
+      margin-inline: calc(-1 * var(--gutter));
+      aspect-ratio: 4 / 5;
+    }
+    .director__portrait img { height: 100%; }
+    .director__portrait::after {
+      content: '';
+      position: absolute;
+      inset: 45% 0 0;
+      background: linear-gradient(to bottom, transparent, rgba(12, 12, 11, 0.86));
+      pointer-events: none;
+    }
+    .director__name {
+      grid-area: 1 / 1;
+      align-self: end;
+      position: relative;
+      z-index: 1;
+      margin: 0 0 var(--space-m);
+      font-size: clamp(2rem, 1.2rem + 4vw, 2.6rem);
+      color: #fff;
+    }
+    .director__creds {
+      display: block;
+      margin-top: 0.35rem;
+      font-size: 0.9375rem;
+      font-family: var(--font-sans);
+      letter-spacing: 0.12em;
+      color: rgba(255, 255, 255, 0.8);
+    }
+    .director__comma { display: none; }
+    .director__roles { margin-top: 0; }
+    .director__socials { gap: 0.6rem; }
+    .director__socials a { width: 2.75rem; height: 2.75rem; }
+    .director__socials a:active { background: var(--ink); color: var(--bg); }
+  }
 
   /* -------------------------------------------------------------- Impact */
   .impact { position: relative; isolation: isolate; overflow: hidden; }
@@ -533,6 +631,9 @@ const DIRECTOR_ICONS: Record<string, string> = {
     font-weight: 600;
     line-height: 1;
     color: var(--on-dark-accent);
+    /* Count-up runs through every digit - fixed-width digits stop the
+       figure (and its label on phones) from jittering sideways. */
+    font-variant-numeric: tabular-nums;
   }
   .stat__label {
     margin-top: 0.7rem;
@@ -553,6 +654,21 @@ const DIRECTOR_ICONS: Record<string, string> = {
   .impact__grid--research .stat__label { max-width: none; white-space: nowrap; }
   @media (max-width: 700px) { .impact__grid--research .stat__label { white-space: normal; } }
   @media (max-width: 700px) { .impact__grid--research { grid-template-columns: 1fr; } }
+
+  /* Phones: a compact ledger - figure and label on one row per stat instead
+     of three tall tiles that each fill most of a screen. */
+  @media (max-width: 560px) {
+    .impact__grid { margin-top: var(--space-l); }
+    .stat {
+      display: grid;
+      grid-template-columns: 6.4rem 1fr;
+      align-items: center;
+      column-gap: var(--space-s);
+      padding: var(--space-s);
+    }
+    .stat__value { font-size: clamp(2rem, 1.3rem + 3vw, 2.4rem); }
+    .stat__label { margin-top: 0; font-size: 0.875rem; }
+  }
 
   /* ------------------------------------------------------------- Pillars */
   .pillars__title { font-size: var(--step-3); margin-top: var(--space-s); }
@@ -587,5 +703,17 @@ const DIRECTOR_ICONS: Record<string, string> = {
     text-transform: uppercase;
     letter-spacing: 0.16em;
     color: var(--blue);
+  }
+
+  /* One column on phones - a wider, shorter image keeps each card to about
+     one screen instead of an image-then-scroll-then-text sequence. */
+  /* Phones: the three arms stack like a deck (data-stack) - each card pins
+     near the top and the next one slides up over it. */
+  @media (max-width: 760px) {
+    .pillars__grid { margin-top: var(--space-m); gap: var(--space-l); }
+    .pillar__media { aspect-ratio: 16 / 10; }
+    .pillar__body { padding: var(--space-s) var(--space-s) var(--space-m); }
+    .pillar__title { font-size: 1.75rem; }
+    .pillar__text { font-size: 1rem; }
   }
 </style>

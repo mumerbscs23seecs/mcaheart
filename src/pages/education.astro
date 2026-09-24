@@ -6,18 +6,25 @@ import ParallaxVideoHero from '../components/ParallaxVideoHero.astro';
 import VideoCard from '../components/VideoCard.astro';
 import VideoLightbox from '../components/VideoLightbox.astro';
 import CTABanner from '../components/CTABanner.astro';
-import { education, videos } from '../data/site';
+import { education, videos, heartOfTheMatterEpisodes } from '../data/site';
 import { fetchPlaylistVideos } from '../lib/youtube-feed';
 
 const { series, webinar } = education;
-// The monthly webinar episode from the Heart Trending library.
-const webinarVideo = videos.find((v) => v.title === 'Monthly Webinar')!;
+// The monthly webinar spotlight - the most recent FACET webinar upload.
+// `videos` is the channel's latest-uploads list (newest first), and FACET
+// Webinars are a real recurring series on it, so this stays accurate as
+// long as one has posted recently enough to be in that list.
+const webinarVideo = videos.find((v) => v.title.startsWith('FACET Webinar')) ?? videos[0];
 
 // Pulled live from the Education playlist's public RSS feed - no API key,
 // cached for 20 minutes server-side so it stays fresh without hammering
-// YouTube.
+// YouTube. Fall back to a static seed of real Heart of the Matter episodes
+// only if the feed has never once answered successfully (same rule as
+// research-group.astro's PubMed fetch and heart-trending.astro's channel
+// fetch) - a feed hiccup should never blank the whole section.
 const educationPlaylistId = 'PLU8rCA-F825UA0ogbRMvq6tbaanN8Mfio';
-const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
+const liveEducationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
+const educationVideos = liveEducationVideos.length > 0 ? liveEducationVideos : heartOfTheMatterEpisodes;
 ---
 
 <BaseLayout
@@ -68,12 +75,12 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
         <button
           class="thumb"
           type="button"
-          data-video-id={videos[0].youtubeId}
+          data-video-id={heartOfTheMatterEpisodes[0].youtubeId}
           data-video-title={series.name}
           aria-label={`Play the ${series.name} series`}
         >
           <span class="media thumb__media">
-            <img src={series.thumb} alt="" loading="lazy" decoding="async" width="900" height="506" />
+            <img src={series.thumb} alt="" loading="lazy" decoding="async" width="900" height="506" data-parallax="0.05" />
             <span class="thumb__play" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="currentColor" width="30" height="30">
                 <path d="M8 5v14l11-7L8 5Z" />
@@ -94,7 +101,7 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
           <h2 class="display playlist__title">Education</h2>
         </header>
 
-        <div class="playlist__grid">
+        <div class="playlist__grid" data-rail="videos">
           {educationVideos.map((v, i) => <VideoCard video={v} index={i} />)}
         </div>
       </div>
@@ -113,7 +120,7 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
           aria-label={`Play the ${webinar.name}`}
         >
           <span class="media thumb__media">
-            <img src={webinar.image} alt="" loading="lazy" decoding="async" width="900" height="600" />
+            <img src={webinar.image} alt="" loading="lazy" decoding="async" width="900" height="600" data-parallax="0.05" />
             <span class="thumb__play" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="currentColor" width="30" height="30">
                 <path d="M8 5v14l11-7L8 5Z" />
@@ -139,7 +146,7 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
   <section class="section soon">
     <div class="shell shell--narrow center" data-reveal>
       <h2 class="display soon__title">Stay connected</h2>
-      <p class="lede soon__body">
+      <p class="lede soon__body" data-scrub>
         New episodes, webinars and journal reviews are added regularly. Follow the
         channel so you do not miss them.
       </p>
@@ -191,6 +198,8 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
   }
   .thumb:hover .thumb__play { background: rgba(0, 0, 0, 0.34); }
   .thumb:hover .thumb__play svg { transform: scale(1.1); background: var(--blue-deep); }
+  .thumb:active .thumb__play { background: rgba(0, 0, 0, 0.34); }
+  .thumb:active .thumb__play svg { transform: scale(0.94); background: var(--blue-deep); transition-duration: 0.12s; }
   .thumb__cap {
     margin-top: var(--space-xs);
     font-size: var(--step--1);
@@ -241,6 +250,10 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
     gap: var(--space-m);
     margin-top: var(--space-l);
   }
+  /* Phones: a swipe rail (data-rail) instead of twelve cards in a column. */
+  @media (max-width: 760px) {
+    .playlist__grid { grid-template-columns: none; gap: 12px; margin-top: var(--space-m); }
+  }
 
   /* ---------------------------------------------------------------- Webinar */
   .webinar__grid {
@@ -253,6 +266,7 @@ const educationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
   .webinar__body { margin-top: var(--space-m); }
   .webinar__partner {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-xs);
     margin-top: var(--space-l);

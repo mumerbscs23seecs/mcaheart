@@ -88,9 +88,16 @@
   --space-xl:  clamp(3.5rem, 2.4rem + 4.4vw, 6.5rem);
   --space-2xl: clamp(5rem, 3.2rem + 7vw, 10rem);
 
-  /* Shell */
+  /* Shell. The safe-area terms keep content clear of a landscape notch
+     (the page opts into edge-to-edge with viewport-fit=cover). */
   --measure: 62ch;
-  --gutter: clamp(1.25rem, 0.4rem + 3.6vw, 4.5rem);
+  --gutter: max(
+    clamp(1.25rem, 0.4rem + 3.6vw, 4.5rem),
+    env(safe-area-inset-left, 0px),
+    env(safe-area-inset-right, 0px)
+  );
+  --dock-h: 0px;
+  --dock-space: 0px;
   --max-w: 1240px;
   --max-w-wide: 1400px;
 
@@ -112,6 +119,16 @@
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 
   color-scheme: light;
+}
+
+/* Phones: a compact top bar, and a bottom tab bar (--dock-h) that every
+   fixed/pinned layout reserves room for via --dock-space. */
+@media (max-width: 760px) {
+  :root {
+    --header-h: 60px;
+    --dock-h: 60px;
+    --dock-space: calc(var(--dock-h) + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* ---------- 1b. Dark mode ------------------------------------------------
@@ -237,12 +254,31 @@ body {
   overflow-x: hidden;
   transition: background-color 0.25s var(--ease), color 0.25s var(--ease);
 }
+/* Phones: the page ends above the tab bar, not under it. */
+@media (max-width: 760px) {
+  body { padding-bottom: var(--dock-space); }
+}
+html.is-locked { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {
   body { transition: none; }
 }
 
 img, svg, video { display: block; max-width: 100%; height: auto; }
 input, button, textarea, select { font: inherit; color: inherit; }
+
+/* Touch: no grey flash on tap (each control draws its own :active state) and
+   no double-tap-to-zoom delay on controls. */
+a, button, summary, label, input, select, textarea {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* iOS Safari zooms the page on focus of any field set below 16px. */
+@media (pointer: coarse) {
+  input:not([type='checkbox'], [type='radio'], [type='file'], [type='range']),
+  select,
+  textarea { font-size: max(16px, 1rem) !important; }
+}
 
 ::placeholder { color: var(--text-hint); opacity: 1; }
 button { background: none; border: 0; cursor: pointer; }
@@ -315,6 +351,7 @@ p { text-wrap: pretty; }
   color: var(--text-muted);
 }
 .eyebrow--center { justify-content: center; }
+@media (max-width: 760px) { .eyebrow { font-size: 0.75rem; } }
 
 .lede {
   font-size: var(--step-1);
@@ -398,7 +435,9 @@ p { text-wrap: pretty; }
   transition: background 0.18s var(--ease), color 0.18s var(--ease), border-color 0.18s var(--ease);
 }
 .btn:hover { --btn-bg: var(--blue-deep); --btn-bd: var(--blue-deep); }
-.btn:active { transform: translateY(0.5px); }
+.btn:active { transform: translateY(0.5px); --btn-bg: var(--blue-deep); --btn-bd: var(--blue-deep); }
+.btn--ghost:active { --btn-bg: var(--ink); --btn-fg: var(--bg); --btn-bd: var(--ink); }
+.btn--light:active { --btn-bg: rgba(255, 255, 255, 0.82); }
 .btn:focus-visible { outline-offset: 3px; }
 
 .btn__arrow { transition: transform 0.3s var(--ease-out); }
@@ -462,6 +501,9 @@ p { text-wrap: pretty; }
 }
 .card:hover { border-color: var(--ink); }
 .card:hover::after { transform: scaleX(1); }
+/* Tap feedback: the same keyline, drawn while the finger is down. */
+.card:active { border-color: var(--ink); }
+.card:active::after { transform: scaleX(1); transition-duration: 0.15s; }
 
 .media {
   position: relative;
@@ -478,16 +520,136 @@ a:hover > .media img { transform: scale(1.03); }
 
 /* ---------- 8. Reveal-on-scroll ----------------------------------------- */
 
-[data-reveal] {
-  opacity: 0;
-  transform: translateY(14px);
-  transition: opacity 0.7s var(--ease-out), transform 0.7s var(--ease-out);
-  transition-delay: var(--reveal-delay, 0ms);
+/* Two independent inputs, combined here:
+   --rv  enter state, 0 -> 1, animated by the transition when the element
+         reaches the viewport (and reset when it drops back out below);
+   --xp  exit, 0 -> 1, written every frame by effects.ts as the element
+         leaves through the top - never transitioned, so it tracks the finger.
+   The individual `translate`/`scale` properties leave `transform` free for
+   each component's own hover/animation effects. */
+@property --rv {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
 }
-[data-reveal].is-visible { opacity: 1; transform: none; }
+
+[data-reveal] {
+  --xp: 0;
+  opacity: calc(var(--rv) * (1 - var(--xp) * 0.85));
+  translate: 0 calc((1 - var(--rv)) * 28px - var(--xp) * 36px);
+  scale: calc(1 - var(--xp) * 0.05);
+  transition: --rv 0.9s var(--ease-out) var(--reveal-delay, 0ms);
+}
+[data-reveal].is-visible { --rv: 1; }
+
+/* Headlines inside a revealing block rise a beat behind it. */
+[data-reveal] .display:not([data-reveal]),
+[data-reveal] > h2:not([data-reveal]) {
+  translate: 0 calc((1 - var(--rv)) * 0.45em);
+}
+
+/* Phones stack everything into one column, so the desktop left-to-right
+   stagger would only make each tile arrive late. */
+@media (max-width: 760px) {
+  [data-reveal] { transition-duration: 0.7s; transition-delay: 0ms; }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  [data-reveal] { opacity: 1; transform: none; }
+  [data-reveal] { --rv: 1; --xp: 0 !important; }
+}
+
+/* ---------- 8b. Scroll-scrubbed text ------------------------------------ */
+/* Each word (split by effects.ts) lights up as the block moves up the
+   screen; the 8-word ramp makes it read as a wave, not a hard cursor. */
+.is-scrub .w {
+  opacity: clamp(0.16, calc((var(--sp, 0) * (var(--n) + 8) - var(--i)) / 8), 1);
+}
+
+/* ---------- 8c. Parallax media ------------------------------------------- */
+/* Oversized so the drift written by effects.ts never exposes an edge. */
+[data-parallax] { scale: 1.16; will-change: translate; }
+@media (prefers-reduced-motion: reduce) { [data-parallax] { scale: 1; } }
+
+/* ---------- 8d. Phone patterns: stacking cards + swipe rails ------------- */
+@media (max-width: 760px) and (prefers-reduced-motion: no-preference) {
+  [data-stack] > * {
+    position: sticky;
+    top: calc(14px + var(--si, 0) * 12px);
+    transform-origin: 50% 0;
+    scale: calc(1 - var(--cover, 0) * 0.08);
+  }
+  /* The card being covered dims back - an opacity-only overlay, cheap to
+     animate, instead of a filter that would re-rasterise every frame. */
+  [data-stack] > *::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: #000;
+    opacity: calc(var(--cover, 0) * 0.32);
+    pointer-events: none;
+  }
+}
+
+@media (max-width: 760px) {
+  [data-rail] {
+    grid-auto-flow: column;
+    grid-auto-columns: 84%;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--gutter);
+    padding-inline: var(--gutter);
+    margin-inline: calc(-1 * var(--gutter));
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  [data-rail]::-webkit-scrollbar { display: none; }
+  [data-rail] > * { scroll-snap-align: start; scroll-snap-stop: always; }
+
+  .rail-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-s);
+    margin-top: var(--space-s);
+  }
+  .rail-meta__count {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+  }
+  .rail-meta__count b { color: var(--text-strong); }
+  .rail-meta__bar {
+    flex: 1;
+    height: 2px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .rail-meta__bar i {
+    display: block;
+    height: 100%;
+    background: var(--blue);
+    transform-origin: 0 50%;
+    transition: transform 0.25s var(--ease-out);
+  }
+  .rail-meta__btn {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--ink);
+    color: var(--ink);
+  }
+  .rail-meta__btn + .rail-meta__btn { margin-left: -0.4rem; }
+  .rail-meta__btn:active { background: var(--ink); color: var(--bg); }
+  .rail-meta__btn:disabled { opacity: 0.3; }
+  .dark-ground .rail-meta__count b { color: var(--on-dark-strong); }
+  .dark-ground .rail-meta__btn { border-color: var(--on-dark-strong); color: var(--on-dark-strong); }
+}
+@media (min-width: 761px) {
+  .rail-meta { display: none; }
 }
 
 /* ---------- 9. Utilities ------------------------------------------------- */

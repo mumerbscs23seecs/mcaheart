@@ -80,6 +80,8 @@ const { video, index = 0 } = Astro.props;
   }
   .vcard__trigger:hover .vcard__play { background: rgba(0, 0, 0, 0.32); }
   .vcard__trigger:hover .vcard__play svg { transform: scale(1.1); background: var(--blue-deep); }
+  .vcard__trigger:active .vcard__play { background: rgba(0, 0, 0, 0.32); }
+  .vcard__trigger:active .vcard__play svg { transform: scale(0.94); background: var(--blue-deep); transition-duration: 0.12s; }
 
   .vcard__body { padding: var(--space-s) var(--space-s) var(--space-m); }
   .vcard__title {

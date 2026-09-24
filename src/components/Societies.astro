@@ -1,0 +1,111 @@
+---
+/* "Our work has been presented at" - the society logo row shared by the
+   home and research pages. Desktop: a static, wrapped row. Phone: one
+   endless strip (a second, aria-hidden copy makes the loop seamless). */
+import { societies } from '../data/site';
+
+interface Props { edge?: 'block' | 'bottom' }
+const { edge = 'block' } = Astro.props;
+---
+
+<section class:list={['section--tight societies', `societies--${edge}`]}>
+  <div class="shell shell--wide">
+    <p class="societies__label">Our work has been presented at</p>
+    <div class="societies__window">
+      <ul class="societies__list" data-velocity="0.25">
+        {[0, 1].map((copy) => societies.map((s) => (
+          <li class:list={['societies__item', copy === 1 && 'societies__item--dup']} aria-hidden={copy === 1 ? 'true' : undefined}>
+            <a
+              href={s.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              tabindex={copy === 1 ? -1 : undefined}
+              aria-label={`${s.name} - view M Chadi Alraies' work indexed here`}
+            >
+              <img class="societies__logo--light" src={s.logo} alt={s.name} loading="lazy" decoding="async" height="60" />
+              {s.logoDark && (
+                <img class="societies__logo--dark" src={s.logoDark} alt={s.name} loading="lazy" decoding="async" height="60" />
+              )}
+            </a>
+          </li>
+        )))}
+      </ul>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* ----------------------------------------------------------- Societies */
+  .societies { padding-block: var(--space-l); }
+  .societies--block { border-block: 1px solid var(--border-soft); }
+  .societies--bottom { border-bottom: 1px solid var(--border-soft); }
+  .societies__label {
+    text-align: center;
+    font-size: var(--step--1);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    color: var(--text-faint);
+  }
+  .societies__list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(2rem, 1rem + 5vw, 5.5rem);
+    margin-top: var(--space-m);
+  }
+  .societies__item a { display: block; line-height: 0; }
+  .societies__item--dup { display: none; }
+
+  /* Phone: one endless strip instead of a wrapped block of logos. Spacing is
+     padding, not gap, so exactly half the track is one full copy and the
+     -50% loop is seamless. Scrolling also pushes it (data-velocity). */
+  @media (max-width: 760px) and (prefers-reduced-motion: no-preference) {
+    .societies__window {
+      overflow: hidden;
+      margin-inline: calc(-1 * var(--gutter));
+      -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+      mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+    }
+    .societies__list {
+      flex-wrap: nowrap;
+      justify-content: flex-start;
+      width: max-content;
+      gap: 0;
+      animation: logo-loop 20s linear infinite;
+    }
+    .societies__item { padding-inline: 1.6rem; }
+    .societies__item--dup { display: block; }
+  }
+  @keyframes logo-loop { to { transform: translateX(-50%); } }
+
+  .societies__item img {
+    height: clamp(52px, 40px + 2vw, 76px);
+    width: auto;
+    filter: grayscale(1) contrast(1.1);
+    opacity: 0.8;
+    mix-blend-mode: multiply;
+    transition: opacity 0.4s var(--ease), filter 0.4s var(--ease);
+  }
+  .societies__item a:hover img,
+  .societies__item a:focus-visible img { opacity: 1; filter: grayscale(0); }
+
+  /* Dark-mode logo variants: the default logos are dark ink on a transparent
+     background (mix-blend-mode:multiply relies on a light page behind them),
+     so on a dark ground they'd vanish. Swap to a white-on-transparent
+     version instead - no multiply blend, since white through "multiply"
+     is a no-op and would stay invisible too. */
+  .societies__logo--dark { display: none; }
+  :root[data-theme='dark'] .societies__logo--light { display: none; }
+  :root[data-theme='dark'] .societies__logo--dark {
+    display: inline-block;
+    mix-blend-mode: normal;
+  }
+  .societies__item a:focus-visible { outline: 2px solid var(--blue); outline-offset: 4px; }
+
+
+  @media (max-width: 760px) {
+    .societies__item img { height: 46px; }
+  }
+</style>

@@ -13,7 +13,7 @@ const { eyebrow, title, body, ctaLabel, ctaHref, image } = Astro.props;
 <section class="cta dark-ground">
   {image && (
     <div class="cta__bg" aria-hidden="true">
-      <img src={image} alt="" loading="lazy" decoding="async" />
+      <img src={image} alt="" loading="lazy" decoding="async" data-parallax="0.12" />
     </div>
   )}
 

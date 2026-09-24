@@ -5,13 +5,18 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import ParallaxVideoHero from '../components/ParallaxVideoHero.astro';
 import VideoCard from '../components/VideoCard.astro';
 import VideoLightbox from '../components/VideoLightbox.astro';
-import { site } from '../data/site';
+import { site, videos as fallbackVideos } from '../data/site';
 import { fetchLatestVideos } from '../lib/youtube-feed';
 
 // Pulled live from the channel's public RSS feed - no API key, cached for
-// 20 minutes server-side so it stays fresh without hammering YouTube.
+// 20 minutes server-side so it stays fresh without hammering YouTube. Fall
+// back to the static seed list only if YouTube has never once answered
+// successfully (no cache yet, and this fetch also failed) - same rule as
+// research-group.astro's PubMed fetch, so a feed hiccup never blanks the
+// whole "Just uploaded" section.
 const channelId = site.youtube.split('/').filter(Boolean).pop()!;
-const latestVideos = await fetchLatestVideos(channelId, 12);
+const liveVideos = await fetchLatestVideos(channelId, 12);
+const latestVideos = liveVideos.length > 0 ? liveVideos : fallbackVideos;
 ---
 
 <BaseLayout
@@ -27,7 +32,6 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
     layer2={{ src: '/assets/trending/hero-layers/wordmark.webp', alt: 'Heart Trending' }}
     tagline="Advancing Cardiovascular Education Through Conversation and Evidence"
     finalTitle="Conversations that move cardiology forward"
-    finalSub="Heart Trending"
     accent="#e2001f"
     navy="#0a1d33"
     navyDeep="#040d1c"
@@ -39,7 +43,7 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
   <section class="section trending-intro">
     <div class="shell shell--narrow">
       <p class="trending-intro__mark" aria-hidden="true">&#10077;</p>
-      <div class="prose trending-intro__body" data-reveal>
+      <div class="prose trending-intro__body" data-reveal data-scrub>
         <p class="trending-intro__lede">
           MCA Heart Trending is a cardiovascular education platform led by Dr. M. Chadi Alraies,
           featuring conversations with cardiologists, researchers, and other experts on emerging
@@ -62,7 +66,7 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
           <h2 class="display library__title">Just uploaded</h2>
         </header>
 
-        <div class="library__grid">
+        <div class="library__grid" data-rail="videos">
           {latestVideos.map((v, i) => <VideoCard video={v} index={i} />)}
         </div>
       </div>
@@ -131,6 +135,10 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
     gap: var(--space-m);
     margin-top: var(--space-l);
   }
+  /* Phones: a swipe rail (data-rail) instead of twelve cards in a column. */
+  @media (max-width: 760px) {
+    .library__grid { grid-template-columns: none; gap: 12px; margin-top: var(--space-m); }
+  }
 
   .collab { overflow: hidden; }
   .collab__grid {
@@ -154,5 +162,13 @@ const latestVideos = await fetchLatestVideos(channelId, 12);
   @media (max-width: 860px) {
     .collab__grid { grid-template-columns: 1fr; }
     .collab__art { order: -1; max-width: 460px; }
+  }
+  /* Decorative line art: on a phone it only needs to introduce the section,
+     not fill a screen before the copy. */
+  @media (max-width: 560px) {
+    .collab__grid { gap: var(--space-m); }
+    .collab__art { max-width: 150px; }
+    .collab__cta { width: 100%; }
+    .trending-intro__mark { font-size: 3.5rem; }
   }
 </style>

@@ -13,9 +13,18 @@
 </dialog>
 
 <style>
+  /* Width is also capped by the height left for a 16:9 frame (minus the
+     close button above and caption below) - a landscape phone would
+     otherwise get a player taller than its screen. */
+  /* margin: auto restores the UA dialog centring that the global
+     `* { margin: 0 }` reset removed - the player was pinned top-left with
+     its close button off-screen. The close button sits inside the top
+     padding so it can never be pushed above the viewport. */
   .lb {
-    width: min(1100px, 92vw);
-    padding: 0;
+    width: min(1100px, 92vw, calc((100dvh - 7.5rem) * 16 / 9));
+    max-height: 100dvh;
+    margin: auto;
+    padding: 3.25rem 0 0;
     border: 0;
     background: transparent;
     color: var(--on-dark);
@@ -50,18 +59,19 @@
 
   .lb__close {
     position: absolute;
-    top: -3rem;
+    top: 0;
     right: 0;
     display: inline-grid;
     place-items: center;
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 2.75rem;
+    height: 2.75rem;
     color: var(--on-dark);
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 0;
     transition: background 0.3s var(--ease);
   }
-  .lb__close:hover { background: var(--blue); border-color: var(--blue); }
+  .lb__close:hover,
+  .lb__close:active { background: var(--blue); border-color: var(--blue); }
 </style>
 
 <script>

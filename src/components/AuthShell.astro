@@ -128,6 +128,8 @@ const pageTitle = `${title} | ${site.name}`;
 
       .auth-card__link {
         justify-self: start;
+        padding-block: 0.6rem;
+        margin-block: -0.6rem;
         font-size: 0.85rem;
         color: var(--blue);
       }
@@ -181,6 +183,9 @@ const pageTitle = `${title} | ${site.name}`;
         font-size: 0.8rem;
       }
       .authpage__demo summary {
+        display: flex;
+        align-items: center;
+        min-height: 44px;
         padding: 0.6rem 0.9rem;
         cursor: pointer;
         color: var(--text-muted);
@@ -197,6 +202,8 @@ const pageTitle = `${title} | ${site.name}`;
         font-family: var(--font-mono);
         font-size: 0.76rem;
         color: var(--text);
+        /* Unbroken email addresses otherwise push the table past a 320px screen. */
+        overflow-wrap: anywhere;
       }
       .authpage__demo td:first-child { padding-left: 0.9rem; color: var(--text-muted); font-family: var(--font-sans); }
 
@@ -204,7 +211,7 @@ const pageTitle = `${title} | ${site.name}`;
         justify-self: center;
         font-size: 0.8rem;
       }
-      .authpage__foot a { color: var(--text-muted); }
+      .authpage__foot a { display: inline-block; padding-block: 0.7rem; color: var(--text-muted); }
       .authpage__foot a:hover { color: var(--blue); }
     </style>
   </body>

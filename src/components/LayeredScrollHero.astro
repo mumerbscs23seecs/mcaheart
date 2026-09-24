@@ -6,23 +6,18 @@
  * center wordmark, right panel, anatomical heart) so they can drift apart
  * as the visitor scrolls, then read as one flat composition at rest.
  *
- * Design, deliberately: the JS below does the least possible amount of
- * work. It computes a single number each frame (the eased pin progress)
- * and writes it to one CSS custom property on the stage. Every layer's
- * motion is a plain CSS calc() off that one property, and a short CSS
- * transition on each layer absorbs the frame-to-frame smoothing - not a
- * hand-rolled JS lerp. There is no per-layer imperative style write, no
- * manual GPU-layer promotion/demotion bookkeeping, and no mutable
- * animation state that two script instances (e.g. a stray HMR reload)
- * could ever disagree about - both would compute the same target from
- * the same scrollY and write the same value. That's what makes this
- * version robust against the blank-flash bug earlier attempts had:
- * there's nothing left to desync.
- *
- * Respects prefers-reduced-motion (everything sits at rest, no listener
- * attached) and skips the scroll-lock height on narrow screens, where a
- * long pinned scroll fights the page instead of introducing it.
+ * The script computes one eased number per frame (pin progress) and writes
+ * it as custom properties on the pin; every layer's motion is a CSS calc()
+ * off those. Three modes, chosen by media query:
+ *   desktop  - wide stage, side art exits, wordmark rises (the original);
+ *   phone    - opens on the whole composition, then the camera pushes in
+ *              on the wordmark while the side art exits; the lab's numbers
+ *              rise in below and count up with the scroll;
+ *   at rest  - reduced motion, or a landscape phone too short to pin:
+ *              no scroll-lock, the composition sits still.
  */
+import { researchStats, director } from '../data/site';
+
 interface Props {
   title: string;
 }
@@ -32,19 +27,48 @@ const base = '/assets/research/hero-layers';
 
 <section class="lshero">
   <div class="lshero__space" id="lsheroSpace">
-    <div class="lshero__pin">
+    <div class="lshero__pin" id="lsheroPin">
       <h1 class="visually-hidden">{title}</h1>
-      <div class="lshero__stage" id="lsheroStage">
+      <div class="lshero__stage">
         <img class="lslayer" id="ls-bg" src={`${base}/00_background.jpg`} alt="" fetchpriority="high" />
-        <img class="lslayer lslayer--side" id="ls-tl" src={`${base}/01_top_left_orbit.png`} alt="" />
-        <img class="lslayer lslayer--side" id="ls-ecg" src={`${base}/02_ecg.png`} alt="" />
-        <img class="lslayer lslayer--side" id="ls-blorbit" src={`${base}/03_bottom_left_orbit.png`} alt="" />
-        <img class="lslayer lslayer--side" id="ls-bl" src={`${base}/04_bottom_left_stent_scene.png`} alt="" />
-        <img class="lslayer" id="ls-logo" src={`${base}/05_center_logo.png`} alt="" />
-        <img class="lslayer lslayer--side" id="ls-rorbit" src={`${base}/06_right_orbit.png`} alt="" />
-        <img class="lslayer lslayer--side" id="ls-panel" src={`${base}/07_right_panel.png`} alt="" />
-        <img class="lslayer lslayer--side" id="ls-heart" src={`${base}/08_right_heart.png`} alt="" />
+        {/* Everything but the backdrop rides in one canvas, so the phone
+            layout can move the whole composition as a single camera. */}
+        <div class="lshero__canvas">
+          {/* The side art moves as two groups, not eight separate layers.
+              One transform per group means the browser rasterises each
+              group once and then only slides it on the GPU; animating all
+              eight individually forced a re-raster of every full-width
+              image on every frame, which flashed them white mid-scroll.
+              The clusters are contiguous in z-order (left sits under the
+              wordmark, right over it), so stacking is unchanged. */}
+          <div class="lsgroup lsgroup--left">
+            <img class="lslayer" id="ls-tl" src={`${base}/01_top_left_orbit.png`} alt="" />
+            <img class="lslayer" id="ls-ecg" src={`${base}/02_ecg.png`} alt="" />
+            <img class="lslayer" id="ls-blorbit" src={`${base}/03_bottom_left_orbit.png`} alt="" />
+            <img class="lslayer" id="ls-bl" src={`${base}/04_bottom_left_stent_scene.png`} alt="" />
+          </div>
+          <img class="lslayer" id="ls-logo" src={`${base}/05_center_logo.png`} alt="" />
+          <div class="lsgroup lsgroup--right">
+            <img class="lslayer" id="ls-rorbit" src={`${base}/06_right_orbit.png`} alt="" />
+            <img class="lslayer" id="ls-panel" src={`${base}/07_right_panel.png`} alt="" />
+            <img class="lslayer" id="ls-heart" src={`${base}/08_right_heart.png`} alt="" />
+          </div>
+        </div>
       </div>
+
+      {/* Phone only - the desktop composition is left exactly as designed. */}
+      <div class="lshero__copy">
+        <p class="lshero__eyebrow" style="--k:0">Led by {director.name}, {director.credentials}</p>
+        <ul class="lshero__stats">
+          {researchStats.map((s, i) => (
+            <li style={`--k:${i + 1}`}>
+              <span class="lshero__num" data-count={s.value}>{s.value}</span>
+              <span class="lshero__label">{s.label}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <p class="lshero__cue" aria-hidden="true">Scroll</p>
     </div>
   </div>
 </section>
@@ -56,12 +80,13 @@ const base = '/assets/research/hero-layers';
     border-bottom: 2px solid var(--ink);
   }
 
-  /* The tall scroll track the pinned stage rides inside of. Shorter on
-     narrow screens - a 4x-viewport pin makes little sense on a phone. */
+  /* The tall scroll track the pinned stage rides inside of. */
   .lshero__space { position: relative; height: 340vh; }
-  @media (max-width: 760px) { .lshero__space { height: 190vh; } }
 
   .lshero__pin {
+    --p: 0;
+    --pside: 0;
+    --pc: 0;
     position: sticky;
     top: 0;
     height: 100vh;
@@ -72,15 +97,11 @@ const base = '/assets/research/hero-layers';
   }
 
   /* Full-bleed - no side gutters, no max-width cap. The stage always
-     spans the entire window width; height follows from the aspect ratio.
-     --p / --pSide (written by the script below) live here so every child
-     layer can read them - a single write per frame instead of nine. */
+     spans the entire window width; height follows from the aspect ratio. */
   .lshero__stage {
     position: relative;
     width: 100%;
     aspect-ratio: 1672 / 941;
-    --p: 0;
-    --pside: 0;
   }
 
   /* The supplied artwork (background photo + all 9 layers) is fixed light
@@ -89,6 +110,8 @@ const base = '/assets/research/hero-layers';
      linework harder to read than the plain original. Simplest and most
      legible: render it exactly as-is, unconditionally - same as light
      mode - regardless of the site's theme setting. */
+
+  .lshero__canvas { position: absolute; inset: 0; }
 
   .lslayer {
     position: absolute;
@@ -99,10 +122,6 @@ const base = '/assets/research/hero-layers';
     pointer-events: none;
     user-select: none;
     transform-origin: center center;
-    /* The browser smooths every frame-to-frame jump on its own timeline -
-       a single dropped or duplicate JS write just gets interpolated away
-       instead of snapping the layer to a wildly different state. */
-    transition: transform 120ms linear, opacity 120ms linear;
   }
   #ls-bg { z-index: 0; }
   #ls-tl { z-index: 10; }
@@ -114,89 +133,204 @@ const base = '/assets/research/hero-layers';
   #ls-panel { z-index: 70; }
   #ls-heart { z-index: 80; }
 
-  /* Each side layer's exit motion, expressed once as calc() off the two
-     shared custom properties instead of nine separate JS style writes
-     per frame. Side art exits fully off-stage by 55% of the pin - the
-     script maps that window into --pside so this is just 0..1 here. */
-  #ls-tl {
-    transform: translate3d(calc(var(--pside) * -160%), calc(var(--pside) * -70%), 0)
-      scale(calc(1 + var(--pside) * 0.08));
+  /* The three things that actually move. Each is promoted to its own
+     compositor layer, so a frame is a GPU transform rather than a repaint
+     of full-width artwork. Nothing else in the hero animates. */
+  .lsgroup,
+  #ls-logo {
+    will-change: transform, opacity;
+    backface-visibility: hidden;
   }
-  #ls-ecg {
-    transform: translate3d(calc(var(--pside) * -170%), calc(var(--pside) * 20%), 0)
-      scale(calc(1 + var(--pside) * 0.03));
+
+  /* Side art leaves as two clusters, drifting out and back in depth off the
+     shared --pside (0..1 across the first 55% of the pin). */
+  .lsgroup { position: absolute; inset: 0; opacity: calc(1 - var(--pside)); }
+  .lsgroup--left {
+    z-index: 10;
+    transform: translate3d(calc(var(--pside) * -46%), calc(var(--pside) * 10%), 0)
+      scale(calc(1 + var(--pside) * 0.1));
   }
-  #ls-blorbit {
-    transform: translate3d(calc(var(--pside) * -150%), calc(var(--pside) * 90%), 0)
-      rotate(calc(var(--pside) * -3deg));
-  }
-  #ls-bl {
-    transform: translate3d(calc(var(--pside) * -140%), calc(var(--pside) * 110%), 0)
+  .lsgroup--right {
+    z-index: 60;
+    transform: translate3d(calc(var(--pside) * 48%), calc(var(--pside) * -12%), 0)
       scale(calc(1 + var(--pside) * 0.12));
   }
-  #ls-rorbit {
-    transform: translate3d(calc(var(--pside) * 150%), calc(var(--pside) * -70%), 0)
-      rotate(calc(var(--pside) * 3deg));
-  }
-  #ls-panel {
-    transform: translate3d(calc(var(--pside) * 160%), calc(var(--pside) * 20%), 0)
-      scale(calc(1 + var(--pside) * 0.08));
-  }
-  #ls-heart {
-    transform: translate3d(calc(var(--pside) * 175%), calc(var(--pside) * -40%), 0)
-      scale(calc(1 + var(--pside) * 0.16)) rotate(calc(var(--pside) * 4deg));
-  }
-  .lslayer--side { opacity: calc(1 - var(--pside)); }
 
-  /* The wordmark rises on its own, slower and more contained than the
-     side art leaving - it settles near the top, still fully readable,
-     rather than exiting the frame. */
+  /* The wordmark rises on its own, slower and more contained than the side
+     art leaving - it settles high but still whole (it used to travel -46%
+     and leave the top of a 900px-tall window with its top half cut off). */
   #ls-logo {
-    transform: translate3d(0, calc(var(--p) * -46%), 0) scale(calc(1 - var(--p) * 0.08));
+    transform: translate3d(0, calc(var(--p) * -26%), 0) scale(calc(1 - var(--p) * 0.08));
   }
 
-  /* Reduced motion / narrow screens: freeze the hero at rest, no scroll-
-     lock, no per-layer transforms. */
-  @media (prefers-reduced-motion: reduce), (max-width: 760px) {
-    .lshero__pin { position: relative; height: auto; max-height: none; padding-block: var(--space-xl); }
+  .lshero__copy,
+  .lshero__cue { display: none; }
+
+  /* ============================================================== Camera
+     Phones and the at-rest layout use a taller frame than the artwork, so
+     the composition lives in one canvas that can be moved as a camera: it
+     starts fitted to the width (the whole picture, as on desktop) and zooms
+     by --pz toward --zmax, the scale at which it fills the frame's height.
+     The backdrop photo simply covers the frame. */
+  @media (max-width: 760px), (prefers-reduced-motion: reduce), (max-height: 520px) {
+    .lshero__stage { overflow: hidden; }
+    #ls-bg { object-fit: cover; }
+    .lshero__canvas {
+      inset: 50% 0 auto;
+      aspect-ratio: 1672 / 941;
+      transform: translateY(-50%) scale(calc(1 + (var(--zmax, 1) - 1) * var(--pz, 0)));
+    }
+  }
+
+  /* ================================================================ Phone
+     Pinned for a shorter run: the whole composition, then the camera pushes
+     in on the wordmark as the side art flies out, then the lab's numbers
+     lift in below it and count up with the scroll. */
+  @media (max-width: 760px) {
+    .lshero__space { height: 290svh; }
+    .lshero__pin {
+      height: 100svh;
+      max-height: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: var(--space-m);
+      padding: calc(var(--header-h) * 0.6) 0 var(--dock-space);
+    }
+    .lshero__stage {
+      flex: none;
+      aspect-ratio: 4 / 5;
+      max-height: 56svh;
+    }
+    #ls-logo { transform: none; }
+
+    .lshero__copy { display: block; padding-inline: var(--gutter); }
+    .lshero__copy [style*='--k'] {
+      --t: clamp(0, calc(var(--pc) * 3.2 - var(--k) * 0.55), 1);
+      opacity: var(--t);
+      translate: 0 calc((1 - var(--t)) * 28px);
+    }
+    .lshero__eyebrow {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--text-muted);
+      padding-bottom: var(--space-xs);
+      border-bottom: 2px solid var(--ink);
+    }
+    .lshero__stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-xs);
+      margin-top: var(--space-s);
+    }
+    .lshero__stats li { display: grid; gap: 0.3rem; align-content: start; }
+    .lshero__num {
+      font-family: var(--font-display);
+      font-size: clamp(1.7rem, 1rem + 3.4vw, 2.3rem);
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      color: var(--blue);
+    }
+    .lshero__label { font-size: 0.8125rem; line-height: 1.35; color: var(--text); }
+
+    .lshero__cue {
+      display: block;
+      position: absolute;
+      left: 50%;
+      bottom: calc(var(--dock-space) + var(--header-h) + 14px);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      opacity: calc(1 - var(--pside) * 5);
+      animation: ls-bob 1.8s ease-in-out infinite;
+    }
+  }
+  @keyframes ls-bob {
+    0%, 100% { transform: translate(-50%, 0); }
+    50% { transform: translate(-50%, 7px); }
+  }
+
+  /* ============================================================= At rest
+     Reduced motion, or a landscape phone where a 100vh pin is ~350px: no
+     scroll-lock, everything in its final place. Keep this query in sync
+     with REST_QUERY in the script. */
+  @media (prefers-reduced-motion: reduce), (max-height: 520px) {
     .lshero__space { height: auto; }
-    .lslayer { transition: none; }
+    .lshero__pin {
+      --p: 0 !important;
+      --pside: 0 !important;
+      --pc: 1 !important;
+      --pz: 1 !important;
+      position: relative;
+      height: auto;
+      max-height: none;
+      padding-block: 0 var(--space-l);
+    }
+    .lshero__stage { aspect-ratio: 4 / 3; max-height: 72svh; }
+    .lshero__cue { display: none; }
   }
 </style>
 
 <script>
+  import { subscribe, clamp, docTop, follower, setVar } from '../scripts/motion';
+
   const space = document.getElementById('lsheroSpace');
-  const stage = document.getElementById('lsheroStage');
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const narrow = matchMedia('(max-width: 760px)').matches;
+  const pin = document.getElementById('lsheroPin');
+  const REST_QUERY = '(prefers-reduced-motion: reduce), (max-height: 520px)';
+  const atRest = matchMedia(REST_QUERY);
+  const phoneQ = matchMedia('(max-width: 760px)');
 
-  if (space && stage && !reduced && !narrow) {
-    const clamp = (v: number, min = 0, max = 1) => Math.min(max, Math.max(min, v));
+  if (space && pin) {
     const ease = (v: number) => (v < 0.5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2);
+    const smooth = follower(0.16);
+    const nums = Array.from(pin.querySelectorAll<HTMLElement>('[data-count]')).map((el) => {
+      const raw = el.dataset.count ?? '';
+      return { el, raw, target: parseInt(raw.replace(/\D/g, ''), 10) || 0, suffix: raw.replace(/[0-9]/g, '') };
+    });
+    const stage = pin.querySelector<HTMLElement>('.lshero__stage')!;
+    let top = 0;
+    let travel = 0;
 
-    function pinProgress() {
-      const max = Math.max(0, space!.offsetHeight - window.innerHeight);
-      return max <= 0 ? 0 : clamp(window.scrollY / max);
-    }
+    subscribe({
+      measure() {
+        top = docTop(space);
+        travel = Math.max(1, space.offsetHeight - pin.offsetHeight);
+        // Camera zoom at which the 1672x941 canvas fills the frame's height.
+        const fitH = (stage.offsetWidth * 941) / 1672;
+        pin.style.setProperty('--zmax', Math.max(1, stage.offsetHeight / Math.max(1, fitH)).toFixed(4));
+      },
+      update({ y, dt }) {
+        if (atRest.matches) {
+          smooth.reset();
+          nums.forEach((n) => { if (n.el.textContent !== n.raw) n.el.textContent = n.raw; });
+          return;
+        }
+        const target = clamp((y - top) / travel);
+        const raw = smooth.step(target, dt);
+        const p = ease(raw);
+        setVar(pin, '--p', p, 4);
+        setVar(pin, '--pside', clamp(p / 0.55), 4);
+        setVar(pin, '--pz', ease(clamp(raw / 0.6)), 4);
+        const pc = clamp((p - 0.4) / 0.5);
+        setVar(pin, '--pc', pc, 4);
 
-    let ticking = false;
-    function update() {
-      ticking = false;
-      const p = ease(pinProgress());
-      const pSide = clamp(p / 0.55);
-      // One write, two properties - every layer's own calc() picks these
-      // up on the next style recalc. No per-layer JS, nothing to desync.
-      stage!.style.setProperty('--p', String(p));
-      stage!.style.setProperty('--pside', String(pSide));
-    }
-    function onScroll() {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(update);
-    }
-
-    update();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', onScroll);
+        // Phone: the figures count up with the scroll itself.
+        if (phoneQ.matches) {
+          nums.forEach((n, i) => {
+            const t = clamp(pc * 1.4 - i * 0.14);
+            const txt = t >= 1 ? n.raw : Math.round(n.target * (1 - Math.pow(1 - t, 3))) + n.suffix;
+            if (n.el.textContent !== txt) n.el.textContent = txt;
+          });
+        }
+        return raw !== target;
+      },
+    });
+    atRest.addEventListener('change', () => smooth.reset());
   }
 </script>

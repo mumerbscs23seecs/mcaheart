@@ -30,7 +30,11 @@
     cursor: pointer;
     transition: background 0.15s var(--ease, ease), color 0.15s var(--ease, ease);
   }
-  .theme-toggle:hover { background: var(--ink); color: var(--bg); }
+  .theme-toggle:hover,
+  .theme-toggle:active { background: var(--ink); color: var(--bg); }
+  @media (pointer: coarse) {
+    .theme-toggle { width: 2.75rem; height: 2.75rem; }
+  }
   .theme-toggle__moon { display: none; }
   :root[data-theme='dark'] .theme-toggle__sun { display: none; }
   :root[data-theme='dark'] .theme-toggle__moon { display: block; }

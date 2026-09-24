@@ -259,6 +259,18 @@ const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, st
     font-size: var(--step--1);
     color: var(--text-strong);
   }
+  .field__file::file-selector-button {
+    min-height: 40px;
+    margin-right: 0.75rem;
+    padding: 0 0.9rem;
+    border: 1px solid var(--ink);
+    border-radius: 0;
+    background: var(--surface);
+    color: var(--text-strong);
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
   .field__file[aria-invalid='true'] { border-color: var(--red); background: var(--red-wash); }
 
   .field__error {
@@ -284,7 +296,13 @@ const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, st
     cursor: pointer;
     transition: border-color 0.3s var(--ease), background 0.3s var(--ease);
   }
-  .choice:hover { border-color: var(--border); }
+  .choice:hover,
+  .choice:active { border-color: var(--border-strong); }
+  @media (max-width: 620px) {
+    .cform { padding: var(--space-m) var(--space-s); }
+    .cform__submit { width: 100%; }
+    .cform__foot { justify-content: center; text-align: center; }
+  }
   .choice input {
     position: absolute;
     opacity: 0;

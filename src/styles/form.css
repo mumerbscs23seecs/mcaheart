@@ -12,6 +12,9 @@
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
   margin: 0;
+  /* Fieldsets default to min-inline-size: min-content, so one wide child
+     (a native file input) pushed the whole group past a 320px screen. */
+  min-width: 0;
 }
 .iform__legend {
   display: flex;
@@ -81,12 +84,27 @@
 .ifield__input[aria-invalid='true'] { border-color: var(--red); background: var(--red-wash); }
 
 .ifield__file {
+  width: 100%;
+  min-width: 0;
   font-size: 0.85rem;
   color: var(--text-muted);
   padding: 0.6rem;
   background: var(--bg);
   border: 1px dashed var(--border);
   border-radius: var(--radius);
+}
+
+.ifield__file::file-selector-button {
+  min-height: 40px;
+  margin-right: 0.75rem;
+  padding: 0 0.9rem;
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--text-strong);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .ifield__err { font-size: 0.8rem; font-weight: 600; color: var(--red); }
@@ -105,7 +123,8 @@
   line-height: 1.5;
   transition: border-color 0.2s var(--ease), background 0.2s var(--ease);
 }
-.ichoice:hover { border-color: var(--border); }
+.ichoice:hover,
+.ichoice:active { border-color: var(--border-strong); }
 .ichoice input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 .ichoice__mark {
   flex-shrink: 0;
@@ -170,3 +189,13 @@
 .iform__status-body p { margin: 0.4rem 0 0; }
 .iform__status-body p:first-child { margin-top: 0; }
 .iform__status-body strong { font-weight: 700; color: var(--text-strong); }
+
+/* Phones - kept last so it overrides the rules above at equal specificity. */
+@media (max-width: 620px) {
+  .iform { gap: var(--space-m); }
+  .iform__group { gap: var(--space-s); }
+  .iform__legend { font-size: var(--step-1); align-items: flex-start; }
+  .ichoice { min-height: 44px; align-items: center; }
+  .ichoice__mark { margin-top: 0; }
+  .iform__submit { width: 100%; }
+}
