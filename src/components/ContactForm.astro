@@ -17,14 +17,14 @@ const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, st
     <div class="field">
       <label class="field__label" for="fullName">Full name <span aria-hidden="true">*</span></label>
       <input class="field__input" id="fullName" name="fullName" type="text"
-             autocomplete="name" required maxlength="120" />
+             autocomplete="name" required maxlength="120" placeholder="Your full name" />
       <p class="field__error" data-error-for="fullName" hidden></p>
     </div>
 
     <div class="field">
       <label class="field__label" for="email">Email <span aria-hidden="true">*</span></label>
       <input class="field__input" id="email" name="email" type="email"
-             autocomplete="email" required maxlength="200" />
+             autocomplete="email" required maxlength="200" placeholder="you@example.com" />
       <p class="field__error" data-error-for="email" hidden></p>
     </div>
   </div>
@@ -33,14 +33,14 @@ const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, st
     <div class="field">
       <label class="field__label" for="phone">Phone</label>
       <input class="field__input" id="phone" name="phone" type="tel"
-             autocomplete="tel" maxlength="40" />
+             autocomplete="tel" maxlength="40" placeholder="With country code, e.g. +1 313 555 0142" />
       <p class="field__error" data-error-for="phone" hidden></p>
     </div>
 
     <div class="field">
       <label class="field__label" for="location">Location</label>
       <input class="field__input" id="location" name="location" type="text"
-             autocomplete="address-level2" maxlength="160" />
+             autocomplete="address-level2" maxlength="160" placeholder="City, state/country" />
       <p class="field__error" data-error-for="location" hidden></p>
     </div>
   </div>
@@ -81,7 +81,7 @@ const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, st
     <div class="field">
       <label class="field__label" for="recName">Full name <span aria-hidden="true">*</span></label>
       <p class="field__help">We'll add a few more questions here soon - for now, your name is enough to get started.</p>
-      <input class="field__input" id="recName" name="recName" type="text" maxlength="120" />
+      <input class="field__input" id="recName" name="recName" type="text" maxlength="120" placeholder="Your full name" />
       <p class="field__error" data-error-for="recName" hidden></p>
     </div>
   </div>
@@ -90,7 +90,7 @@ const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, st
   <div class="cform__panel" data-intent-panel="observership" hidden>
     <div class="field">
       <label class="field__label" for="obsName">What is your name? <span aria-hidden="true">*</span></label>
-      <input class="field__input" id="obsName" name="obsName" type="text" maxlength="120" />
+      <input class="field__input" id="obsName" name="obsName" type="text" maxlength="120" placeholder="Your full name" />
       <p class="field__error" data-error-for="obsName" hidden></p>
     </div>
 
@@ -98,7 +98,6 @@ const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, st
       <label class="field__label" for="obsApplyDate">
         When do you plan to apply for Internal Medicine match? <span aria-hidden="true">*</span>
       </label>
-      <p class="field__help">Mention the year, e.g. Sept 2027.</p>
       <input class="field__input" id="obsApplyDate" name="obsApplyDate" type="text" maxlength="60" placeholder="e.g. Sept 2027" />
       <p class="field__error" data-error-for="obsApplyDate" hidden></p>
     </div>
@@ -122,15 +121,15 @@ const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, st
       <label class="field__label" for="obsStatus">
         Please tell your exact professional status <span aria-hidden="true">*</span>
       </label>
-      <p class="field__help">E.g. Graduate from XYZ school planning to apply for IM residency.</p>
-      <textarea class="field__input field__input--area" id="obsStatus" name="obsStatus" rows="3" maxlength="2000"></textarea>
+      <textarea class="field__input field__input--area" id="obsStatus" name="obsStatus" rows="3" maxlength="2000"
+                placeholder="E.g. Graduate from XYZ school planning to apply for IM residency."></textarea>
       <p class="field__error" data-error-for="obsStatus" hidden></p>
     </div>
 
     <div class="field">
       <label class="field__label" for="obsUsmle">Have you completed any USMLEs?</label>
-      <p class="field__help">If so, please mention the ones taken. Mentioning scores is not compulsory though encouraged.</p>
-      <textarea class="field__input field__input--area" id="obsUsmle" name="obsUsmle" rows="3" maxlength="2000"></textarea>
+      <textarea class="field__input field__input--area" id="obsUsmle" name="obsUsmle" rows="3" maxlength="2000"
+                placeholder="If so, mention the ones taken. Scores are optional, though encouraged."></textarea>
       <p class="field__error" data-error-for="obsUsmle" hidden></p>
     </div>
 
@@ -148,7 +147,7 @@ const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, st
 
     <div class="field">
       <label class="field__label" for="obsGradYear">What is your Year of graduation? <span aria-hidden="true">*</span></label>
-      <input class="field__input" id="obsGradYear" name="obsGradYear" type="text" maxlength="40" />
+      <input class="field__input" id="obsGradYear" name="obsGradYear" type="text" maxlength="40" placeholder="e.g. 2024" />
       <p class="field__error" data-error-for="obsGradYear" hidden></p>
     </div>
 
@@ -175,6 +174,30 @@ const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, st
       <p class="field__help">PDF or Word, up to {mb(OBS_CV.maxBytes)}.</p>
       <input class="field__file" id="obsCv" name="obsCv" type="file" accept={OBS_CV.extensions.join(',')} />
       <p class="field__error" data-error-for="obsCv" hidden></p>
+    </div>
+  </div>
+
+  {/* ------------------------------------------------ Join Heart of the Matter */}
+  <div class="cform__panel" data-intent-panel="trending" hidden>
+    <div class="field">
+      <label class="field__label" for="trendingMessage">
+        Tell us about yourself <span aria-hidden="true">*</span>
+      </label>
+      <textarea class="field__input field__input--area" id="trendingMessage" name="trendingMessage"
+                rows="6" maxlength="4000"
+                placeholder="Your specialty and what you'd like to talk about on the series - an interview, a trial discussion, or a webinar topic."></textarea>
+      <p class="field__error" data-error-for="trendingMessage" hidden></p>
+    </div>
+  </div>
+
+  {/* ---------------------------------------------------------- Other */}
+  <div class="cform__panel" data-intent-panel="other" hidden>
+    <div class="field">
+      <label class="field__label" for="otherMessage">How can we help? <span aria-hidden="true">*</span></label>
+      <textarea class="field__input field__input--area" id="otherMessage" name="otherMessage"
+                rows="6" maxlength="4000"
+                placeholder="Tell us what you're getting in touch about."></textarea>
+      <p class="field__error" data-error-for="otherMessage" hidden></p>
     </div>
   </div>
 

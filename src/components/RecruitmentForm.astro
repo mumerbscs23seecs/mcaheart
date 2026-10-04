@@ -13,12 +13,12 @@ const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
     <div class="ifrow">
       <div class="ifield">
         <label class="ifield__label" for="name">Full name <b>*</b></label>
-        <input class="ifield__input" id="name" name="name" type="text" autocomplete="name" required maxlength="120" />
+        <input class="ifield__input" id="name" name="name" type="text" autocomplete="name" required maxlength="120" placeholder="Your full name" />
         <p class="ifield__err" data-err-for="name" hidden></p>
       </div>
       <div class="ifield">
         <label class="ifield__label" for="email">Email <b>*</b></label>
-        <input class="ifield__input" id="email" name="email" type="email" autocomplete="email" required maxlength="200" />
+        <input class="ifield__input" id="email" name="email" type="email" autocomplete="email" required maxlength="200" placeholder="you@example.com" />
         <p class="ifield__err" data-err-for="email" hidden></p>
       </div>
     </div>
@@ -26,14 +26,28 @@ const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
     <div class="ifrow">
       <div class="ifield">
         <label class="ifield__label" for="whatsapp">WhatsApp number <b>*</b></label>
-        <p class="ifield__help">Include country code, e.g. +1 for the USA. Used only if you're shortlisted.</p>
-        <input class="ifield__input" id="whatsapp" name="whatsapp" type="tel" required maxlength="40" />
+        <input
+          class="ifield__input"
+          id="whatsapp"
+          name="whatsapp"
+          type="tel"
+          required
+          maxlength="40"
+          placeholder="With country code, e.g. +1 313 555 0142"
+        />
         <p class="ifield__err" data-err-for="whatsapp" hidden></p>
       </div>
       <div class="ifield">
         <label class="ifield__label" for="gradYear">Year you graduated medical school <b>*</b></label>
-        <p class="ifield__help">Or your expected year, e.g. "2027 (expected)".</p>
-        <input class="ifield__input" id="gradYear" name="gradYear" type="text" required maxlength="40" />
+        <input
+          class="ifield__input"
+          id="gradYear"
+          name="gradYear"
+          type="text"
+          required
+          maxlength="40"
+          placeholder="2021, or 2027 (expected)"
+        />
         <p class="ifield__err" data-err-for="gradYear" hidden></p>
       </div>
     </div>
@@ -54,8 +68,15 @@ const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
 
     <div class="ifield">
       <label class="ifield__label" for="fellowshipPlan">When do you plan to apply for cardiology fellowship? <b>*</b></label>
-      <p class="ifield__help">Write "N/A" if this doesn't apply to you.</p>
-      <input class="ifield__input" id="fellowshipPlan" name="fellowshipPlan" type="text" required maxlength="300" />
+      <input
+        class="ifield__input"
+        id="fellowshipPlan"
+        name="fellowshipPlan"
+        type="text"
+        required
+        maxlength="300"
+        placeholder="e.g. Sept 2027 - or N/A if it doesn't apply"
+      />
       <p class="ifield__err" data-err-for="fellowshipPlan" hidden></p>
     </div>
   </fieldset>
@@ -66,8 +87,15 @@ const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
 
     <div class="ifield">
       <label class="ifield__label" for="researchExperience">Previous research experience <b>*</b></label>
-      <p class="ifield__help">Briefly outline any publications and in-person research roles.</p>
-      <textarea class="ifield__input ifield__area" id="researchExperience" name="researchExperience" rows="4" required maxlength="4000"></textarea>
+      <textarea
+        class="ifield__input ifield__area"
+        id="researchExperience"
+        name="researchExperience"
+        rows="4"
+        required
+        maxlength="4000"
+        placeholder="Publications and in-person research roles."
+      ></textarea>
       <p class="ifield__err" data-err-for="researchExperience" hidden></p>
     </div>
 
@@ -87,9 +115,8 @@ const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
 
     <div class="ifield">
       <label class="ifield__label" for="profileLink">ResearchGate / Google Scholar / PubMed profile <b>*</b></label>
-      <p class="ifield__help">A link to any one is fine.</p>
       <input class="ifield__input" id="profileLink" name="profileLink" type="url" required maxlength="500"
-             placeholder="https://scholar.google.com/citations?user=…" />
+             placeholder="Any one is fine, e.g. https://scholar.google.com/citations?user=…" />
       <p class="ifield__err" data-err-for="profileLink" hidden></p>
     </div>
   </fieldset>
@@ -100,25 +127,42 @@ const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
 
     <div class="ifield">
       <label class="ifield__label" for="letterOfInterest">Letter of interest <b>*</b></label>
-      <p class="ifield__help">A short letter outlining your motivation to join the MCA Heart Research Lab.</p>
-      <textarea class="ifield__input ifield__area" id="letterOfInterest" name="letterOfInterest" rows="6" required maxlength="4000"></textarea>
+      <textarea
+        class="ifield__input ifield__area"
+        id="letterOfInterest"
+        name="letterOfInterest"
+        rows="6"
+        required
+        maxlength="4000"
+        placeholder="Why you want to join the MCA Heart Research Lab."
+      ></textarea>
       <p class="ifield__err" data-err-for="letterOfInterest" hidden></p>
     </div>
 
     <div class="ifield">
       <label class="ifield__label" for="referralSource">How did you hear about the MCA Heart Research Lab? <b>*</b></label>
-      <p class="ifield__help">If a current member recommended the group, tell us about your interactions.</p>
-      <textarea class="ifield__input ifield__area" id="referralSource" name="referralSource" rows="3" required maxlength="4000"></textarea>
+      <textarea
+        class="ifield__input ifield__area"
+        id="referralSource"
+        name="referralSource"
+        rows="3"
+        required
+        maxlength="4000"
+        placeholder="If a member recommended us, tell us about your interactions."
+      ></textarea>
       <p class="ifield__err" data-err-for="referralSource" hidden></p>
     </div>
 
     <div class="ifield">
       <label class="ifield__label" for="internalRef">Internal recommendation or prior collaboration</label>
-      <p class="ifield__help">
-        Optional. Do you have a recommendation from the MCA team, or have you worked with a current
-        member we could reach out to for a reference?
-      </p>
-      <textarea class="ifield__input ifield__area" id="internalRef" name="internalRef" rows="2" maxlength="1000"></textarea>
+      <textarea
+        class="ifield__input ifield__area"
+        id="internalRef"
+        name="internalRef"
+        rows="2"
+        maxlength="1000"
+        placeholder="Optional. Anyone on the MCA team we could ask for a reference."
+      ></textarea>
       <p class="ifield__err" data-err-for="internalRef" hidden></p>
     </div>
   </fieldset>
@@ -129,15 +173,27 @@ const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
 
     <div class="ifield">
       <label class="ifield__label" for="currentStatus">Current job / academic status</label>
-      <p class="ifield__help">Optional. Where you currently work or study, and until when you'll be there.</p>
-      <textarea class="ifield__input ifield__area" id="currentStatus" name="currentStatus" rows="3" maxlength="2000"></textarea>
+      <textarea
+        class="ifield__input ifield__area"
+        id="currentStatus"
+        name="currentStatus"
+        rows="3"
+        maxlength="2000"
+        placeholder="Optional. Where you work or study, and until when."
+      ></textarea>
       <p class="ifield__err" data-err-for="currentStatus" hidden></p>
     </div>
 
     <div class="ifield">
       <label class="ifield__label" for="professionalGoals">Professional goals</label>
-      <p class="ifield__help">Optional. e.g. residency, fellowship, sub-specialty.</p>
-      <textarea class="ifield__input ifield__area" id="professionalGoals" name="professionalGoals" rows="2" maxlength="1000"></textarea>
+      <textarea
+        class="ifield__input ifield__area"
+        id="professionalGoals"
+        name="professionalGoals"
+        rows="2"
+        maxlength="1000"
+        placeholder="Optional. e.g. residency, fellowship, sub-specialty."
+      ></textarea>
       <p class="ifield__err" data-err-for="professionalGoals" hidden></p>
     </div>
 

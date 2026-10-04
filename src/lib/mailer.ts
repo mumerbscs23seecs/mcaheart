@@ -31,6 +31,12 @@ function intentRows(data: ContactPayload): Array<[string, string]> {
   if (data.intent === 'recommendation') {
     return [['Name', data.recName || '-']];
   }
+  if (data.intent === 'trending') {
+    return [['Message', data.trendingMessage || '-']];
+  }
+  if (data.intent === 'other') {
+    return [['Message', data.otherMessage || '-']];
+  }
   // observership
   return [
     ['Name', data.obsName || '-'],

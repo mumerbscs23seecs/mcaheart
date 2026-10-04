@@ -12,7 +12,7 @@ import { director } from '../data/site';
 >
   <PageHero
     title="Submit a research idea"
-    subtitle={`Propose a database or meta-analysis project to ${director.name}, ${director.credentials} and the MCA Heart Research Lab team. Every submission is reviewed for clinical relevance, novelty, feasibility, appropriate data source, and publication potential before a project lead is assigned.`}
+    subtitle={`Propose a database or meta-analysis project to ${director.name.replace(/ /g, ' ')}, ${director.credentials} and the MCA Heart Research Lab team. Every submission is reviewed for clinical relevance, novelty, feasibility, appropriate data source, and publication potential before a project lead is assigned.`}
     image="/assets/brand/get-involved-bg.webp"
   />
 
@@ -47,6 +47,9 @@ import { director } from '../data/site';
      pages share its background now, so the heading should read at the
      same size instead of PageHero's larger default (--step-5). */
   :global(.phero h1.phero__title) { font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem); }
+  /* The shared .lede 42ch cap broke the director's name across two lines.
+     Same wider measure Join the Lab already uses for its longer subtitle. */
+  :global(.phero p.phero__sub) { max-width: 62ch; }
 
   .idea-intro { display: grid; gap: var(--space-s); color: var(--text); line-height: 1.75; }
   .idea-intro strong { color: var(--text-strong); }

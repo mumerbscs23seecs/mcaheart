@@ -5,13 +5,15 @@ import { z } from 'zod';
  * server-side enforcement can never drift apart.
  */
 
-export const INTENTS = ['collaborate', 'recommendation', 'observership'] as const;
+export const INTENTS = ['collaborate', 'recommendation', 'observership', 'trending', 'other'] as const;
 export type Intent = (typeof INTENTS)[number];
 
 export const INTENT_LABELS: Record<Intent, string> = {
   collaborate: 'Looking for a collaboration',
   recommendation: 'Letter of recommendation',
   observership: 'Request for observership',
+  trending: 'Join Heart Trending',
+  other: 'Other reason',
 };
 
 export const VISA_OPTIONS = [
@@ -70,6 +72,14 @@ export const contactSchema = z
     obsGradYear: optText(40),
     obsStart: optText(20),
     obsEnd: optText(20),
+
+    // --- Appearing on Heart Trending.
+    trendingMessage: optText(4000),
+
+    // --- Anything else. Each panel gets its own field rather than reusing
+    // `message`, since a hidden panel's inputs still submit and two fields
+    // of the same name would overwrite each other.
+    otherMessage: optText(4000),
     // The CV file itself arrives as a File in the multipart body and is
     // pulled straight off the FormData in the API route, not through zod.
 
@@ -116,6 +126,22 @@ export const contactSchema = z
       );
       need(data.obsStart, 'obsStart', 'Please add an intended start date.');
       need(data.obsEnd, 'obsEnd', 'Please add an intended end date.');
+    }
+
+    if (data.intent === 'trending') {
+      need(
+        data.trendingMessage && data.trendingMessage.trim().length >= 10,
+        'trendingMessage',
+        'Please tell us a little more - at least 10 characters.',
+      );
+    }
+
+    if (data.intent === 'other') {
+      need(
+        data.otherMessage && data.otherMessage.trim().length >= 10,
+        'otherMessage',
+        'Please tell us a little more - at least 10 characters.',
+      );
     }
   });
 

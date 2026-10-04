@@ -33,12 +33,12 @@ const { prefill } = Astro.props;
       <div class="ifrow">
         <div class="ifield">
           <label class="ifield__label" for="leadName">Full name <b>*</b></label>
-          <input class="ifield__input" id="leadName" name="leadName" type="text" autocomplete="name" required maxlength="120" />
+          <input class="ifield__input" id="leadName" name="leadName" type="text" autocomplete="name" required maxlength="120" placeholder="Your full name" />
           <p class="ifield__err" data-err-for="leadName" hidden></p>
         </div>
         <div class="ifield">
           <label class="ifield__label" for="leadEmail">Primary email <b>*</b></label>
-          <input class="ifield__input" id="leadEmail" name="leadEmail" type="email" autocomplete="email" required maxlength="200" />
+          <input class="ifield__input" id="leadEmail" name="leadEmail" type="email" autocomplete="email" required maxlength="200" placeholder="you@example.com" />
           <p class="ifield__err" data-err-for="leadEmail" hidden></p>
         </div>
       </div>
@@ -46,7 +46,7 @@ const { prefill } = Astro.props;
 
     <div class="ifield ifield--half">
       <label class="ifield__label" for="contactNumber">Contact number <b>*</b></label>
-      <input class="ifield__input" id="contactNumber" name="contactNumber" type="tel" autocomplete="tel" required maxlength="40" />
+      <input class="ifield__input" id="contactNumber" name="contactNumber" type="tel" autocomplete="tel" required maxlength="40" placeholder="With country code, e.g. +1 313 555 0142" />
       <p class="ifield__err" data-err-for="contactNumber" hidden></p>
     </div>
   </fieldset>
@@ -57,13 +57,12 @@ const { prefill } = Astro.props;
 
     <div class="ifield">
       <label class="ifield__label" for="title">Title of research idea <b>*</b></label>
-      <input class="ifield__input" id="title" name="title" type="text" required maxlength="250" />
+      <input class="ifield__input" id="title" name="title" type="text" required maxlength="250" placeholder="A short, descriptive working title" />
       <p class="ifield__err" data-err-for="title" hidden></p>
     </div>
 
     <div class="ifield">
       <span class="ifield__label">Type of research <b>*</b></span>
-      <p class="ifield__help">This changes which questions the form asks below.</p>
       <div class="ichoices">
         {RESEARCH_TYPES.map((t, i) => (
           <label class="ichoice">
@@ -108,16 +107,30 @@ const { prefill } = Astro.props;
     ].map(([name, label, help]) => (
       <div class="ifield">
         <label class="ifield__label" for={name}>{label} <b>*</b></label>
-        <p class="ifield__help">{help}</p>
-        <textarea class="ifield__input ifield__area" id={name} name={name} rows="3" required maxlength="3000"></textarea>
+        <textarea
+          class="ifield__input ifield__area"
+          id={name}
+          name={name}
+          rows="3"
+          required
+          maxlength="3000"
+          placeholder={help}
+        ></textarea>
         <p class="ifield__err" data-err-for={name} hidden></p>
       </div>
     ))}
 
     <div class="ifield">
       <label class="ifield__label" for="rationale">Rationale <b>*</b></label>
-      <p class="ifield__help">Clinical significance and the gap this addresses. Be brief - two lines is fine.</p>
-      <textarea class="ifield__input ifield__area" id="rationale" name="rationale" rows="2" required maxlength="600"></textarea>
+      <textarea
+        class="ifield__input ifield__area"
+        id="rationale"
+        name="rationale"
+        rows="2"
+        required
+        maxlength="600"
+        placeholder="Clinical significance and the gap this addresses. Be brief - two lines is fine."
+      ></textarea>
       <p class="ifield__err" data-err-for="rationale" hidden></p>
     </div>
   </fieldset>
@@ -129,42 +142,76 @@ const { prefill } = Astro.props;
     {/* Database branch */}
     <div class="ifield" data-when="Database">
       <label class="ifield__label" for="studyDesign">Proposed study design / plan <b>*</b></label>
-      <p class="ifield__help">e.g. retrospective cohort, prognostic model.</p>
-      <input class="ifield__input" id="studyDesign" name="studyDesign" type="text" maxlength="600" />
+      <input
+        class="ifield__input"
+        id="studyDesign"
+        name="studyDesign"
+        type="text"
+        maxlength="600"
+        placeholder="e.g. retrospective cohort, prognostic model."
+      />
       <p class="ifield__err" data-err-for="studyDesign" hidden></p>
     </div>
     <div class="ifield" data-when="Database">
       <label class="ifield__label" for="priorStudies">Similar studies previously published on this exact topic? <b>*</b></label>
-      <p class="ifield__help">
-        Key citations or titles. The publication value of the idea can hinge on this - please do a proper literature review.
-      </p>
-      <textarea class="ifield__input ifield__area" id="priorStudies" name="priorStudies" rows="3" maxlength="3000"></textarea>
+      <textarea
+        class="ifield__input ifield__area"
+        id="priorStudies"
+        name="priorStudies"
+        rows="3"
+        maxlength="3000"
+        placeholder="Key citations or titles. The publication value of the idea can hinge on this - please do a proper literature review."
+      ></textarea>
       <p class="ifield__err" data-err-for="priorStudies" hidden></p>
     </div>
     <div class="ifield" data-when="Database">
       <label class="ifield__label" for="latestStudy">Latest study published on this topic <b>*</b></label>
-      <p class="ifield__help">Include DOI, year, author, journal name.</p>
-      <input class="ifield__input" id="latestStudy" name="latestStudy" type="text" maxlength="600" />
+      <input
+        class="ifield__input"
+        id="latestStudy"
+        name="latestStudy"
+        type="text"
+        maxlength="600"
+        placeholder="Include DOI, year, author, journal name."
+      />
       <p class="ifield__err" data-err-for="latestStudy" hidden></p>
     </div>
 
     {/* Meta-analysis branch */}
     <div class="ifield" data-when="Meta-analysis">
       <label class="ifield__label" for="previousMetaDate">When was the previous meta-analysis conducted? <b>*</b></label>
-      <p class="ifield__help">Year, or "none exists" if this is the first.</p>
-      <input class="ifield__input" id="previousMetaDate" name="previousMetaDate" type="text" maxlength="300" />
+      <input
+        class="ifield__input"
+        id="previousMetaDate"
+        name="previousMetaDate"
+        type="text"
+        maxlength="300"
+        placeholder="Year, or &quot;none exists&quot; if this is the first."
+      />
       <p class="ifield__err" data-err-for="previousMetaDate" hidden></p>
     </div>
     <div class="ifield" data-when="Meta-analysis">
       <label class="ifield__label" for="newStudies">Number of NEW studies planned for inclusion <b>*</b></label>
-      <p class="ifield__help">RCTs and/or cohort studies, with the corresponding study links / DOIs.</p>
-      <textarea class="ifield__input ifield__area" id="newStudies" name="newStudies" rows="3" maxlength="3000"></textarea>
+      <textarea
+        class="ifield__input ifield__area"
+        id="newStudies"
+        name="newStudies"
+        rows="3"
+        maxlength="3000"
+        placeholder="RCTs and/or cohort studies, with the corresponding study links / DOIs."
+      ></textarea>
       <p class="ifield__err" data-err-for="newStudies" hidden></p>
     </div>
     <div class="ifield" data-when="Meta-analysis">
       <label class="ifield__label" for="sampleSizeIncrease">Approx. % increase in sample size vs previous meta-analyses <b>*</b></label>
-      <p class="ifield__help">A rough estimate is fine, e.g. "≈ 40%".</p>
-      <input class="ifield__input ifield--half" id="sampleSizeIncrease" name="sampleSizeIncrease" type="text" maxlength="120" />
+      <input
+        class="ifield__input ifield--half"
+        id="sampleSizeIncrease"
+        name="sampleSizeIncrease"
+        type="text"
+        maxlength="120"
+        placeholder="A rough estimate is fine, e.g. &quot;≈ 40%&quot;."
+      />
       <p class="ifield__err" data-err-for="sampleSizeIncrease" hidden></p>
     </div>
   </fieldset>
