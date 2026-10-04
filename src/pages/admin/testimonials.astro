@@ -1,0 +1,402 @@
+---
+/**
+ * Testimonials CRUD - "What our members say" on /research-group.
+ *
+ * Persisted in Supabase (mca-pipeline/add-testimonials.sql), not an
+ * in-memory demo store like Ideas/Applicants/Requests - these need to
+ * survive a server restart. Every write goes through a security-definer
+ * SQL function that re-checks the caller is an admin itself (same shape as
+ * the pipeline's advance_stage()), so this page adds no authority of its
+ * own - it just calls through a Supabase session bridged from the in-memory
+ * admin login, exactly like admin/ideas.astro does before approving an idea.
+ */
+import AppLayout from '../../layouts/AppLayout.astro';
+import '../../styles/admin.css';
+import { currentUser } from '../../lib/auth';
+import { getPipelineSession, bridgeAdminSession } from '../../lib/pipeline-auth';
+import {
+  listTestimonialsAdmin,
+  addTestimonial,
+  updateTestimonial,
+  deleteTestimonial,
+  reorderTestimonial,
+  type PhotoUpload,
+} from '../../lib/testimonials';
+
+export const prerender = false;
+
+const me = currentUser(Astro.cookies);
+if (!me) return Astro.redirect('/login', 302);
+if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+let session = await getPipelineSession(Astro.request, Astro.cookies);
+session = session ?? (await bridgeAdminSession(Astro.request, Astro.cookies));
+const supabase = session?.supabase ?? null;
+
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+const PHOTO_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp'];
+
+type Flash = { tone: 'ok' | 'error'; text: string };
+let flash: Flash | null = null;
+
+/** Downscales/re-encodes every upload to one predictable size, regardless
+ *  of what the admin's phone or camera actually produced - keeps each row
+ *  a few tens of KB instead of however large the original photo was. */
+async function processPhoto(file: File): Promise<PhotoUpload | { error: string }> {
+  if (file.size > PHOTO_MAX_BYTES) return { error: 'That photo is over 5 MB.' };
+  const ext = file.name.slice(file.name.lastIndexOf('.')).toLowerCase();
+  if (!PHOTO_EXTENSIONS.includes(ext)) {
+    return { error: `Accepted photo types: ${PHOTO_EXTENSIONS.join(', ')}` };
+  }
+  try {
+    const sharp = (await import('sharp')).default;
+    const bytes = await sharp(Buffer.from(await file.arrayBuffer()))
+      .resize(400, 400, { fit: 'cover', position: 'attention' })
+      .webp({ quality: 82 })
+      .toBuffer();
+    return { bytes, mime: 'image/webp', filename: file.name.replace(/\.[^.]+$/, '.webp') };
+  } catch (err) {
+    return { error: `Could not process that image: ${err instanceof Error ? err.message : 'unknown error'}` };
+  }
+}
+
+if (Astro.request.method === 'POST') {
+  if (!supabase) {
+    flash = { tone: 'error', text: 'Could not reach the pipeline database - try again in a moment.' };
+  } else {
+    const form = await Astro.request.formData();
+    const action = String(form.get('action') ?? '');
+    const id = String(form.get('id') ?? '');
+
+    try {
+      if (action === 'add' || action === 'update') {
+        const data = {
+          quote: String(form.get('quote') ?? '').trim(),
+          name: String(form.get('name') ?? '').trim(),
+          affiliation: String(form.get('affiliation') ?? '').trim(),
+          future: String(form.get('future') ?? '').trim(),
+        };
+        if (!data.quote || !data.name || !data.affiliation || !data.future) {
+          throw new Error('Quote, name, affiliation and "Next" are all required.');
+        }
+
+        const file = form.get('photo');
+        let photo: PhotoUpload | null = null;
+        if (file instanceof File && file.size > 0) {
+          const result = await processPhoto(file);
+          if ('error' in result) throw new Error(result.error);
+          photo = result;
+        }
+
+        if (action === 'add') {
+          await addTestimonial(supabase, data, photo);
+          flash = { tone: 'ok', text: `Added ${data.name}.` };
+        } else {
+          const removePhoto = form.get('removePhoto') === 'on';
+          await updateTestimonial(supabase, id, data, photo, removePhoto);
+          flash = { tone: 'ok', text: `Updated ${data.name}.` };
+        }
+      } else if (action === 'delete') {
+        await deleteTestimonial(supabase, id);
+        flash = { tone: 'ok', text: 'Testimonial deleted.' };
+      } else if (action === 'up' || action === 'down') {
+        await reorderTestimonial(supabase, id, action);
+      }
+    } catch (err) {
+      flash = { tone: 'error', text: err instanceof Error ? err.message : 'Something went wrong.' };
+    }
+  }
+}
+
+// dbReady false covers two cases that need the same message: Supabase isn't
+// reachable at all, or it is but add-testimonials.sql hasn't been run yet
+// (a fresh install) - either way there's no table to read, and the add/edit
+// forms below would just fail if shown, so they're hidden until this is true.
+let testimonials: Awaited<ReturnType<typeof listTestimonialsAdmin>> = [];
+let dbReady = false;
+let dbError = '';
+if (supabase) {
+  try {
+    testimonials = await listTestimonialsAdmin(supabase);
+    dbReady = true;
+  } catch (err) {
+    dbError = err instanceof Error ? err.message : 'Could not load testimonials.';
+  }
+}
+---
+
+<AppLayout title="Testimonials" heading="Testimonials" user={me} active="testimonials">
+  <div class="adm">
+    {flash && (
+      <div class:list={['adm-flash', `adm-flash--${flash.tone}`]} role="status">
+        <p>{flash.text}</p>
+      </div>
+    )}
+
+    {!supabase && (
+      <div class="adm-flash adm-flash--error">
+        <p>
+          Could not reach the pipeline database, so testimonials can't be loaded or edited right
+          now. This page needs the same Supabase connection the Workflow area uses.
+        </p>
+      </div>
+    )}
+
+    {supabase && !dbReady && (
+      <div class="adm-flash adm-flash--error">
+        <p><strong>The testimonials table hasn't been set up yet.</strong></p>
+        <p>
+          Run <code>mca-pipeline/add-testimonials.sql</code> once in the Supabase SQL editor, then
+          reload this page. It creates the table, sets up the permissions, and seeds your 6
+          existing testimonials plus 9 placeholders to fill out the grid.
+        </p>
+        <p class="adm-hint" style="margin-top:0.4rem">Database said: {dbError}</p>
+      </div>
+    )}
+
+    {dbReady && (
+    <>
+    <details class="tcard tcard--new">
+      <summary class="tcard__summary">
+        <span class="tcard__plus" aria-hidden="true">+</span>
+        <span>Add a testimonial</span>
+      </summary>
+      <form class="tform" method="post" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="add" />
+        <div class="tform__row">
+          <label class="tform__field">
+            <span>Name</span>
+            <input type="text" name="name" required maxlength="120" />
+          </label>
+          <label class="tform__field">
+            <span>Affiliation</span>
+            <input
+              type="text"
+              name="affiliation"
+              required
+              maxlength="200"
+              placeholder="Aultman Hospital / Canton Medical Education Foundation / NEOMED University"
+            />
+          </label>
+        </div>
+        <div class="tform__row">
+          <label class="tform__field">
+            <span>Next</span>
+            <input type="text" name="future" required maxlength="80" placeholder="Interventional Cardiology fellowship" />
+          </label>
+          <label class="tform__field">
+            <span>Photo</span>
+            <input type="file" name="photo" accept={['.png', '.jpg', '.jpeg', '.webp'].join(',')} />
+          </label>
+        </div>
+        <label class="tform__field">
+          <span>Quote</span>
+          <textarea name="quote" rows="4" required maxlength="2000"></textarea>
+        </label>
+        <button class="adm-btn adm-btn--on" type="submit">Add testimonial</button>
+      </form>
+    </details>
+
+    {testimonials.length === 0 && supabase && (
+      <p class="adm-hint">No testimonials yet - add the first one above.</p>
+    )}
+
+    <div class="tlist">
+      {testimonials.map((t, i) => (
+        <details class="tcard">
+          <summary class="tcard__summary">
+            {t.hasPhoto ? (
+              <img class="tcard__thumb" src={`/api/testimonials/${t.id}/photo`} alt="" width="40" height="40" />
+            ) : (
+              <span class="tcard__thumb tcard__thumb--initials" aria-hidden="true">
+                {t.name.split(' ').map((w) => w[0]).slice(0, 2).join('')}
+              </span>
+            )}
+            <span class="tcard__who">
+              <span class="tcard__name">{t.name}</span>
+              <span class="tcard__affil">{t.affiliation}</span>
+            </span>
+            <span class="tcard__chev" aria-hidden="true">▾</span>
+          </summary>
+
+          <div class="tcard__body">
+            <div class="tcard__reorder">
+              <form method="post" class="adm-inline">
+                <input type="hidden" name="action" value="up" />
+                <input type="hidden" name="id" value={t.id} />
+                <button class="adm-btn" type="submit" disabled={i === 0} aria-label="Move up">↑</button>
+              </form>
+              <form method="post" class="adm-inline">
+                <input type="hidden" name="action" value="down" />
+                <input type="hidden" name="id" value={t.id} />
+                <button class="adm-btn" type="submit" disabled={i === testimonials.length - 1} aria-label="Move down">↓</button>
+              </form>
+            </div>
+
+            <form class="tform" method="post" enctype="multipart/form-data">
+              <input type="hidden" name="action" value="update" />
+              <input type="hidden" name="id" value={t.id} />
+              <div class="tform__row">
+                <label class="tform__field">
+                  <span>Name</span>
+                  <input type="text" name="name" required maxlength="120" value={t.name} />
+                </label>
+                <label class="tform__field">
+                  <span>Affiliation</span>
+                  <input type="text" name="affiliation" required maxlength="200" value={t.affiliation} />
+                </label>
+              </div>
+              <div class="tform__row">
+                <label class="tform__field">
+                  <span>Next</span>
+                  <input type="text" name="future" required maxlength="80" value={t.future} />
+                </label>
+                <label class="tform__field">
+                  <span>Replace photo</span>
+                  <input type="file" name="photo" accept={['.png', '.jpg', '.jpeg', '.webp'].join(',')} />
+                </label>
+              </div>
+              <label class="tform__field">
+                <span>Quote</span>
+                <textarea name="quote" rows="4" required maxlength="2000">{t.quote}</textarea>
+              </label>
+
+              <div class="tform__foot">
+                {t.hasPhoto && (
+                  <label class="tform__check">
+                    <input type="checkbox" name="removePhoto" />
+                    <span>Remove current photo (show initials instead)</span>
+                  </label>
+                )}
+                <div class="adm-actions">
+                  <button class="adm-btn adm-btn--on" type="submit">Save changes</button>
+                </div>
+              </div>
+            </form>
+
+            <form method="post" class="tcard__delete" onsubmit="return confirm('Delete this testimonial? This cannot be undone.')">
+              <input type="hidden" name="action" value="delete" />
+              <input type="hidden" name="id" value={t.id} />
+              <button class="adm-btn adm-btn--danger" type="submit">Delete</button>
+            </form>
+          </div>
+        </details>
+      ))}
+    </div>
+    </>
+    )}
+  </div>
+</AppLayout>
+
+<style>
+  .tlist { display: grid; gap: 0.6rem; }
+
+  .tcard {
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .tcard[open] { border-color: var(--border); }
+  .tcard--new { border-top: 2px solid var(--blue); }
+
+  .tcard__summary {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.85rem 1.1rem;
+    cursor: pointer;
+    list-style: none;
+  }
+  .tcard__summary::-webkit-details-marker { display: none; }
+  .tcard__summary:hover { background: var(--bg-tint); }
+
+  .tcard__plus {
+    display: grid;
+    place-items: center;
+    width: 1.6rem;
+    height: 1.6rem;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+    background: var(--blue);
+  }
+
+  .tcard__thumb {
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--bg-tint);
+  }
+  .tcard__thumb--initials {
+    display: grid;
+    place-items: center;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    border: 1px solid var(--border-soft);
+  }
+
+  .tcard__who { flex: 1; min-width: 0; display: grid; gap: 0.1rem; }
+  .tcard__name { font-weight: 700; color: var(--text-strong); font-size: 0.92rem; }
+  .tcard__affil {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tcard__chev { color: var(--text-muted); transition: transform 0.2s var(--ease); }
+  .tcard[open] .tcard__chev { transform: rotate(180deg); }
+
+  .tcard__body {
+    padding: 0 1.1rem 1.1rem;
+    border-top: 1px solid var(--border-soft);
+    display: grid;
+    gap: 0.8rem;
+  }
+  .tcard__reorder { display: flex; gap: 0.4rem; margin-top: 0.8rem; }
+
+  .tform { display: grid; gap: 0.7rem; }
+  .tform__row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+  @media (max-width: 560px) { .tform__row { grid-template-columns: 1fr; } }
+  .tform__field { display: grid; gap: 0.3rem; }
+  .tform__field span {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text);
+  }
+  .tform__field input[type='text'],
+  .tform__field input[type='file'],
+  .tform__field textarea {
+    padding: 0.65rem 0.8rem;
+    background: var(--bg);
+    border: 1px solid var(--border-soft);
+    border-radius: var(--radius);
+    font: inherit;
+    font-size: 0.9rem;
+    color: var(--text-strong);
+  }
+  .tform__field textarea { resize: vertical; line-height: 1.55; }
+  .tform__field input:focus,
+  .tform__field textarea:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px var(--accent-wash-strong);
+  }
+
+  .tform__foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+  }
+  .tform__check { display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--text); }
+
+  .tcard__delete { padding-top: 0.6rem; border-top: 1px solid var(--border-soft); }
+</style>
