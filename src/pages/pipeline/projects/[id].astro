@@ -50,6 +50,14 @@ const { data: journalAttempts } = await supabase
 // journalAttempts is newest-first now, so the first open one is the current attempt.
 const openJournalAttempt = (journalAttempts ?? []).find((a: any) => a.outcome == null);
 
+const { data: projectMentees } = await supabase
+  .from('project_mentees')
+  .select('person_id,rating,rating_note,rated_at,assigned_at,person:people(full_name,email)')
+  .eq('project_id', id)
+  .order('assigned_at');
+const projectComplete = Boolean(p.archived_at) || (p.phase === 'journal' && p.stage === 'published');
+const canRateMentees = (person.id === p.lead_id || person.id === p.colead_id || isAdmin) && projectComplete;
+
 const { data: history } = await supabase
   .from('project_history')
   .select('at,label,actor')
@@ -115,6 +123,56 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
     {stale && !overdue && <span class="pl-warn">stale</span>}
     {p.needs_reassignment && <span class="pl-warn">needs reassignment</span>}
   </div>
+
+  {(projectMentees ?? []).length > 0 && (
+    <section class="pl-actions">
+      <h2>Mentees</h2>
+      <div class="pl-mentees">
+        {(projectMentees ?? []).map((pm: any) => (
+          <div class="pl-mentee">
+            <p class="pl-mentee__name">
+              <b>{pm.person?.full_name}</b>
+              {pm.rating ? (
+                <span class="pl-mentee__rating">rated {pm.rating}/5</span>
+              ) : (
+                <span class="pl-muted pl-small"> · not yet rated</span>
+              )}
+            </p>
+            {pm.rating && pm.rating_note && <p class="pl-muted pl-small">“{pm.rating_note}”</p>}
+
+            {!pm.rating && canRateMentees && (
+              <form method="post" action={`/pipeline/projects/${id}/rate-mentee`} class="pl-mini">
+                <input type="hidden" name="personId" value={pm.person_id} />
+                <select name="rating" required>
+                  <option value="">Rate…</option>
+                  {[5, 4, 3, 2, 1].map((n) => <option value={n}>{n} / 5</option>)}
+                </select>
+                <input name="note" placeholder="Comment (optional)" />
+                <button class="pl-btn" type="submit">Submit rating</button>
+              </form>
+            )}
+            {!pm.rating && !canRateMentees && !projectComplete && (
+              <p class="pl-muted pl-small">Rating opens once this project is published or archived.</p>
+            )}
+
+            {pm.rating && canRateMentees && (
+              <details class="pl-mentee__edit">
+                <summary>Edit rating</summary>
+                <form method="post" action={`/pipeline/projects/${id}/rate-mentee`} class="pl-mini">
+                  <input type="hidden" name="personId" value={pm.person_id} />
+                  <select name="rating" required>
+                    {[5, 4, 3, 2, 1].map((n) => <option value={n} selected={n === pm.rating}>{n} / 5</option>)}
+                  </select>
+                  <input name="note" placeholder="Comment (optional)" value={pm.rating_note ?? ''} />
+                  <button class="pl-btn" type="submit">Update rating</button>
+                </form>
+              </details>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  )}
 
   {p.needs_reassignment && (
     <div class="pl-flash pl-flash--err">

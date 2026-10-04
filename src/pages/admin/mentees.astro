@@ -1,0 +1,587 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import '../../styles/admin.css';
+import { currentUser } from '../../lib/auth';
+import { getPipelineSession, bridgeAdminSession } from '../../lib/pipeline-auth';
+
+export const prerender = false;
+
+const me = currentUser(Astro.cookies);
+if (!me) return Astro.redirect('/login', 302);
+if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+let session = await getPipelineSession(Astro.request, Astro.cookies);
+session = session ?? (await bridgeAdminSession(Astro.request, Astro.cookies));
+const supabase = session?.supabase ?? null;
+
+const EXPERTISE_TAGS = [
+  'Data extraction',
+  'Data streaming',
+  'Manuscript writing',
+  'Statistical analysis',
+  'Literature review',
+  'Conference presentation',
+] as const;
+
+const AVATAR_TONES = ['green', 'rose', 'amber', 'wine'] as const;
+function initials(name: string): string {
+  return name.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+}
+function avatarTone(id: string): (typeof AVATAR_TONES)[number] {
+  let sum = 0;
+  for (const ch of id) sum += ch.charCodeAt(0);
+  return AVATAR_TONES[sum % AVATAR_TONES.length];
+}
+
+type Flash = { tone: 'ok' | 'error'; text: string };
+let flash: Flash | null = null;
+
+if (supabase && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  const personId = String(form.get('personId') ?? '');
+
+  if (action === 'set-expertise') {
+    const tags = form.getAll('expertise').map(String);
+    const { error } = await supabase.rpc('set_mentee_expertise', { p_person: personId, p_expertise: tags });
+    flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Expertise tags updated.' };
+  }
+
+  if (action === 'set-availability') {
+    const available = form.get('available') === '1';
+    const { error } = await supabase.rpc('set_mentee_availability', { p_person: personId, p_available: available });
+    flash = error
+      ? { tone: 'error', text: error.message }
+      : { tone: 'ok', text: available ? 'Marked available for assignment.' : 'Marked unavailable.' };
+  }
+
+  if (action === 'set-flag') {
+    const flag = String(form.get('flag') ?? 'none');
+    const reason = String(form.get('reason') ?? '');
+    const { error } = await supabase.rpc('set_mentee_flag', { p_person: personId, p_flag: flag, p_reason: reason || null });
+    flash = error
+      ? { tone: 'error', text: error.message }
+      : { tone: 'ok', text: flag === 'none' ? 'Flag cleared.' : `Marked as ${flag.replace('_', ' ')}.` };
+  }
+
+  if (action === 'assign') {
+    const projectId = String(form.get('projectId') ?? '');
+    if (!projectId) {
+      flash = { tone: 'error', text: 'Choose a project to assign them to.' };
+    } else {
+      const { error } = await supabase.rpc('assign_mentee', { p_project: projectId, p_person: personId });
+      flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Mentee assigned to the project.' };
+    }
+  }
+
+  if (action === 'unassign') {
+    const projectId = String(form.get('projectId') ?? '');
+    const { error } = await supabase.rpc('unassign_mentee', { p_project: projectId, p_person: personId });
+    flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Mentee unassigned.' };
+  }
+
+  if (action === 'rate') {
+    const projectId = String(form.get('projectId') ?? '');
+    const rating = Number(form.get('rating') ?? '');
+    const note = String(form.get('note') ?? '').trim() || null;
+    if (!rating) {
+      flash = { tone: 'error', text: 'Choose a rating first.' };
+    } else {
+      const { error } = await supabase.rpc('rate_mentee', {
+        p_project: projectId,
+        p_person: personId,
+        p_rating: rating,
+        p_note: note,
+      });
+      flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Rating submitted.' };
+    }
+  }
+}
+
+let mentees: any[] = [];
+let openProjects: { id: string; ref: string; title: string }[] = [];
+let assignmentsByPerson = new Map<string, any[]>();
+let dbReady = false;
+let dbError = '';
+
+if (supabase) {
+  try {
+    const { data: menteeRows, error: mErr } = await supabase
+      .from('people')
+      .select('id,full_name,email,expertise,open_to_assignment,flag_status,flag_reason')
+      .eq('is_mentee', true)
+      .order('full_name');
+    if (mErr) throw mErr;
+    mentees = menteeRows ?? [];
+
+    const { data: projRows, error: pErr } = await supabase
+      .from('projects')
+      .select('id,ref,title')
+      .is('archived_at', null)
+      .order('ref');
+    if (pErr) throw pErr;
+    openProjects = projRows ?? [];
+
+    const { data: pmRows, error: pmErr } = await supabase
+      .from('project_mentees')
+      .select('person_id,project_id,rating,rating_note,project:projects(ref,title,phase,stage,archived_at)');
+    if (pmErr) throw pmErr;
+    assignmentsByPerson = new Map();
+    for (const row of pmRows ?? []) {
+      const list = assignmentsByPerson.get(row.person_id) ?? [];
+      list.push(row);
+      assignmentsByPerson.set(row.person_id, list);
+    }
+    dbReady = true;
+  } catch (err) {
+    dbError = err instanceof Error ? err.message : 'Could not load mentees.';
+  }
+}
+---
+
+<AppLayout title="Mentees" heading="Mentees" user={me} active="mentees">
+  <div class="adm">
+    {flash && (
+      <div class:list={['adm-flash', `adm-flash--${flash.tone}`]} role="status">
+        <p>{flash.text}</p>
+      </div>
+    )}
+
+    {supabase && !dbReady && (
+      <div class="adm-flash adm-flash--error">
+        <p>
+          The mentees table isn't set up yet in Supabase. Run <code>mca-pipeline/add-mentees.sql</code> in the SQL
+          editor, then reload this page.
+          {dbError && <><br /><span class="adm-hint">({dbError})</span></>}
+        </p>
+      </div>
+    )}
+
+    {!supabase && (
+      <div class="adm-flash adm-flash--error">
+        <p>Could not reach the pipeline database - the mentees list needs Supabase access.</p>
+      </div>
+    )}
+
+    {dbReady && (
+      <>
+        <div class="mnt-head">
+          <div>
+            <h2 class="mnt-head__title">Mentees</h2>
+          </div>
+          <label class="mnt-search">
+            <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
+            <input type="search" data-mnt-search placeholder="Search mentees…" aria-label="Search mentees" />
+          </label>
+        </div>
+
+        {mentees.length === 0 && (
+          <p class="mnt-empty">No mentees yet — approve an applicant to add one.</p>
+        )}
+
+        <div class="mnt-list" data-mnt-list>
+          {mentees.map((m) => {
+            const tags: string[] = m.expertise ?? [];
+            const assigned = assignmentsByPerson.get(m.id) ?? [];
+            const assignedProjectIds = new Set(assigned.map((a: any) => a.project_id));
+            const assignable = openProjects.filter((p) => !assignedProjectIds.has(p.id));
+            const badgeTone = m.flag_status === 'blacklisted' ? 'blacklisted' : m.flag_status === 'red_flag' ? 'red_flag' : m.open_to_assignment ? 'available' : 'unavailable';
+            const badgeLabel = m.flag_status !== 'none' ? m.flag_status.replace('_', ' ') : m.open_to_assignment ? 'Available' : 'Unavailable';
+            return (
+              <article class="mnt-card" data-mnt-name={m.full_name.toLowerCase()}>
+                <details class="mnt-row">
+                  <summary class="mnt-row__head">
+                    <span class="mnt-avatar" data-tone={avatarTone(m.id)}>{initials(m.full_name)}</span>
+                    <span class="mnt-row__id">
+                      <span class="mnt-row__name">{m.full_name}</span>
+                      <span class="mnt-row__meta">{tags.length ? tags.join(' · ') : 'No expertise tagged'} · {assigned.length} project{assigned.length === 1 ? '' : 's'}</span>
+                      <span class="mnt-pill" data-tone={badgeTone}><i /> {badgeLabel}</span>
+                    </span>
+                    <svg class="mnt-row__chev" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="m5 7.5 5 5 5-5" /></svg>
+                  </summary>
+
+                  <div class="mnt-row__body">
+                    <div class="mnt-cols">
+                      <div>
+                        <p class="mnt-label">Email</p>
+                        <p class="mnt-value">{m.email}</p>
+                        {m.flag_status !== 'none' && (
+                          <p class="mnt-value mnt-value--danger">{m.flag_status.replace('_', ' ')}: {m.flag_reason}</p>
+                        )}
+                      </div>
+                      <div>
+                        <p class="mnt-label">Expertise tags</p>
+                        <div class="mnt-chips mnt-chips--static">
+                          {tags.length ? tags.map((t) => <span class="mnt-chip-pill">{t}</span>) : <span class="mnt-value">None tagged</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="mnt-projects-head">
+                      <h3>Assigned projects</h3>
+                      {assignable.length > 0 && (
+                        <details class="mnt-assign">
+                          <summary><svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" d="M10 4v12M4 10h12" /></svg> Assign project</summary>
+                          <form method="post" class="mnt-assign__form">
+                            <input type="hidden" name="personId" value={m.id} />
+                            <select class="mnt-select" name="projectId" aria-label="Choose a project">
+                              {assignable.map((p) => <option value={p.id}>{p.ref} - {p.title}</option>)}
+                            </select>
+                            <button class="mnt-btn mnt-btn--primary" type="submit" name="action" value="assign">Confirm</button>
+                          </form>
+                        </details>
+                      )}
+                    </div>
+
+                    <div class="mnt-projects">
+                      {assigned.length === 0 && <p class="mnt-empty mnt-empty--inline">Not assigned to any project yet.</p>}
+                      {assigned.map((a: any) => {
+                        const proj = a.project ?? {};
+                        const complete = Boolean(proj.archived_at) || (proj.phase === 'journal' && proj.stage === 'published');
+                        return (
+                          <div class="pcard">
+                            <span class="pcard__icon">
+                              <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" d="M5 2.5h7l3 3v12h-10z" /><path fill="none" stroke="currentColor" stroke-width="1.5" d="M12 2.5v3h3" /></svg>
+                            </span>
+                            <div class="pcard__body">
+                              <p class="pcard__title"><b>{proj.ref}</b> - {proj.title}</p>
+                              {a.rating ? (
+                                a.rating_note && <p class="pcard__note">“{a.rating_note}”</p>
+                              ) : (
+                                <p class="pcard__note">{complete ? 'Ready to rate.' : 'Rating opens once this project is published or archived.'}</p>
+                              )}
+
+                              {!a.rating && complete && (
+                                <form method="post" class="mnt-rate">
+                                  <input type="hidden" name="personId" value={m.id} />
+                                  <input type="hidden" name="projectId" value={a.project_id} />
+                                  <select class="mnt-select" name="rating" required>
+                                    <option value="">Rate…</option>
+                                    {[5, 4, 3, 2, 1].map((n) => <option value={n}>{n} / 5</option>)}
+                                  </select>
+                                  <input class="mnt-input mnt-rate__note" type="text" name="note" placeholder="Comment (optional)" />
+                                  <button class="mnt-btn mnt-btn--primary" type="submit" name="action" value="rate">Submit rating</button>
+                                </form>
+                              )}
+                              {a.rating && (
+                                <details class="mnt-edit-rating">
+                                  <summary>Edit rating</summary>
+                                  <form method="post" class="mnt-rate">
+                                    <input type="hidden" name="personId" value={m.id} />
+                                    <input type="hidden" name="projectId" value={a.project_id} />
+                                    <select class="mnt-select" name="rating" required>
+                                      {[5, 4, 3, 2, 1].map((n) => <option value={n} selected={n === a.rating}>{n} / 5</option>)}
+                                    </select>
+                                    <input class="mnt-input mnt-rate__note" type="text" name="note" placeholder="Comment (optional)" value={a.rating_note ?? ''} />
+                                    <button class="mnt-btn mnt-btn--primary" type="submit" name="action" value="rate">Update rating</button>
+                                  </form>
+                                </details>
+                              )}
+                              {!a.rating && (
+                                <form method="post" class="mnt-unassign">
+                                  <input type="hidden" name="personId" value={m.id} />
+                                  <input type="hidden" name="projectId" value={a.project_id} />
+                                  <button class="mnt-link" type="submit" name="action" value="unassign">Unassign</button>
+                                </form>
+                              )}
+                            </div>
+                            <span class="mnt-pill" data-tone={a.rating ? 'available' : complete ? 'red_flag' : 'unavailable'}>
+                              {a.rating ? `Rated ${a.rating}/5` : complete ? 'Needs rating' : 'Not complete yet'}
+                            </span>
+                            <a class="pcard__chev" href={`/pipeline/projects/${a.project_id}`} title="Open project" aria-label="Open project">
+                              <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="m7.5 5 5 5-5 5" /></svg>
+                            </a>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </details>
+
+                <div class="mnt-row__tools">
+                  <a class="mnt-icon-btn" href={`mailto:${m.email}`} title="Email mentee" aria-label="Email mentee">
+                    <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" d="M3 5h14v10H3z" /><path fill="none" stroke="currentColor" stroke-width="1.5" d="m3.5 5.5 6.5 5.5 6.5-5.5" /></svg>
+                  </a>
+                  <details class="mnt-menu">
+                    <summary class="mnt-icon-btn" aria-label="More options">
+                      <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="4" cy="10" r="1.4" fill="currentColor" /><circle cx="10" cy="10" r="1.4" fill="currentColor" /><circle cx="16" cy="10" r="1.4" fill="currentColor" /></svg>
+                    </summary>
+                    <div class="mnt-menu__panel">
+                      <form method="post">
+                        <input type="hidden" name="personId" value={m.id} />
+                        <input type="hidden" name="available" value={m.open_to_assignment ? '0' : '1'} />
+                        <button class="mnt-menu__item" type="submit" name="action" value="set-availability">
+                          {m.open_to_assignment ? 'Mark unavailable' : 'Mark available'}
+                        </button>
+                      </form>
+
+                      <details class="mnt-menu__sub">
+                        <summary>Edit expertise tags</summary>
+                        <form method="post" class="mnt-menu__subform">
+                          <input type="hidden" name="personId" value={m.id} />
+                          <div class="mnt-chips">
+                            {EXPERTISE_TAGS.map((tag) => (
+                              <label class="mnt-chip">
+                                <input type="checkbox" name="expertise" value={tag} checked={tags.includes(tag)} />
+                                <span>{tag}</span>
+                              </label>
+                            ))}
+                          </div>
+                          <button class="mnt-btn mnt-btn--ghost" type="submit" name="action" value="set-expertise">Save tags</button>
+                        </form>
+                      </details>
+
+                      <details class="mnt-menu__sub">
+                        <summary>Flag mentee</summary>
+                        <form method="post" class="mnt-menu__subform">
+                          <input type="hidden" name="personId" value={m.id} />
+                          <select class="mnt-select" name="flag">
+                            <option value="none" selected={m.flag_status === 'none'}>None</option>
+                            <option value="red_flag" selected={m.flag_status === 'red_flag'}>Red flag</option>
+                            <option value="blacklisted" selected={m.flag_status === 'blacklisted'}>Blacklist</option>
+                          </select>
+                          <input class="mnt-input" type="text" name="reason" placeholder="Reason (required unless clearing)" value={m.flag_reason ?? ''} />
+                          <button class="mnt-btn mnt-btn--danger" type="submit" name="action" value="set-flag">Update flag</button>
+                        </form>
+                      </details>
+                    </div>
+                  </details>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </>
+    )}
+  </div>
+</AppLayout>
+
+<script>
+  const input = document.querySelector('[data-mnt-search]');
+  const list = document.querySelector('[data-mnt-list]');
+  if (input && list) {
+    input.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      list.querySelectorAll('.mnt-card').forEach((card) => {
+        const name = card.getAttribute('data-mnt-name') ?? '';
+        card.style.display = !q || name.includes(q) ? '' : 'none';
+      });
+    });
+  }
+</script>
+
+<style>
+  /* This page intentionally departs from the site's zero-radius/no-shadow
+     system - a one-off, requested look for Mentees only. Nothing here is
+     :global beyond the page heading override, and Astro only bundles this
+     stylesheet into this one route, so it can't leak onto other pages. */
+  :global(.app__heading) { display: none; }
+
+  .mnt-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .mnt-head__title { font-family: var(--font-sans); font-weight: 700; font-size: 2.3rem; color: var(--text-strong); margin: 0; }
+
+  .mnt-search {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.6rem 0.9rem; background: var(--bg-tint);
+    border: 1px solid var(--border-soft); border-radius: 10px;
+    color: var(--text-muted); min-width: 220px;
+  }
+  .mnt-search input {
+    border: 0; background: none; outline: none; font-size: 0.88rem; color: var(--text-strong); width: 100%;
+  }
+
+  .mnt-empty { padding: 1.25rem 0; font-size: 0.92rem; color: var(--text-muted); }
+  .mnt-empty--inline { padding: 0; }
+
+  /* ---------- cards ---------- */
+  .mnt-list { display: grid; gap: 1rem; min-width: 0; }
+  .mnt-card {
+    position: relative;
+    min-width: 0;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 16px;
+    box-shadow: 0 1px 2px rgba(20, 20, 18, 0.04), 0 1px 10px rgba(20, 20, 18, 0.045);
+  }
+
+  .mnt-row__head {
+    display: flex; align-items: flex-start; gap: 0.9rem;
+    padding: 1.3rem 4.5rem 1.3rem 1.4rem;
+    cursor: pointer; list-style: none;
+  }
+  .mnt-row__head::-webkit-details-marker { display: none; }
+
+  .mnt-avatar {
+    flex-shrink: 0; width: 46px; height: 46px; border-radius: 50%;
+    display: grid; place-items: center;
+    font-family: var(--font-sans); font-weight: 700; font-size: 1rem;
+  }
+  .mnt-avatar[data-tone='green'] { background: var(--ok-bg); color: var(--ok); }
+  .mnt-avatar[data-tone='rose']  { background: var(--red-wash); color: var(--red); }
+  .mnt-avatar[data-tone='amber'] { background: var(--warn-bg); color: var(--warn); }
+  .mnt-avatar[data-tone='wine']  { background: var(--accent-wash); color: var(--blue); }
+
+  .mnt-row__id { display: grid; gap: 0.35rem; min-width: 0; }
+  .mnt-row__name { font-family: var(--font-sans); font-weight: 700; font-size: 1.3rem; color: var(--text-strong); }
+  .mnt-row__meta { font-size: 0.85rem; color: var(--text-muted); }
+
+  .mnt-pill {
+    justify-self: start; display: inline-flex; align-items: center; gap: 0.4rem;
+    font-size: 0.78rem; font-weight: 600; padding: 0.3rem 0.7rem; border-radius: 999px; width: fit-content;
+  }
+  .mnt-pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; font-style: normal; }
+  .mnt-pill[data-tone='available'] { background: var(--ok-bg); color: var(--ok); }
+  .mnt-pill[data-tone='unavailable'] { background: var(--bg-tint); color: var(--text-muted); }
+  .mnt-pill[data-tone='red_flag'] { background: var(--warn-bg); color: var(--warn); }
+  .mnt-pill[data-tone='blacklisted'] { background: var(--red-wash); color: var(--red); }
+
+  .mnt-row__chev { flex-shrink: 0; margin-top: 0.3rem; color: var(--text-muted); transition: transform 0.2s var(--ease); }
+  .mnt-row[open] .mnt-row__chev { transform: rotate(180deg); }
+
+  /* ---------- tools (sibling of <details>, overlaid so clicks on mail/menu
+     never land inside <summary> and double-trigger the card's own toggle) ---------- */
+  .mnt-row__tools { position: absolute; top: 1.2rem; right: 1.3rem; display: flex; gap: 0.35rem; }
+  .mnt-icon-btn {
+    display: grid; place-items: center; width: 34px; height: 34px;
+    border-radius: 9px; border: 1px solid var(--border-soft); background: var(--bg);
+    color: var(--text); cursor: pointer; list-style: none;
+  }
+  .mnt-icon-btn::-webkit-details-marker { display: none; }
+  .mnt-icon-btn:hover { border-color: var(--border-strong); color: var(--text-strong); }
+
+  .mnt-menu { position: relative; }
+  .mnt-menu__panel {
+    position: absolute; top: calc(100% + 8px); right: 0; z-index: 20;
+    width: 260px; padding: 0.6rem;
+    background: var(--surface); border: 1px solid var(--border-soft); border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(20, 20, 18, 0.14);
+    display: grid; gap: 0.3rem;
+  }
+  .mnt-menu__item {
+    width: 100%; text-align: left; padding: 0.55rem 0.6rem; border-radius: 8px;
+    background: none; border: 0; font-size: 0.86rem; font-weight: 600; color: var(--text-strong); cursor: pointer;
+  }
+  .mnt-menu__item:hover { background: var(--bg-tint); }
+  .mnt-menu__sub summary {
+    padding: 0.55rem 0.6rem; border-radius: 8px; cursor: pointer; list-style: none;
+    font-size: 0.86rem; font-weight: 600; color: var(--text-strong);
+  }
+  .mnt-menu__sub summary::-webkit-details-marker { display: none; }
+  .mnt-menu__sub summary:hover { background: var(--bg-tint); }
+  .mnt-menu__subform { display: grid; gap: 0.5rem; padding: 0.5rem 0.6rem 0.2rem; min-width: 0; }
+
+  /* ---------- row body ---------- */
+  .mnt-row__body { padding: 0 1.4rem 1.6rem; display: grid; gap: 1.4rem; }
+
+  .mnt-cols {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+    padding-top: 1rem; border-top: 1px solid var(--border-soft);
+  }
+  .mnt-cols > div:first-child { border-right: 1px solid var(--border-soft); padding-right: 1.5rem; }
+
+  .mnt-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 0.35rem; }
+  .mnt-value { font-size: 0.92rem; color: var(--text-strong); }
+  .mnt-value--danger { color: var(--red); font-weight: 600; margin-top: 0.2rem; }
+
+  .mnt-chips--static { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .mnt-chip-pill {
+    font-size: 0.78rem; font-weight: 600; color: var(--text);
+    background: var(--bg-tint); padding: 0.3rem 0.7rem; border-radius: 999px;
+  }
+
+  .mnt-projects-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; min-width: 0; }
+  .mnt-projects-head h3 { font-family: var(--font-sans); font-size: 1.05rem; font-weight: 700; color: var(--text-strong); margin: 0; }
+
+  /* Like the other selects, this one's content width (long project titles)
+     can't be allowed to dictate the row's width - min-width: 0 at every
+     level from the <details> down, and the form takes the full row once
+     opened so the select has a known width to shrink within. */
+  .mnt-assign { min-width: 0; max-width: 100%; }
+  .mnt-assign[open] { flex: 1 1 100%; }
+  .mnt-assign summary {
+    display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; list-style: none;
+    padding: 0.5rem 0.9rem; border: 1px solid var(--border-strong); border-radius: 9px;
+    font-size: 0.82rem; font-weight: 700; color: var(--text-strong);
+  }
+  .mnt-assign summary::-webkit-details-marker { display: none; }
+  .mnt-assign summary:hover { background: var(--bg-tint); }
+  .mnt-assign__form { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; min-width: 0; max-width: 100%; }
+
+  .mnt-projects { display: grid; gap: 0.7rem; }
+  .pcard {
+    display: flex; align-items: flex-start; gap: 0.8rem;
+    padding: 0.9rem 1rem; background: var(--bg-tint); border: 1px solid var(--border-soft); border-radius: 12px;
+  }
+  .pcard__icon {
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: 9px;
+    display: grid; place-items: center; background: var(--surface); color: var(--text-muted);
+    border: 1px solid var(--border-soft);
+  }
+  .pcard__body { flex: 1; min-width: 0; display: grid; gap: 0.3rem; }
+  .pcard__title { font-family: var(--font-sans); font-weight: 700; font-size: 0.96rem; color: var(--text-strong); }
+  .pcard__note { font-size: 0.84rem; color: var(--text-muted); font-style: italic; }
+  .pcard__chev {
+    flex-shrink: 0; display: grid; place-items: center; width: 28px; height: 28px; margin-top: 0.1rem;
+    color: var(--text-muted); border-radius: 50%;
+  }
+  .pcard__chev:hover { background: var(--surface); color: var(--text-strong); }
+
+  .mnt-link {
+    background: none; border: 0; padding: 0; margin-top: 0.1rem; cursor: pointer;
+    font-size: 0.78rem; font-weight: 700; color: var(--blue); text-decoration: underline; text-underline-offset: 2px;
+  }
+  .mnt-edit-rating { margin-top: 0.1rem; }
+  .mnt-edit-rating > summary {
+    cursor: pointer; list-style: none; font-size: 0.78rem; font-weight: 700; color: var(--blue);
+    text-decoration: underline; text-underline-offset: 2px;
+  }
+  .mnt-edit-rating > summary::-webkit-details-marker { display: none; }
+  .mnt-edit-rating[open] > summary { margin-bottom: 0.4rem; }
+
+  .mnt-rate { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.4rem; }
+  .mnt-rate__note { flex: 1 1 160px; min-width: 0; }
+
+  /* ---------- menu's expertise-chip editor ---------- */
+  .mnt-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .mnt-chip { position: relative; }
+  .mnt-chip input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .mnt-chip span {
+    display: inline-flex; align-items: center; padding: 0.4rem 0.75rem; border-radius: 999px;
+    border: 1px solid var(--border-strong); font-size: 0.75rem; font-weight: 600; color: var(--text-strong); cursor: pointer;
+    transition: background 0.15s var(--ease), color 0.15s var(--ease), border-color 0.15s var(--ease);
+  }
+  .mnt-chip:has(input:checked) span { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+  .mnt-chip input:focus-visible ~ span { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+  /* ---------- inputs / selects / buttons ---------- */
+  .mnt-select, .mnt-input {
+    padding: 0.55rem 0.75rem; background: var(--surface);
+    border: 1px solid var(--border-strong); border-radius: 8px;
+    font-family: var(--font-sans); font-size: 0.85rem; color: var(--text-strong);
+    min-width: 0; max-width: 100%;
+  }
+  .mnt-select { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 200px; }
+  .mnt-select:focus, .mnt-input:focus {
+    outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--accent-wash-strong);
+  }
+
+  .mnt-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 0.55rem 1rem; border-radius: 8px;
+    font-family: var(--font-sans); font-size: 0.8rem; font-weight: 700; cursor: pointer;
+    transition: background 0.15s var(--ease), color 0.15s var(--ease), border-color 0.15s var(--ease);
+  }
+  .mnt-btn--primary { background: var(--blue); color: #fff; border: 1px solid var(--blue); }
+  .mnt-btn--primary:hover { background: var(--blue-deep); border-color: var(--blue-deep); }
+  .mnt-btn--ghost { background: transparent; color: var(--ink); border: 1px solid var(--border-strong); }
+  .mnt-btn--ghost:hover { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .mnt-btn--danger { background: var(--red); color: #fff; border: 1px solid var(--red); }
+  .mnt-btn--danger:hover { background: var(--red-deep); border-color: var(--red-deep); }
+
+  @media (max-width: 620px) {
+    .mnt-row__head { flex-wrap: wrap; padding-right: 1.4rem; }
+    .mnt-row__tools { position: static; margin: 0 1.4rem 1rem; justify-content: flex-end; }
+    .mnt-cols { grid-template-columns: 1fr; }
+    .mnt-cols > div:first-child { border-right: 0; padding-right: 0; border-bottom: 1px solid var(--border-soft); padding-bottom: 1rem; }
+  }
+</style>

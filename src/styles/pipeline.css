@@ -75,24 +75,24 @@
   padding: 0 32px;
   display: flex;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
+  gap: clamp(0.75rem, 0.5rem + 1.2vw, 1.75rem);
   overflow-x: auto;
 }
 .pl-tabs { border-bottom: 1px solid var(--border); }
 .pl-tab {
-  padding: 14px 14px;
-  color: var(--text-muted);
+  padding: 14px 2px;
+  color: var(--text-strong);
   text-decoration: none;
   font-family: var(--font-sans);
   font-size: 0.85rem;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: -0.003em;
   border-bottom: 2px solid transparent;
   white-space: nowrap;
 }
-.pl-tab:first-child { padding-left: 0; }
-.pl-tab:hover { color: var(--text-strong); }
-.pl-tab.is-active { color: var(--text-strong); border-bottom-color: var(--pl-accent); }
+.pl-tab:hover { color: var(--pl-accent); }
+.pl-tab.is-active { border-bottom-color: var(--pl-accent); }
 .pl-tab__count {
   margin-left: 6px;
   font-weight: 700;
@@ -477,6 +477,7 @@ select.pl-status:focus-visible { outline: 2px solid var(--pl-accent); outline-of
    page's edge, far from the content it describes. */
 .pl-detail { display: grid; grid-template-columns: minmax(0, 720px) 300px; gap: 44px; align-items: start; }
 @media (max-width: 860px) { .pl-detail { grid-template-columns: 1fr; gap: 28px; } }
+@media (max-width: 860px) { .pl-actions { max-width: 100%; } }
 
 .pl-phead { margin: 0 0 8px; }
 .pl-phead__status { margin: 10px 0 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; }
@@ -510,6 +511,11 @@ select.pl-status:focus-visible { outline: 2px solid var(--pl-accent); outline-of
   box-shadow: none;
   padding: 4px 22px 18px;
   margin: 8px 0 34px;
+  /* Matches .pl-detail's own track width below (720px history column + 44px
+     gap + 300px people column) - not centered, just flush-left like the
+     title/chips/History above and below it, with its right edge landing
+     exactly where the People panel's right edge does. */
+  max-width: 1064px;
 }
 .pl-actions h2 {
   margin: 16px 0 4px;
@@ -809,6 +815,23 @@ select.pl-status:focus-visible { outline: 2px solid var(--pl-accent); outline-of
 .pl-reqcard__line { margin: 0 0 8px; font-size: 0.88rem; }
 .pl-reqcard .pl-mini { margin-top: 0; }
 .pl-reqcard .pl-mini input { flex: 1 1 180px; }
+
+/* ---------- mentees ---------- */
+.pl-mentees { display: grid; gap: 10px; }
+.pl-mentee {
+  background: var(--bg-tint, #eef2f8);
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--blue);
+  border-radius: 0;
+  padding: 12px 14px;
+}
+.pl-mentee__name { margin: 0 0 4px; font-size: 0.9rem; }
+.pl-mentee__rating { margin-left: 8px; font-size: 0.78rem; font-weight: 700; color: var(--ok, #16a34a); }
+.pl-mentee .pl-mini { margin-top: 8px; }
+.pl-mentee .pl-mini input { flex: 1 1 160px; }
+.pl-mentee__edit { margin-top: 6px; }
+.pl-mentee__edit > summary { cursor: pointer; font-size: 0.78rem; font-weight: 600; color: var(--blue); list-style: none; }
+.pl-mentee__edit > summary::-webkit-details-marker { display: none; }
 
 /* ---------- login ---------- */
 .pl-authbody {
