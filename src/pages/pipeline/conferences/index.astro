@@ -50,6 +50,7 @@ if (!isAdmin) {
     .select('id,ref,title,phase,stage,stage_label,lead_name,analyst_name,current_conference,days_in_stage,created_at,stage_changed_at,archived_at')
     .eq('phase', 'conference')
     .is('archived_at', null)
+    .is('hidden_at', null)
     .order('stage_changed_at', { ascending: false });
   q = scopeProjects(q, person);
   const { data } = await q;

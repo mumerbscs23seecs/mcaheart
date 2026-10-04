@@ -133,6 +133,15 @@ if (gate === '1') {
   const sep = dest.includes('?') ? '&' : '?';
   if (error) return Astro.redirect(`${dest}${sep}err=${encodeURIComponent(error.message)}`);
   return Astro.redirect(`${dest}${sep}ok=${encodeURIComponent('Flag cleared.')}`);
+} else if (gate === 'hide' || gate === 'unhide') {
+  // Visibility toggle, not a status change - applies directly, no email/preview.
+  // Hiding works regardless of phase or archive state (any paper, any stage).
+  const hide = gate === 'hide';
+  const reason = String(form.get('reason') ?? '').trim() || null;
+  const { error } = await supabase.rpc('set_project_hidden', { p_project: projectId, p_hidden: hide, p_reason: reason });
+  const sep = dest.includes('?') ? '&' : '?';
+  if (error) return Astro.redirect(`${dest}${sep}err=${encodeURIComponent(error.message)}`);
+  return Astro.redirect(`${dest}${sep}ok=${encodeURIComponent(hide ? 'Paper hidden.' : 'Paper unhidden.')}`);
 } else if (gate === 'request-decide') {
   const requestId = String(form.get('request') ?? '');
   const approve = String(form.get('approve') ?? '') === 'yes';
@@ -168,7 +177,7 @@ const rendered = renderTransitionEmail({
 });
 const subject = subjectOverride || rendered.subject;
 
-if (step === 'confirm') {
+if (step === 'confirm' || step === 'confirm-no-email') {
   const { error } = await supabase.rpc(rpc.fn, rpc.args);
   if (error) {
     const sep = dest.includes('?') ? '&' : '?';
@@ -181,7 +190,9 @@ if (step === 'confirm') {
   }
 
   let emailNote = '';
-  if (to.length) {
+  if (step === 'confirm-no-email') {
+    emailNote = ' · no email sent';
+  } else if (to.length) {
     const sent = await sendEmail({ to, subject, html: rendered.html }).catch((e) => ({ ok: false, error: String(e) }));
     emailNote = sent.ok ? ` · emailed ${to.length}` : ' · email failed';
   } else {
@@ -205,7 +216,7 @@ for (const [k, v] of form.entries()) {
 <PipelineLayout title="Preview email">
   <p class="pl-crumb"><a class="pl-link" href={back}>&larr; Back to project</a></p>
   <h1 class="pl-h1">Preview: {actionLabel}</h1>
-  <p class="pl-sub">Nothing has changed yet. Review the email below, edit the subject or note if you like, then send.</p>
+  <p class="pl-sub">Nothing has changed yet. Review the email below, edit the subject or note if you like, then send - or apply the change with no email at all.</p>
 
   <section class="pl-actions">
     <h2>Recipients</h2>
@@ -234,6 +245,7 @@ for (const [k, v] of form.entries()) {
 
     <div class="pl-mini" style="margin-top:18px">
       <button class="pl-btn pl-btn--ghost" type="submit" name="step" value="preview">Refresh preview</button>
+      <button class="pl-btn pl-btn--ghost" type="submit" name="step" value="confirm-no-email">Update (no email)</button>
       <button class="pl-btn" type="submit" name="step" value="confirm">Send email &amp; apply</button>
       <a class="pl-btn pl-btn--ghost" href={back}>Cancel</a>
     </div>

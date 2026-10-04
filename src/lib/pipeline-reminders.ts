@@ -38,6 +38,7 @@ export async function sweepPipelineReminders(dryRun = false): Promise<PipelineSw
     .select('id,ref,title,stage_label,days_in_stage,reminder_level,lead_id,colead_id,analyst_id')
     .eq('phase', 'manuscript')
     .is('archived_at', null)
+    .is('hidden_at', null)
     .eq('parked', false)
     .gte('days_in_stage', 7);
 

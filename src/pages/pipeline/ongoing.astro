@@ -12,12 +12,14 @@ const q = (Astro.url.searchParams.get('q') ?? '').trim();
 
 let query = supabase
   .from('project_list')
-  .select('id,ref,title,phase,stage,stage_label,lead_name,analyst_name,current_conference,days_in_stage,days_overdue,parked,ms_version,created_at,stage_changed_at,archived_at')
+  .select('id,ref,title,full_title,phase,stage,stage_label,lead_name,analyst_name,current_conference,days_in_stage,days_overdue,parked,ms_version,created_at,stage_changed_at,archived_at,submission_order')
   .eq('phase', 'manuscript')
   .is('archived_at', null)
+  .is('hidden_at', null)
+  .order('submission_order', { ascending: true, nullsFirst: false })
   .order('stage_changed_at', { ascending: false });
 if (!showParked) query = query.eq('parked', false);
-if (q) query = query.ilike('title', `%${q}%`);
+if (q) query = query.or(`title.ilike.%${q}%,full_title.ilike.%${q}%`);
 if (!isAdmin) query = scopeProjects(query, person);
 
 const { data: rows, error } = await query;
@@ -61,7 +63,7 @@ const fmt = (d: string | null) => {
           {rows.map((p) => (
             <tr>
               <td class="pl-t__title" data-th="Submission title">
-                <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a>
+                <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.full_title || p.title}</a>
                 <span class="pl-t__ref">
                   {p.ref} · {p.ms_version ?? 'v1.0'}
                   {p.analyst_name ? ` · analyst ${p.analyst_name}` : ''}

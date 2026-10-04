@@ -17,7 +17,9 @@ const isAdmin = person.role === 'admin';
 
 type Tab = { key: string; label: string; href: string; count: number | null; alert?: boolean };
 
-const tasks = await getPipelineTasks(supabase, person);
+// Admins reach Tasks from the top app bar now (Manage > Tasks) and don't
+// render this tab, so skip the query that only fed its badge count.
+const tasks = isAdmin ? [] : await getPipelineTasks(supabase, person);
 const taskTab: Tab = {
   key: 'tasks',
   label: 'Tasks',
@@ -32,7 +34,8 @@ const phaseCount = (phase: string) => {
     .from(isAdmin ? 'projects' : 'project_list')
     .select('id', { count: 'exact', head: true })
     .eq('phase', phase)
-    .is('archived_at', null);
+    .is('archived_at', null)
+    .is('hidden_at', null);
   return isAdmin ? q : scopeProjects(q, person);
 };
 
@@ -43,6 +46,7 @@ const journalStageCount = (op: 'eq' | 'neq') =>
     .select('id', { count: 'exact', head: true })
     .eq('phase', 'journal')
     .is('archived_at', null)
+    .is('hidden_at', null)
     [op]('stage', 'published');
 
 const [confN, ongoingN, subsN, pubN] = await Promise.all([
@@ -64,10 +68,17 @@ const tabs: Tab[] = [
   ...(isAdmin
     ? [{ key: 'published', label: 'Published', href: '/pipeline/published', count: pubN.count ?? null }]
     : []),
-  taskTab,
-  // No count: this one is an action ("propose one"), not a queue of work -
-  // a number beside it would read as "N new ideas".
-  { key: 'ideas', label: 'New Idea', href: '/pipeline/ideas', count: null },
+  // Admins now reach these two from the top app bar (Manage > Tasks, and
+  // New Idea) instead - but members have no app-bar nav items at all, so
+  // this strip stays their only way to either one.
+  ...(isAdmin
+    ? []
+    : [
+        taskTab,
+        // No count: this one is an action ("propose one"), not a queue of
+        // work - a number beside it would read as "N new ideas".
+        { key: 'ideas', label: 'New Idea', href: '/pipeline/ideas', count: null },
+      ]),
 ];
 ---
 
@@ -91,7 +102,12 @@ const tabs: Tab[] = [
     />
   </head>
   <body class="pl-body">
-    <AppBar active="pipeline" name={person.full_name} role={person.role} email={person.email} />
+    <AppBar
+      active={isAdmin && active === 'tasks' ? 'tasks' : isAdmin && active === 'ideas' ? 'new-idea' : 'pipeline'}
+      name={person.full_name}
+      role={person.role}
+      email={person.email}
+    />
 
     <nav class="pl-tabs" aria-label="Workflow sections">
       <div class="pl-tabs__row">

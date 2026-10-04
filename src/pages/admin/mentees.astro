@@ -118,6 +118,7 @@ if (supabase) {
       .from('projects')
       .select('id,ref,title')
       .is('archived_at', null)
+      .is('hidden_at', null)
       .order('ref');
     if (pErr) throw pErr;
     openProjects = projRows ?? [];

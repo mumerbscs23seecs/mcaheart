@@ -113,7 +113,8 @@ async function memberTasks(supabase: SupabaseClient, person: Person): Promise<Ta
   let q = supabase
     .from('project_list')
     .select('id,ref,title,phase,stage_label,days_in_stage,days_overdue,next_target')
-    .is('archived_at', null);
+    .is('archived_at', null)
+    .is('hidden_at', null);
   q = scopeProjects(q, person);
   const { data: mine } = await q;
 

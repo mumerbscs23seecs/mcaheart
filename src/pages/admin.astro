@@ -97,11 +97,11 @@ let dataError: string | null = null;
 
 if (supabase) {
   const [totalRes, pubRes, reqRes, monthRes, stageRes, eventRes] = await Promise.all([
-    scoped(supabase.from('projects').select('id', { count: 'exact', head: true }).is('archived_at', null)),
-    supabase.from('projects').select('id', { count: 'exact', head: true }).eq('phase', 'journal').eq('stage', 'published').is('archived_at', null),
+    scoped(supabase.from('projects').select('id', { count: 'exact', head: true }).is('archived_at', null).is('hidden_at', null)),
+    supabase.from('projects').select('id', { count: 'exact', head: true }).eq('phase', 'journal').eq('stage', 'published').is('archived_at', null).is('hidden_at', null),
     supabase.from('stage_change_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
-    scoped(supabase.from('projects').select('id', { count: 'exact', head: true }).is('archived_at', null).gte('created_at', firstOfMonth)),
-    scoped(supabase.from('project_list').select('phase,stage,days_in_stage,parked').is('archived_at', null)),
+    scoped(supabase.from('projects').select('id', { count: 'exact', head: true }).is('archived_at', null).is('hidden_at', null).gte('created_at', firstOfMonth)),
+    scoped(supabase.from('project_list').select('phase,stage,days_in_stage,parked').is('archived_at', null).is('hidden_at', null)),
     supabase.from('events').select('at').gte('at', rangeStart),
   ]);
 

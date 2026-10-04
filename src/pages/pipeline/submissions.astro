@@ -11,9 +11,11 @@ const q = (Astro.url.searchParams.get('q') ?? '').trim();
 
 let query = supabase
   .from('project_list')
-  .select('id,ref,title,full_title,phase,stage,stage_label,lead_name,current_journal,journals_tried,revision_round,open_journal_attempt_id,days_in_stage,created_at,stage_changed_at,archived_at')
+  .select('id,ref,title,full_title,phase,stage,stage_label,lead_name,current_journal,journals_tried,revision_round,open_journal_attempt_id,days_in_stage,created_at,stage_changed_at,archived_at,submission_order')
   .eq('phase', 'journal')
   .is('archived_at', null)
+  .is('hidden_at', null)
+  .order('submission_order', { ascending: true, nullsFirst: false })
   .order('stage_changed_at', { ascending: false });
 // Admins get a dedicated "Published" tab, so keep those out of here.
 // Members see everything (incl. published) under Submissions.

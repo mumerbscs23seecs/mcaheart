@@ -122,7 +122,18 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
     {overdue && <span class="pl-warn">overdue {p.days_overdue}d</span>}
     {stale && !overdue && <span class="pl-warn">stale</span>}
     {p.needs_reassignment && <span class="pl-warn">needs reassignment</span>}
+    {p.hidden_at && <span class="pl-warn">hidden{p.hidden_reason ? ` - ${p.hidden_reason}` : ''}</span>}
   </div>
+
+  {isAdmin && (
+    <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-mini" style="margin:10px 0 0">
+      <input type="hidden" name="gate" value={p.hidden_at ? 'unhide' : 'hide'} />
+      {!p.hidden_at && <input name="reason" placeholder="Reason (optional)" />}
+      <button class="pl-btn pl-btn--ghost" type="submit">
+        {p.hidden_at ? 'Unhide this paper' : 'Hide this paper'}
+      </button>
+    </form>
+  )}
 
   {(projectMentees ?? []).length > 0 && (
     <section class="pl-actions">

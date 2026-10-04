@@ -15,6 +15,7 @@ let query = supabase
   .eq('phase', 'journal')
   .eq('stage', 'published')
   .is('archived_at', null)
+  .is('hidden_at', null)
   .order('stage_changed_at', { ascending: false });
 if (q) query = query.ilike('title', `%${q}%`);
 

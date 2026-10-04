@@ -1,0 +1,105 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import '../../styles/admin.css';
+import { currentUser } from '../../lib/auth';
+import { getPipelineSession, bridgeAdminSession } from '../../lib/pipeline-auth';
+import { listHiddenProjects } from '../../lib/hidden-papers';
+
+export const prerender = false;
+
+const me = currentUser(Astro.cookies);
+if (!me) return Astro.redirect('/login', 302);
+if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+// set_project_hidden() resolves the caller via me() (auth.uid()), which
+// only works on a client carrying the admin's own Supabase session - not
+// supabaseAdmin()'s service-role key. Same bridge the /pipeline middleware
+// uses, borrowed here since /admin/* pages sit outside that middleware.
+let session = await getPipelineSession(Astro.request, Astro.cookies);
+session = session ?? (await bridgeAdminSession(Astro.request, Astro.cookies));
+const supabase = session?.supabase ?? null;
+
+let flash: { tone: 'ok' | 'error'; text: string } | null = null;
+
+if (supabase && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const projectId = String(form.get('projectId') ?? '');
+  const { error } = await supabase.rpc('set_project_hidden', {
+    p_project: projectId,
+    p_hidden: false,
+    p_reason: null,
+  });
+  flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Paper unhidden.' };
+}
+
+let rows: Awaited<ReturnType<typeof listHiddenProjects>> = [];
+let dbReady = false;
+let dbError = '';
+try {
+  rows = await listHiddenProjects();
+  dbReady = true;
+} catch (err) {
+  dbError = err instanceof Error ? err.message : 'Could not load hidden papers.';
+}
+
+const fmt = (t: string) => new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+const PHASE_LABEL: Record<string, string> = {
+  idea: 'Idea',
+  conference: 'Conference',
+  manuscript: 'Ongoing',
+  journal: 'Submissions',
+};
+---
+
+<AppLayout title="Hidden papers" heading="Hidden papers" user={me} active="hidden">
+  <div class="adm">
+    {flash && (
+      <div class:list={['adm-flash', `adm-flash--${flash.tone}`]} role="status">
+        <p>{flash.text}</p>
+      </div>
+    )}
+
+    {!dbReady && (
+      <div class="adm-flash adm-flash--error">
+        <p>
+          Could not load hidden papers.
+          {dbError && <><br /><span class="adm-hint">({dbError})</span></>}
+        </p>
+      </div>
+    )}
+
+    {dbReady && (
+      <div class="adm-panel">
+        <h2 class="adm-panel__title">Hidden ({rows.length})</h2>
+        {rows.length === 0 ? (
+          <p class="adm-hint">Nothing hidden right now. Hide a paper from its detail page in the Workflow.</p>
+        ) : (
+          <div class="adm-scroll">
+            <table class="adm-table">
+              <thead>
+                <tr><th>Ref</th><th>Title</th><th>Phase</th><th>Reason</th><th>Hidden</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr>
+                    <td class="adm-mono">{r.ref}</td>
+                    <td><a class="link-underline" href={`/pipeline/projects/${r.id}`}>{r.full_title || r.title}</a></td>
+                    <td>{PHASE_LABEL[r.phase] ?? r.phase}</td>
+                    <td>{r.hidden_reason || '-'}</td>
+                    <td class="adm-mono">{fmt(r.hidden_at)}{r.hidden_by_name && <> · {r.hidden_by_name}</>}</td>
+                    <td class="adm-actions">
+                      <form method="post" class="adm-inline">
+                        <input type="hidden" name="projectId" value={r.id} />
+                        <button class="adm-btn" type="submit">Unhide</button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+</AppLayout>

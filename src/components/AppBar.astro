@@ -2,12 +2,13 @@
 import { pendingIdeaCount } from '../lib/ideas';
 import { pendingApplicationCount } from '../lib/applications';
 import { unreadRequestCount } from '../lib/requests';
+import { hiddenProjectCount } from '../lib/hidden-papers';
 import { getNotifications } from '../lib/notifications';
 import ThemeToggle from './ThemeToggle.astro';
 import LogoMark from './LogoMark.astro';
 
 interface Props {
-  active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'mentees' | 'requests' | 'testimonials' | 'access';
+  active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'mentees' | 'requests' | 'testimonials' | 'hidden' | 'access' | 'tasks' | 'new-idea';
   name: string;
   role: string;
   email: string;
@@ -34,16 +35,36 @@ const safeCount = async (fn: () => Promise<number>) => {
 const pendingIdeas = isAdmin ? await safeCount(pendingIdeaCount) : 0;
 const pendingApps = isAdmin ? await safeCount(pendingApplicationCount) : 0;
 const unreadRequests = isAdmin ? await safeCount(unreadRequestCount) : 0;
-const navItems = isAdmin
+const hiddenCount = isAdmin ? await safeCount(hiddenProjectCount) : 0;
+
+// Two kinds of entry: a plain link, or a dropdown ('menu') grouping a few
+// related pages - Review (things waiting on a decision) and Manage
+// (admin-only settings/content, not day-to-day pipeline work).
+type NavLink = { type: 'link'; key: string; label: string; href: string; badge: number };
+type NavMenu = { type: 'menu'; key: string; label: string; badge: number; items: Omit<NavLink, 'type'>[] };
+const navItems: (NavLink | NavMenu)[] = isAdmin
   ? [
-      { key: 'dashboard', label: 'Dashboard', href: '/admin', badge: 0 },
-      { key: 'pipeline', label: 'Workflow', href: '/pipeline', badge: 0 },
-      { key: 'ideas', label: 'Ideas', href: '/admin/ideas', badge: pendingIdeas },
-      { key: 'applicants', label: 'Applicants', href: '/admin/applications', badge: pendingApps },
-      { key: 'mentees', label: 'Mentees', href: '/admin/mentees', badge: 0 },
-      { key: 'requests', label: 'Requests', href: '/admin/requests', badge: unreadRequests },
-      { key: 'testimonials', label: 'Testimonials', href: '/admin/testimonials', badge: 0 },
-      { key: 'access', label: 'Access', href: '/admin/access', badge: 0 },
+      { type: 'link', key: 'dashboard', label: 'Dashboard', href: '/admin', badge: 0 },
+      { type: 'link', key: 'pipeline', label: 'Workflow', href: '/pipeline', badge: 0 },
+      {
+        type: 'menu', key: 'review', label: 'Review', badge: pendingIdeas + pendingApps + unreadRequests,
+        items: [
+          { key: 'ideas', label: 'Ideas', href: '/admin/ideas', badge: pendingIdeas },
+          { key: 'applicants', label: 'Applicants', href: '/admin/applications', badge: pendingApps },
+          { key: 'requests', label: 'Requests', href: '/admin/requests', badge: unreadRequests },
+        ],
+      },
+      {
+        type: 'menu', key: 'manage', label: 'Manage', badge: 0,
+        items: [
+          { key: 'access', label: 'Access', href: '/admin/access', badge: 0 },
+          { key: 'testimonials', label: 'Testimonials', href: '/admin/testimonials', badge: 0 },
+          { key: 'mentees', label: 'Mentees', href: '/admin/mentees', badge: 0 },
+          { key: 'hidden', label: 'Hidden', href: '/admin/hidden', badge: hiddenCount },
+          { key: 'tasks', label: 'Tasks', href: '/pipeline/tasks', badge: 0 },
+        ],
+      },
+      { type: 'link', key: 'new-idea', label: 'New Idea', href: '/pipeline/ideas', badge: 0 },
     ]
   : [];
 ---
@@ -57,13 +78,40 @@ const navItems = isAdmin
 
     {navItems.length > 0 && (
       <nav class="appbar__nav" aria-label="Members">
-        {navItems.map((item) => (
-          <a
-            class:list={['appbar__link', active === item.key && 'is-active']}
-            href={item.href}
-            aria-current={active === item.key ? 'page' : undefined}
-          >{item.label}{item.badge > 0 && <span class="appbar__badge-n">{item.badge}</span>}</a>
-        ))}
+        {navItems.map((item) =>
+          item.type === 'link' ? (
+            <a
+              class:list={['appbar__link', active === item.key && 'is-active']}
+              href={item.href}
+              aria-current={active === item.key ? 'page' : undefined}
+            >{item.label}{item.badge > 0 && <span class="appbar__badge-n">{item.badge}</span>}</a>
+          ) : (
+            <span class="appbar__menu" data-menu>
+              <button
+                type="button"
+                class:list={['appbar__link', 'appbar__menu-trigger', item.items.some((s) => s.key === active) && 'is-active']}
+                data-menu-toggle
+                aria-haspopup="true"
+                aria-expanded="false"
+              >
+                {item.label}
+                {item.badge > 0 && <span class="appbar__badge-n">{item.badge}</span>}
+                <svg class="appbar__menu-chev" viewBox="0 0 20 20" width="12" height="12" aria-hidden="true">
+                  <path fill="none" stroke="currentColor" stroke-width="1.8" d="m5 7.5 5 5 5-5" />
+                </svg>
+              </button>
+              <div class="appbar__menu-panel" data-menu-panel hidden>
+                {item.items.map((sub) => (
+                  <a
+                    class:list={['appbar__menu-item', active === sub.key && 'is-active']}
+                    href={sub.href}
+                    aria-current={active === sub.key ? 'page' : undefined}
+                  >{sub.label}{sub.badge > 0 && <span class="appbar__badge-n">{sub.badge}</span>}</a>
+                ))}
+              </div>
+            </span>
+          ),
+        )}
       </nav>
     )}
 
@@ -139,7 +187,12 @@ const navItems = isAdmin
     padding: 0 var(--gutter);
     height: 60px;
     display: grid;
-    grid-template-columns: auto 1fr auto;
+    /* 1fr / auto / 1fr, not auto / 1fr / auto - the brand and account groups
+       are different widths, so giving them the equal flexible columns (and
+       the nav the auto one, sized to its own content) is what makes the nav
+       truly centered on the bar instead of centered only within whatever
+       space happens to be left between two unevenly sized neighbors. */
+    grid-template-columns: 1fr auto 1fr;
     align-items: stretch;
     gap: clamp(0.75rem, 0.3rem + 1.6vw, 2rem);
   }
@@ -165,9 +218,14 @@ const navItems = isAdmin
   .appbar__nav {
     display: flex; align-items: stretch; justify-content: center;
     gap: clamp(1rem, 0.5rem + 1.6vw, 2rem);
-    min-width: 0; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    min-width: 0;
+    /* No overflow-x:auto here on purpose: setting one overflow axis to
+       anything but 'visible' forces the browser to treat the OTHER axis
+       as 'auto' too (CSS spec, not a bug) - that silently clipped the
+       Review/Manage dropdown panels below, even though they measured as
+       on-screen and were clickable in automated tests. Down to 5 top-level
+       items now (was 8-9 when this was added), they fit without scrolling. */
   }
-  .appbar__nav::-webkit-scrollbar { display: none; }
   .appbar__link {
     display: inline-flex;
     align-items: center;
@@ -181,6 +239,34 @@ const navItems = isAdmin
   }
   .appbar__link:hover { color: var(--blue); }
   .appbar__link.is-active { border-bottom-color: var(--blue); }
+  /* dropdown nav items (Review, Manage) - same trigger look as a plain
+     .appbar__link, a small caret added, and a panel that follows the
+     .acct/.nbell open/close pattern below. */
+  .appbar__menu { position: relative; display: inline-flex; align-items: stretch; }
+  .appbar__menu-trigger {
+    /* font-family only, not the `font` shorthand - that resets EVERY font
+       property (weight, size...) back to what a <button> inherits by
+       default, wiping the bold/size .appbar__link already set below and
+       leaving Review/Manage looking lighter than the plain nav links. */
+    background: none; border: 0; cursor: pointer; font-family: inherit;
+    gap: 0.3em;
+  }
+  .appbar__menu-chev { color: var(--text-muted); transition: transform 0.15s var(--ease); flex-shrink: 0; }
+  .appbar__menu.is-open .appbar__menu-chev { transform: rotate(180deg); }
+  .appbar__menu-panel {
+    position: absolute; top: calc(100% + 10px); left: 50%; translate: -50% 0; z-index: 130;
+    min-width: 170px; padding: 0.4rem;
+    background: var(--surface); border: 1px solid var(--border-soft); border-radius: 14px;
+    box-shadow: 0 10px 30px rgba(20, 20, 18, 0.14);
+  }
+  .appbar__menu-panel[hidden] { display: none; }
+  .appbar__menu-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+    padding: 0.55rem 0.6rem; border-radius: 9px;
+    font-size: 0.86rem; font-weight: 700; color: var(--text-strong);
+  }
+  .appbar__menu-item:hover { background: var(--bg-tint); }
+  .appbar__menu-item.is-active { color: var(--blue); }
   .appbar__badge-n {
     display: inline-grid;
     place-items: center;
@@ -313,7 +399,11 @@ const navItems = isAdmin
        (brand, then nav, then account), same as before today's change. */
     .appbar__inner { display: flex; flex-wrap: wrap; height: auto; gap: 0.5rem; padding-block: 0.5rem; }
     .appbar__account { width: 100%; }
-    .appbar__nav { width: 100%; justify-content: flex-start; }
+    /* flex-wrap: wrap (not the base row's nowrap+scroll) - needed so a
+       dropdown trigger can actually get its own full-width line to expand
+       its panel into below, instead of staying pinned to a narrow column
+       inside what's otherwise still a single scrollable row. */
+    .appbar__nav { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
     /* The account cluster sits left-aligned on its own row at this width,
        not flush against the viewport edge - anchoring a panel's right edge
        (correct on desktop, where the cluster IS flush right) pushes it off
@@ -321,6 +411,16 @@ const navItems = isAdmin
        trigger's left edge here. (nbell__panel had this bug before today -
        same root cause, same fix, so it's included here too.) */
     .acct__panel, .nbell__panel { left: 0; right: auto; }
+    /* Review/Manage sit mid-row in the wrapped nav, not pinned to an edge
+       like the account/bell triggers - left:0 (their fix) isn't enough,
+       since it's relative to wherever the trigger itself landed, which
+       still overflows when that's already near the right edge. Expand the
+       panel inline instead of floating it, so it can never go off-screen. */
+    .appbar__menu { flex-direction: column; width: 100%; }
+    .appbar__menu-panel {
+      position: static; translate: none; margin-top: 4px;
+      width: 100%; box-shadow: none;
+    }
   }
 </style>
 
@@ -370,5 +470,9 @@ const navItems = isAdmin
     if (acct) {
       setupMenu(acct, acct.querySelector('[data-acct-toggle]'), acct.querySelector('[data-acct-panel]'));
     }
+
+    document.querySelectorAll('[data-menu]').forEach((menu) => {
+      setupMenu(menu, menu.querySelector('[data-menu-toggle]'), menu.querySelector('[data-menu-panel]'));
+    });
   })();
 </script>
