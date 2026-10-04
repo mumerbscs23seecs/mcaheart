@@ -198,7 +198,7 @@
 }
 .pl-table {
   width: 100%;
-  min-width: 760px;
+  min-width: 900px;
   border-collapse: collapse;
   font-size: 0.98rem;
 }
@@ -231,7 +231,7 @@
 .pl-table tbody tr:last-child td { border-bottom: 0; }
 .pl-table tbody tr:hover td { background: var(--pl-link-wash); }
 
-.pl-t__title { max-width: 64ch; }
+.pl-t__title { max-width: 48ch; }
 /* Submissions specifically: the journal-name and revision-history columns
    already say plenty, so give the title the freed space and let the
    status column shrink to its own content instead of stretching further -
@@ -255,7 +255,17 @@
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
 }
-.pl-t__venue { font-family: var(--pl-serif); font-style: italic; color: var(--text); }
+.pl-t__venue { font-family: var(--pl-serif); font-style: italic; color: var(--text); max-width: 22ch; }
+/* Submissions: the team's own shorthand for the paper - usually short, but
+   a few run to a full phrase, so this wraps instead of forcing nowrap
+   (which blew the column out to fit its single longest entry). */
+.pl-t__abbr {
+  max-width: 20ch;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.pl-t__lead { width: 1%; white-space: nowrap; }
 .pl-t__date {
   width: 1%;
   color: var(--text-muted);
