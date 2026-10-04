@@ -1,11 +1,11 @@
 /**
- * DEMO store for contact-form submissions ("Requests" in the admin nav) -
- * in-memory only, no database. Same trade-off as applications.ts: the CV
- * bytes for an observership request live on the record in memory so the
- * admin can download them during the session, and are wiped on restart.
- * Production must stream uploads to object storage and keep only a key here.
+ * Store for contact-form submissions ("Requests" in the admin nav) -
+ * Supabase-backed (service role, mca-pipeline/add-forms-storage.sql), so
+ * submissions survive a server restart. Previously an in-memory Map; the
+ * public shape (RequestRecord) is unchanged so admin/requests.astro didn't
+ * need to change at all.
  */
-import { randomBytes } from 'node:crypto';
+import { supabaseAdmin } from './supabase';
 import { audit } from './auth';
 import type { ContactPayload, Intent } from './contact-schema';
 
@@ -24,66 +24,61 @@ export interface RequestRecord extends ContactPayload {
   read: boolean;
 }
 
-const requests = new Map<string, RequestRecord>();
-const DAY = 86_400_000;
+const hexToBuffer = (hex: string) => Buffer.from(hex.slice(2), 'hex');
+const toHexLiteral = (b: Buffer) => '\\x' + b.toString('hex');
 
-function seed() {
-  if (requests.size) return;
-  const now = Date.now();
-  requests.set('r_01', {
-    id: 'r_01',
-    submittedAt: now - 1 * DAY,
-    fullName: 'Daniyar Zhaksybek',
-    email: 'daniyar.z@example.com',
-    phone: '',
-    location: 'Almaty, Kazakhstan',
-    designation: 'IM residency applicant',
-    intent: 'observership',
-    message: '',
-    recName: '',
-    obsName: 'Daniyar Zhaksybek',
-    obsApplyDate: 'Sept 2027',
-    obsNeedsLetter: 'yes',
-    obsStatus: 'Graduate from Al-Farabi Kazakh National Medical University, planning to apply for IM residency.',
-    obsUsmle: 'Step 1 (Pass), Step 2 CK (242)',
-    obsVisa: 'I need a visa and would need to apply for visa',
-    obsGradYear: '2025',
-    obsStart: '2026-11-02',
-    obsEnd: '2026-11-30',
-    company: undefined,
-    cv: null,
-    read: true,
-  });
-  audit('system', 'seeded demo request', undefined, '1 request');
+function fromRow(row: any, withBytes: boolean): RequestRecord {
+  return {
+    ...(row.payload as ContactPayload),
+    id: row.id,
+    submittedAt: new Date(row.submitted_at).getTime(),
+    cv: row.cv_filename
+      ? { filename: row.cv_filename, mime: row.cv_mime, size: row.cv_size, bytes: withBytes ? hexToBuffer(row.cv_bytes) : Buffer.alloc(0) }
+      : null,
+    read: row.read_at != null,
+  };
 }
-seed();
+
+const LIST_COLUMNS = 'id,payload,submitted_at,read_at,cv_filename,cv_mime,cv_size';
 
 /* -------------------------------------------------------------------------- */
 
-export function addRequest(data: ContactPayload, cv: StoredFile | null): RequestRecord {
-  const id = `r_${randomBytes(5).toString('hex')}`;
-  const rec: RequestRecord = { ...data, id, submittedAt: Date.now(), cv, read: false };
-  requests.set(id, rec);
+export async function addRequest(data: ContactPayload, cv: StoredFile | null): Promise<RequestRecord> {
+  const { data: row, error } = await supabaseAdmin()
+    .from('contact_requests')
+    .insert({
+      payload: data,
+      cv_bytes: cv ? toHexLiteral(cv.bytes) : null,
+      cv_mime: cv?.mime ?? null,
+      cv_filename: cv?.filename ?? null,
+      cv_size: cv?.size ?? null,
+    })
+    .select(LIST_COLUMNS)
+    .single();
+  if (error) throw new Error(`Could not save request: ${error.message}`);
   audit(data.email, 'submitted contact request', data.fullName);
-  return rec;
+  return fromRow(row, false);
 }
 
-export function listRequests(intent?: Intent): RequestRecord[] {
-  const all = [...requests.values()].sort((a, b) => b.submittedAt - a.submittedAt);
+export async function listRequests(intent?: Intent): Promise<RequestRecord[]> {
+  const { data, error } = await supabaseAdmin().from('contact_requests').select(LIST_COLUMNS).order('submitted_at', { ascending: false });
+  if (error) throw new Error(`Could not load requests: ${error.message}`);
+  const all = (data ?? []).map((r) => fromRow(r, false));
   return intent ? all.filter((r) => r.intent === intent) : all;
 }
 
-export function getRequest(id: string): RequestRecord | undefined {
-  return requests.get(id);
+export async function getRequest(id: string): Promise<RequestRecord | undefined> {
+  const { data, error } = await supabaseAdmin().from('contact_requests').select('*').eq('id', id).maybeSingle();
+  if (error || !data) return undefined;
+  return fromRow(data, true);
 }
 
-export function unreadRequestCount(): number {
-  let n = 0;
-  for (const r of requests.values()) if (!r.read) n++;
-  return n;
+export async function unreadRequestCount(): Promise<number> {
+  const { count } = await supabaseAdmin().from('contact_requests').select('id', { count: 'exact', head: true }).is('read_at', null);
+  return count ?? 0;
 }
 
 /** Called when the admin opens the requests list - marks everything currently there as read. */
-export function markAllRequestsRead(): void {
-  for (const r of requests.values()) r.read = true;
+export async function markAllRequestsRead(): Promise<void> {
+  await supabaseAdmin().from('contact_requests').update({ read_at: new Date().toISOString() }).is('read_at', null);
 }

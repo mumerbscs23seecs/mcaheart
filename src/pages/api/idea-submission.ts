@@ -110,7 +110,12 @@ export const POST: APIRoute = async ({ request }) => {
   // The record is saved either way, so the confirmation message shouldn't
   // wait on SMTP (Gmail's auth failure + Resend fallback can take several
   // seconds) - fire the email and respond immediately.
-  addIdea(parsed.data, attachment?.filename ?? null);
+  try {
+    await addIdea(parsed.data, attachment?.filename ?? null);
+  } catch (err) {
+    console.error('[idea] could not save idea:', err);
+    return json({ ok: false, error: 'Something went wrong on our end. Please try again shortly.' }, 500);
+  }
   deliverIdea(parsed.data, attachment).catch((err) => {
     console.error('[idea] email delivery failed (record kept):', err);
   });

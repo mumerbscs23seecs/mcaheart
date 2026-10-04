@@ -2,6 +2,7 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
+import { getPipelineSession, bridgeAdminSession } from '../../lib/pipeline-auth';
 import { listApplications, getApplication, decideApplication } from '../../lib/applications';
 import { deliverApplicationDecision, renderApplicationDecisionEmail } from '../../lib/recruitment-mailer';
 
@@ -10,6 +11,36 @@ export const prerender = false;
 const me = currentUser(Astro.cookies);
 if (!me) return Astro.redirect('/login', 302);
 if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+// An approved applicant becomes a real mentee in the pipeline's people
+// table - bridge a session the same way admin/ideas.astro does.
+let session = await getPipelineSession(Astro.request, Astro.cookies);
+session = session ?? (await bridgeAdminSession(Astro.request, Astro.cookies));
+const supabase = session?.supabase ?? null;
+
+// Fixed tag set admin assigns at approval time, not free text - keeps the
+// Mentees list filterable/scannable. Pre-checked by a crude keyword match
+// against what the applicant actually wrote, but admin can change it.
+const EXPERTISE_TAGS = [
+  'Data extraction',
+  'Data streaming',
+  'Manuscript writing',
+  'Statistical analysis',
+  'Literature review',
+  'Conference presentation',
+] as const;
+
+function guessExpertiseTags(freeText: string): string[] {
+  const t = freeText.toLowerCase();
+  const hits: string[] = [];
+  if (/extract|screen/.test(t)) hits.push('Data extraction');
+  if (/stream/.test(t)) hits.push('Data streaming');
+  if (/manuscript|writ/.test(t)) hits.push('Manuscript writing');
+  if (/stat|analys/.test(t)) hits.push('Statistical analysis');
+  if (/literature|review/.test(t)) hits.push('Literature review');
+  if (/present|conference|poster|abstract/.test(t)) hits.push('Conference presentation');
+  return hits;
+}
 
 type Flash = { tone: 'ok' | 'error'; text: string };
 type Decision = 'approved' | 'withheld' | 'declined';
@@ -20,6 +51,7 @@ type Preview = {
   to: string;
   subject: string;
   html: string;
+  expertiseTags: string[];
 };
 let flash: Flash | null = null;
 let preview: Preview | null = null;
@@ -37,7 +69,7 @@ if (Astro.request.method === 'POST') {
     decisionFromAction(action);
 
   if (action === 'preview-approve' || action === 'preview-withhold' || action === 'preview-decline') {
-    const app = getApplication(appId);
+    const app = await getApplication(appId);
     if (!app) flash = { tone: 'error', text: 'Application not found.' };
     else if (app.status !== 'pending') flash = { tone: 'error', text: `That application was already ${app.status}.` };
     else {
@@ -47,12 +79,14 @@ if (Astro.request.method === 'POST') {
         decision,
         note: note.trim() || null,
       });
-      preview = { appId, decision, note, to: app.email, subject, html };
+      const submittedTags = form.getAll('expertise').map(String);
+      const expertiseTags = submittedTags.length ? submittedTags : guessExpertiseTags(app.expertise);
+      preview = { appId, decision, note, to: app.email, subject, html, expertiseTags };
     }
   }
 
   if (action === 'confirm') {
-    const result = decideApplication(appId, decision, me.name, note);
+    const result = await decideApplication(appId, decision, me.name, note);
     if (!result.ok || !result.application) {
       flash = { tone: 'error', text: result.error ?? 'Could not record that decision.' };
     } else {
@@ -64,15 +98,37 @@ if (Astro.request.method === 'POST') {
         emailed = false;
         console.error('[applications] decision email failed:', err);
       }
+      let menteeNote = '';
+      if (decision === 'approved') {
+        if (!supabase) {
+          menteeNote = ' Could not reach the pipeline database - add them as a mentee by hand.';
+        } else {
+          const tags = form.getAll('expertise').map(String);
+          const { error: mentErr } = await supabase.rpc('add_mentee', {
+            p_full_name: app.name,
+            p_email: app.email,
+            p_expertise: tags,
+          });
+          if (mentErr) menteeNote = ` Added, but could not add them as a mentee: ${mentErr.message}`;
+        }
+      }
       const verb = decision === 'approved' ? 'Approved' : decision === 'withheld' ? 'Withheld' : 'Declined';
       flash = emailed
-        ? { tone: 'ok', text: `${verb} - email sent to ${app.email}.` }
-        : { tone: 'error', text: `${verb} and recorded, but the email to ${app.email} could not be sent.` };
+        ? { tone: 'ok', text: `${verb} - email sent to ${app.email}.${menteeNote}` }
+        : { tone: 'error', text: `${verb} and recorded, but the email to ${app.email} could not be sent.${menteeNote}` };
     }
   }
 }
 
-const apps = listApplications();
+let apps: Awaited<ReturnType<typeof listApplications>> = [];
+let dbReady = false;
+let dbError = '';
+try {
+  apps = await listApplications();
+  dbReady = true;
+} catch (err) {
+  dbError = err instanceof Error ? err.message : 'Could not load applications.';
+}
 const pending = apps.filter((a) => a.status === 'pending').length;
 
 const fmtDate = (t: number | null) =>
@@ -107,7 +163,17 @@ const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
       </div>
     )}
 
-    {preview ? (
+    {!dbReady && (
+      <div class="adm-flash adm-flash--error">
+        <p>
+          Applications storage isn't set up yet. Run <code>mca-pipeline/add-forms-storage.sql</code> in the
+          Supabase SQL editor, then reload this page.
+          {dbError && <><br /><span class="adm-hint">({dbError})</span></>}
+        </p>
+      </div>
+    )}
+
+    {dbReady && (preview ? (
       <div class="mailprev">
         <h2 class="mailprev__title">
           Preview - {preview.decision === 'approved' ? 'approval' : preview.decision === 'withheld' ? 'hold' : 'decline'} email
@@ -125,6 +191,21 @@ const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
           <label class="idea__notelabel" for="prev-note">Comments to the applicant</label>
           <textarea class="idea__note" id="prev-note" name="note" rows="3"
             placeholder="Add or edit comments, then refresh the preview.">{preview.note}</textarea>
+
+          {preview.decision === 'approved' && (
+            <fieldset class="mentee-tags">
+              <legend class="idea__notelabel">Mentee expertise (for the Mentees list)</legend>
+              <div class="mentee-tags__grid">
+                {EXPERTISE_TAGS.map((tag) => (
+                  <label class="mentee-tags__item">
+                    <input type="checkbox" name="expertise" value={tag} checked={preview.expertiseTags.includes(tag)} />
+                    {tag}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
           <div class="mailprev__actions">
             <button class="adm-btn" type="submit"
               name="action" value={`preview-${preview.decision === 'approved' ? 'approve' : preview.decision === 'withheld' ? 'withhold' : 'decline'}`}>
@@ -197,7 +278,7 @@ const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
       ))}
     </div>
       </>
-    )}
+    ))}
   </div>
 </AppLayout>
 
@@ -265,4 +346,8 @@ const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
   .idea__decision--withheld { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn); }
   .idea__decision--declined { background: var(--red-wash); border: 1px solid var(--red-border); color: var(--red); }
   .idea__decision-note { margin-top: 0.3rem; font-style: italic; color: var(--text); }
+
+  .mentee-tags { border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 0.7rem 0.9rem; margin: 0; }
+  .mentee-tags__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
+  .mentee-tags__item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text); }
 </style>

@@ -1,14 +1,17 @@
 /**
- * DEMO store for research-idea submissions - in-memory only, no database.
- * Same pattern as auth.ts / submissions.ts.
+ * Store for research-idea submissions - Supabase-backed (service role,
+ * mca-pipeline/add-forms-storage.sql), so submissions survive a server
+ * restart. Previously an in-memory Map; the public shape (IdeaRecord) is
+ * unchanged so admin/ideas.astro and pipeline/ideas.astro didn't need to
+ * change at all.
  *
  * The public /submit-idea form writes here; /admin/ideas reads, and an admin
  * approves (→ creates a pipeline submission), withholds (held for later, not
  * a final answer), or declines. All three decisions email the submitter.
  */
-import { randomBytes } from 'node:crypto';
+import { supabaseAdmin } from './supabase';
 import { audit } from './auth';
-import type { IdeaPayload, Database } from './idea-schema';
+import type { IdeaPayload } from './idea-schema';
 
 export type IdeaStatus = 'pending' | 'approved' | 'withheld' | 'declined';
 
@@ -22,115 +25,54 @@ export interface IdeaRecord extends IdeaPayload {
   decisionNote: string | null;
 }
 
-const ideas = new Map<string, IdeaRecord>();
-const DAY = 86_400_000;
-
-function seed() {
-  if (ideas.size) return;
-  const now = Date.now();
-  const base = (): Omit<IdeaRecord, keyof IdeaPayload | 'id' | 'submittedAt'> => ({
-    status: 'pending',
-    attachmentName: null,
-    reviewedAt: null,
-    reviewedBy: null,
-    decisionNote: null,
-  });
-
-  const blank = {
-    databases: [] as Database[],
-    studyDesign: '',
-    priorStudies: '',
-    latestStudy: '',
-    previousMetaDate: '',
-    newStudies: '',
-    sampleSizeIncrease: '',
-    company: undefined as string | undefined,
+function fromRow(row: any): IdeaRecord {
+  return {
+    ...(row.payload as IdeaPayload),
+    id: row.id,
+    submittedAt: new Date(row.submitted_at).getTime(),
+    status: row.status,
+    attachmentName: row.attachment_filename,
+    reviewedAt: row.reviewed_at ? new Date(row.reviewed_at).getTime() : null,
+    reviewedBy: row.reviewed_by,
+    decisionNote: row.decision_note,
   };
-
-  ideas.set('i_01', {
-    id: 'i_01',
-    submittedAt: now - 3 * DAY,
-    leadName: 'Priya Nair',
-    leadEmail: 'priya.nair@example.com',
-    contactNumber: '+1 216 555 0142',
-    title: 'Sex differences in outcomes after Impella-supported high-risk PCI',
-    researchType: 'Database',
-    population: 'Adults undergoing high-risk PCI with Impella support, 2016–2021, stratified by sex.',
-    intervention: 'Impella-supported high-risk PCI',
-    comparison: 'Male vs female recipients',
-    outcomes: 'In-hospital mortality, vascular complications, acute kidney injury, length of stay.',
-    rationale: 'Women are under-represented in MCS trials; a real-world disparities signal would inform enrolment and device selection.',
-    conference: 'SCAI',
-    commitment: 'agree',
-    ...blank,
-    databases: ['National Inpatient Sample (NIS)'],
-    studyDesign: 'Retrospective cohort with propensity matching',
-    priorStudies: 'Prior NIS work on MCS trends exists but none focused on sex-based disparities in the Impella HR-PCI cohort.',
-    latestStudy: 'Patel N et al., 2024, JACC Cardiovasc Interv, doi:10.1016/j.jcin.2024.03.010',
-    ...base(),
-  });
-
-  ideas.set('i_02', {
-    id: 'i_02',
-    submittedAt: now - 26 * 60 * 60 * 1000,
-    leadName: 'Daniel Okafor',
-    leadEmail: 'daniel.okafor@example.com',
-    contactNumber: '+1 313 555 0188',
-    title: 'DOAC vs warfarin after bioprosthetic mitral valve replacement',
-    researchType: 'Meta-analysis',
-    population: 'Adults within 3 months of bioprosthetic mitral valve replacement.',
-    intervention: 'Direct oral anticoagulant',
-    comparison: 'Warfarin',
-    outcomes: 'Thromboembolism, major bleeding, valve thrombosis at 90 days and 1 year.',
-    rationale: 'Guidelines are cautious about DOACs in the mitral position; a focused pooled estimate would help.',
-    conference: 'flexible',
-    commitment: 'agree',
-    ...blank,
-    previousMetaDate: '2021',
-    newStudies: '3 new cohort studies: doi:10.1002/ehf2.14210, doi:10.1016/j.ijcard.2023.09.021, doi:10.1093/ehjcvp/pvad044',
-    sampleSizeIncrease: '≈ 55%',
-    ...base(),
-  });
-
-  audit('system', 'seeded demo ideas', undefined, '2 pending');
 }
-seed();
+
+const LIST_COLUMNS = 'id,payload,status,submitted_at,reviewed_at,reviewed_by,decision_note,attachment_filename';
 
 /* -------------------------------------------------------------------------- */
 
-export function addIdea(data: IdeaPayload, attachmentName: string | null): IdeaRecord {
-  const id = `i_${randomBytes(5).toString('hex')}`;
-  const rec: IdeaRecord = {
-    ...data,
-    id,
-    submittedAt: Date.now(),
-    status: 'pending',
-    attachmentName,
-    reviewedAt: null,
-    reviewedBy: null,
-    decisionNote: null,
-  };
-  ideas.set(id, rec);
+export async function addIdea(data: IdeaPayload, attachmentName: string | null): Promise<IdeaRecord> {
+  const { data: row, error } = await supabaseAdmin()
+    .from('ideas')
+    .insert({ payload: data, status: 'pending', attachment_filename: attachmentName })
+    .select(LIST_COLUMNS)
+    .single();
+  if (error) throw new Error(`Could not save idea: ${error.message}`);
   audit(data.leadEmail, 'submitted research idea', data.title);
-  return rec;
+  return fromRow(row);
 }
 
-export function listIdeas(): IdeaRecord[] {
-  return [...ideas.values()].sort((a, b) => {
-    // pending first, then newest
-    if ((a.status === 'pending') !== (b.status === 'pending')) return a.status === 'pending' ? -1 : 1;
-    return b.submittedAt - a.submittedAt;
-  });
+export async function listIdeas(): Promise<IdeaRecord[]> {
+  const { data, error } = await supabaseAdmin().from('ideas').select(LIST_COLUMNS);
+  if (error) throw new Error(`Could not load ideas: ${error.message}`);
+  return (data ?? [])
+    .map(fromRow)
+    .sort((a, b) => {
+      if ((a.status === 'pending') !== (b.status === 'pending')) return a.status === 'pending' ? -1 : 1;
+      return b.submittedAt - a.submittedAt;
+    });
 }
 
-export function getIdea(id: string): IdeaRecord | undefined {
-  return ideas.get(id);
+export async function getIdea(id: string): Promise<IdeaRecord | undefined> {
+  const { data, error } = await supabaseAdmin().from('ideas').select(LIST_COLUMNS).eq('id', id).maybeSingle();
+  if (error || !data) return undefined;
+  return fromRow(data);
 }
 
-export function pendingIdeaCount(): number {
-  let n = 0;
-  for (const i of ideas.values()) if (i.status === 'pending') n++;
-  return n;
+export async function pendingIdeaCount(): Promise<number> {
+  const { count } = await supabaseAdmin().from('ideas').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+  return count ?? 0;
 }
 
 export interface DecisionResult {
@@ -141,19 +83,25 @@ export interface DecisionResult {
 
 /** Record an approve/withhold/decline. Does NOT send email or create a
  *  submission - the page orchestrates those so failures surface cleanly. */
-export function decideIdea(
+export async function decideIdea(
   id: string,
   decision: 'approved' | 'withheld' | 'declined',
   reviewer: string,
   note: string,
-): DecisionResult {
-  const idea = ideas.get(id);
-  if (!idea) return { ok: false, error: 'Idea not found.' };
-  if (idea.status !== 'pending') return { ok: false, error: `That idea was already ${idea.status}.` };
-  idea.status = decision;
-  idea.reviewedAt = Date.now();
-  idea.reviewedBy = reviewer;
-  idea.decisionNote = note.trim() || null;
+): Promise<DecisionResult> {
+  const { data: existing } = await supabaseAdmin().from('ideas').select('status').eq('id', id).maybeSingle();
+  if (!existing) return { ok: false, error: 'Idea not found.' };
+  if (existing.status !== 'pending') return { ok: false, error: `That idea was already ${existing.status}.` };
+
+  const { data: row, error } = await supabaseAdmin()
+    .from('ideas')
+    .update({ status: decision, reviewed_at: new Date().toISOString(), reviewed_by: reviewer, decision_note: note.trim() || null })
+    .eq('id', id)
+    .select(LIST_COLUMNS)
+    .single();
+  if (error || !row) return { ok: false, error: error?.message ?? 'Could not record that decision.' };
+
+  const idea = fromRow(row);
   audit(reviewer, `${decision} idea`, idea.title, note.trim() || undefined);
   return { ok: true, idea };
 }

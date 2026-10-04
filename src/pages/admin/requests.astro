@@ -16,12 +16,19 @@ const active: Intent | null = (INTENTS as readonly string[]).includes(activePara
   ? (activeParam as Intent)
   : null;
 
-const all = listRequests();
+let all: Awaited<ReturnType<typeof listRequests>> = [];
+let dbReady = false;
+let dbError = '';
+try {
+  all = await listRequests();
+  dbReady = true;
+  // Opening this page is how the admin "reads" new requests - the nav badge
+  // clears once they've actually looked at the list.
+  await markAllRequestsRead();
+} catch (err) {
+  dbError = err instanceof Error ? err.message : 'Could not load requests.';
+}
 const requests = active ? all.filter((r) => r.intent === active) : all;
-
-// Opening this page is how the admin "reads" new requests - the nav badge
-// clears once they've actually looked at the list.
-markAllRequestsRead();
 
 const fmtDate = (t: number) => new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
 const ago = (t: number) => {
@@ -50,6 +57,17 @@ function detailRows(r: RequestRecord): Array<[string, string]> {
 
 <AppLayout title="Requests" heading="Contact requests" user={me} active="requests">
   <div class="adm">
+    {!dbReady && (
+      <div class="adm-flash adm-flash--error">
+        <p>
+          Requests storage isn't set up yet. Run <code>mca-pipeline/add-forms-storage.sql</code> in the
+          Supabase SQL editor, then reload this page.
+          {dbError && <><br /><span class="adm-hint">({dbError})</span></>}
+        </p>
+      </div>
+    )}
+
+    {dbReady && (<>
     <div class="reqs__filter">
       <a class:list={['reqs__chip', !active && 'is-active']} href="/admin/requests">
         All <span>{all.length}</span>
@@ -98,6 +116,7 @@ function detailRows(r: RequestRecord): Array<[string, string]> {
         </details>
       ))}
     </div>
+    </>)}
   </div>
 </AppLayout>
 

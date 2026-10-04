@@ -101,8 +101,13 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ ok: false, error: 'Please check the highlighted fields.', fieldErrors }, 422);
   }
 
-  // --- Save (files held in memory) ---------------------------------------
-  addApplication(parsed.data, { cv: cvRes.file, headshot: hsRes.file });
+  // --- Save ----------------------------------------------------------------
+  try {
+    await addApplication(parsed.data, { cv: cvRes.file, headshot: hsRes.file });
+  } catch (err) {
+    console.error('[recruitment] could not save application:', err);
+    return json({ ok: false, error: 'Something went wrong on our end. Please try again shortly.' }, 500);
+  }
 
   // --- Notify ----------------------------------------------------------
   const attachments: Attachment[] = [];

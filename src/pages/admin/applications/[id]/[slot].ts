@@ -5,11 +5,11 @@ import { getApplication } from '../../../../lib/applications';
 export const prerender = false;
 
 /** Streams a stored CV / headshot to an authenticated admin. */
-export const GET: APIRoute = ({ params, cookies }) => {
+export const GET: APIRoute = async ({ params, cookies }) => {
   const me = currentUser(cookies);
   if (!me || me.role !== 'admin') return new Response('Forbidden', { status: 403 });
 
-  const app = getApplication(params.id ?? '');
+  const app = await getApplication(params.id ?? '');
   if (!app) return new Response('Not found', { status: 404 });
 
   const file = params.slot === 'cv' ? app.cv : params.slot === 'headshot' ? app.headshot : null;

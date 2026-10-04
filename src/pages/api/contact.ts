@@ -99,8 +99,13 @@ export const POST: APIRoute = async ({ request }) => {
     }
   }
 
-  // --- 5. Save (kept in memory - shows up under Admin → Requests) --------
-  addRequest(parsed.data, cv);
+  // --- 5. Save (shows up under Admin → Requests) --------------------------
+  try {
+    await addRequest(parsed.data, cv);
+  } catch (err) {
+    console.error('[contact] could not save request:', err);
+    return json({ ok: false, error: 'Something went wrong on our end. Please try again shortly.' }, 500);
+  }
 
   // --- 6. Deliver ----------------------------------------------------------
   const attachments: Attachment[] | undefined = cv

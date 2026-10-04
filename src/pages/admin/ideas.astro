@@ -82,7 +82,7 @@ if (Astro.request.method === 'POST') {
 
   // --- Phase 1: build the preview -------------------------------------------
   if (action === 'preview-approve' || action === 'preview-withhold' || action === 'preview-decline') {
-    const idea = getIdea(ideaId);
+    const idea = await getIdea(ideaId);
     if (!idea) flash = { tone: 'error', text: 'Idea not found.' };
     else if (idea.status !== 'pending') flash = { tone: 'error', text: `That idea was already ${idea.status}.` };
     else if (decision === 'approved' && !conference) {
@@ -104,7 +104,7 @@ if (Astro.request.method === 'POST') {
     if (decision === 'approved' && !conference) {
       flash = { tone: 'error', text: 'Choose which conference to send this to before approving.' };
     } else {
-    const result = decideIdea(ideaId, decision, me.name, note);
+    const result = await decideIdea(ideaId, decision, me.name, note);
     if (!result.ok || !result.idea) {
       flash = { tone: 'error', text: result.error ?? 'Could not record that decision.' };
     } else {
@@ -197,7 +197,15 @@ if (Astro.request.method === 'POST') {
   }
 }
 
-const ideas = listIdeas();
+let ideas: Awaited<ReturnType<typeof listIdeas>> = [];
+let dbReady = false;
+let dbError = '';
+try {
+  ideas = await listIdeas();
+  dbReady = true;
+} catch (err) {
+  dbError = err instanceof Error ? err.message : 'Could not load ideas.';
+}
 const pending = ideas.filter((i) => i.status === 'pending').length;
 
 const fmtDate = (t: number | null) =>
@@ -248,7 +256,17 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
       </div>
     )}
 
-    {preview ? (
+    {!dbReady && (
+      <div class="adm-flash adm-flash--error">
+        <p>
+          Ideas storage isn't set up yet. Run <code>mca-pipeline/add-forms-storage.sql</code> in the
+          Supabase SQL editor, then reload this page.
+          {dbError && <><br /><span class="adm-hint">({dbError})</span></>}
+        </p>
+      </div>
+    )}
+
+    {dbReady && (preview ? (
       <div class="mailprev">
         <h2 class="mailprev__title">
           Preview - {preview.decision === 'approved' ? 'approval' : preview.decision === 'withheld' ? 'hold' : 'decline'} email
@@ -343,7 +361,7 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
       ))}
     </div>
       </>
-    )}
+    ))}
   </div>
 </AppLayout>
 

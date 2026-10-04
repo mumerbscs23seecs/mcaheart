@@ -68,29 +68,40 @@ async function adminTasks(supabase: SupabaseClient): Promise<Task[]> {
   }
 
   // 2. new research ideas awaiting review
-  for (const i of listIdeas().filter((x) => x.status === 'pending')) {
-    tasks.push({
-      id: 'idea-' + i.id,
-      kind: 'idea',
-      title: `New idea to review - ${i.title}`,
-      detail: `Submitted by ${i.leadName}`,
-      href: '/admin/ideas',
-      cta: 'Open ideas',
-      when: new Date(i.submittedAt).toISOString(),
-    });
+  // This runs on every /pipeline/* page load (PipelineLayout's Tasks badge),
+  // not just /admin - a thrown error here (e.g. the forms-storage migration
+  // not run yet) must not take down the whole pipeline area over one badge.
+  try {
+    for (const i of (await listIdeas()).filter((x) => x.status === 'pending')) {
+      tasks.push({
+        id: 'idea-' + i.id,
+        kind: 'idea',
+        title: `New idea to review - ${i.title}`,
+        detail: `Submitted by ${i.leadName}`,
+        href: '/admin/ideas',
+        cta: 'Open ideas',
+        when: new Date(i.submittedAt).toISOString(),
+      });
+    }
+  } catch (err) {
+    console.warn('[tasks] ideas unavailable - run add-forms-storage.sql:', err instanceof Error ? err.message : err);
   }
 
   // 3. new lab recruitment applications awaiting review
-  for (const a of listApplications().filter((x) => x.status === 'pending')) {
-    tasks.push({
-      id: 'app-' + a.id,
-      kind: 'application',
-      title: `New lab application - ${a.name}`,
-      detail: [a.jobStatus, a.expertise].filter(Boolean).join(' · '),
-      href: '/admin/applications',
-      cta: 'Open applications',
-      when: new Date(a.submittedAt).toISOString(),
-    });
+  try {
+    for (const a of (await listApplications()).filter((x) => x.status === 'pending')) {
+      tasks.push({
+        id: 'app-' + a.id,
+        kind: 'application',
+        title: `New lab application - ${a.name}`,
+        detail: [a.jobStatus, a.expertise].filter(Boolean).join(' · '),
+        href: '/admin/applications',
+        cta: 'Open applications',
+        when: new Date(a.submittedAt).toISOString(),
+      });
+    }
+  } catch (err) {
+    console.warn('[tasks] applications unavailable - run add-forms-storage.sql:', err instanceof Error ? err.message : err);
   }
 
   return sortTasks(tasks);

@@ -1,14 +1,10 @@
 /**
- * DEMO store for lab recruitment applications - in-memory only, no database.
- *
- * FILE STORAGE (answer to "where are uploads stored"):
- *   The CV and headshot bytes are held IN MEMORY on the record below, so the
- *   admin can download them from the review panel during the session. They are
- *   wiped when the Node process restarts - nothing touches disk or a bucket.
- *   Production must stream uploads to object storage (S3 / R2 / Supabase) and
- *   keep only a key here.
+ * Store for lab recruitment applications - Supabase-backed (service role,
+ * mca-pipeline/add-forms-storage.sql), so submissions survive a server
+ * restart. Previously an in-memory Map; the public shape (ApplicationRecord)
+ * is unchanged so admin/applications.astro didn't need to change at all.
  */
-import { randomBytes } from 'node:crypto';
+import { supabaseAdmin } from './supabase';
 import { audit } from './auth';
 import type { RecruitmentPayload } from './recruitment-schema';
 
@@ -32,81 +28,81 @@ export interface ApplicationRecord extends RecruitmentPayload {
   decisionNote: string | null;
 }
 
-const applications = new Map<string, ApplicationRecord>();
-const DAY = 86_400_000;
+const hexToBuffer = (hex: string) => Buffer.from(hex.slice(2), 'hex');
+const toHexLiteral = (b: Buffer) => '\\x' + b.toString('hex');
 
-function seed() {
-  if (applications.size) return;
-  const now = Date.now();
-  applications.set('a_01', {
-    id: 'a_01',
-    submittedAt: now - 2 * DAY,
-    name: 'Sara Malik',
-    email: 'sara.malik@example.com',
-    gradYear: '2023',
-    jobStatus: 'PGY-2 IM',
-    fellowshipPlan: 'ERAS 2027 cycle',
-    researchExperience:
-      '4 first-author case reports, 2 co-authored meta-analyses (screening + extraction). Research elective at a tertiary cardiology centre.',
-    letterOfInterest:
-      'I want structured mentorship in database and meta-analytic methods before applying to cardiology fellowship, and MCA’s output and collaborative model are exactly the environment I’m looking for.',
-    expertise: 'Data screening / extraction for meta-analysis',
-    profileLink: 'https://scholar.google.com/citations?user=example',
-    currentStatus: 'IM resident at a community program; contract runs to June 2027.',
-    professionalGoals: 'Interventional cardiology fellowship.',
-    internalRef: 'Worked with Varun Victor on a prior abstract.',
-    referralSource: 'Recommended by a co-resident who is already in the group.',
-    whatsapp: '+1 216 555 0199',
-    company: undefined,
-    status: 'pending',
-    cv: null,
-    headshot: null,
-    reviewedAt: null,
-    reviewedBy: null,
-    decisionNote: null,
-  });
-  audit('system', 'seeded demo application', undefined, '1 pending');
+/** `withBytes` false omits the (large) file bytes - used for the list view, which only ever shows filename/size. */
+function fromRow(row: any, withBytes: boolean): ApplicationRecord {
+  return {
+    ...(row.payload as RecruitmentPayload),
+    id: row.id,
+    submittedAt: new Date(row.submitted_at).getTime(),
+    status: row.status,
+    cv: row.cv_filename
+      ? { filename: row.cv_filename, mime: row.cv_mime, size: row.cv_size, bytes: withBytes ? hexToBuffer(row.cv_bytes) : Buffer.alloc(0) }
+      : null,
+    headshot: row.headshot_filename
+      ? { filename: row.headshot_filename, mime: row.headshot_mime, size: row.headshot_size, bytes: withBytes ? hexToBuffer(row.headshot_bytes) : Buffer.alloc(0) }
+      : null,
+    reviewedAt: row.reviewed_at ? new Date(row.reviewed_at).getTime() : null,
+    reviewedBy: row.reviewed_by,
+    decisionNote: row.decision_note,
+  };
 }
-seed();
+
+const LIST_COLUMNS =
+  'id,payload,status,submitted_at,reviewed_at,reviewed_by,decision_note,cv_filename,cv_mime,cv_size,headshot_filename,headshot_mime,headshot_size';
 
 /* -------------------------------------------------------------------------- */
 
-export function addApplication(
+export async function addApplication(
   data: RecruitmentPayload,
   files: { cv: StoredFile | null; headshot: StoredFile | null },
-): ApplicationRecord {
-  const id = `a_${randomBytes(5).toString('hex')}`;
-  const rec: ApplicationRecord = {
-    ...data,
-    id,
-    submittedAt: Date.now(),
-    status: 'pending',
-    cv: files.cv,
-    headshot: files.headshot,
-    reviewedAt: null,
-    reviewedBy: null,
-    decisionNote: null,
-  };
-  applications.set(id, rec);
+): Promise<ApplicationRecord> {
+  const { data: row, error } = await supabaseAdmin()
+    .from('applications')
+    .insert({
+      payload: data,
+      status: 'pending',
+      cv_bytes: files.cv ? toHexLiteral(files.cv.bytes) : null,
+      cv_mime: files.cv?.mime ?? null,
+      cv_filename: files.cv?.filename ?? null,
+      cv_size: files.cv?.size ?? null,
+      headshot_bytes: files.headshot ? toHexLiteral(files.headshot.bytes) : null,
+      headshot_mime: files.headshot?.mime ?? null,
+      headshot_filename: files.headshot?.filename ?? null,
+      headshot_size: files.headshot?.size ?? null,
+    })
+    .select(LIST_COLUMNS)
+    .single();
+  if (error) throw new Error(`Could not save application: ${error.message}`);
   audit(data.email, 'submitted lab application', data.name);
-  return rec;
+  return fromRow(row, false);
 }
 
-export function listApplications(): ApplicationRecord[] {
-  return [...applications.values()].sort((a, b) => {
-    if ((a.status === 'pending') !== (b.status === 'pending')) return a.status === 'pending' ? -1 : 1;
-    return b.submittedAt - a.submittedAt;
-  });
+export async function listApplications(): Promise<ApplicationRecord[]> {
+  const { data, error } = await supabaseAdmin().from('applications').select(LIST_COLUMNS);
+  if (error) throw new Error(`Could not load applications: ${error.message}`);
+  return (data ?? [])
+    .map((r) => fromRow(r, false))
+    .sort((a, b) => {
+      if ((a.status === 'pending') !== (b.status === 'pending')) return a.status === 'pending' ? -1 : 1;
+      return b.submittedAt - a.submittedAt;
+    });
 }
 
-export function getApplication(id: string): ApplicationRecord | undefined {
-  return applications.get(id);
+export async function getApplication(id: string): Promise<ApplicationRecord | undefined> {
+  const { data, error } = await supabaseAdmin().from('applications').select('*').eq('id', id).maybeSingle();
+  if (error || !data) return undefined;
+  return fromRow(data, true);
 }
 
-export function pendingApplicationCount(): number {
-  let n = 0;
-  for (const a of applications.values()) if (a.status === 'pending') n++;
-  return n;
+export async function pendingApplicationCount(): Promise<number> {
+  const { count } = await supabaseAdmin()
+    .from('applications')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'pending');
+  return count ?? 0;
 }
 
 export interface DecisionResult {
@@ -115,19 +111,25 @@ export interface DecisionResult {
   application?: ApplicationRecord;
 }
 
-export function decideApplication(
+export async function decideApplication(
   id: string,
   decision: 'approved' | 'withheld' | 'declined',
   reviewer: string,
   note: string,
-): DecisionResult {
-  const app = applications.get(id);
-  if (!app) return { ok: false, error: 'Application not found.' };
-  if (app.status !== 'pending') return { ok: false, error: `That application was already ${app.status}.` };
-  app.status = decision;
-  app.reviewedAt = Date.now();
-  app.reviewedBy = reviewer;
-  app.decisionNote = note.trim() || null;
+): Promise<DecisionResult> {
+  const { data: existing } = await supabaseAdmin().from('applications').select('status').eq('id', id).maybeSingle();
+  if (!existing) return { ok: false, error: 'Application not found.' };
+  if (existing.status !== 'pending') return { ok: false, error: `That application was already ${existing.status}.` };
+
+  const { data: row, error } = await supabaseAdmin()
+    .from('applications')
+    .update({ status: decision, reviewed_at: new Date().toISOString(), reviewed_by: reviewer, decision_note: note.trim() || null })
+    .eq('id', id)
+    .select(LIST_COLUMNS)
+    .single();
+  if (error || !row) return { ok: false, error: error?.message ?? 'Could not record that decision.' };
+
+  const app = fromRow(row, false);
   audit(reviewer, `${decision} application`, app.name, note.trim() || undefined);
   return { ok: true, application: app };
 }

@@ -5,11 +5,11 @@ import { getRequest } from '../../../../lib/requests';
 export const prerender = false;
 
 /** Streams a stored observership CV to an authenticated admin. */
-export const GET: APIRoute = ({ params, cookies }) => {
+export const GET: APIRoute = async ({ params, cookies }) => {
   const me = currentUser(cookies);
   if (!me || me.role !== 'admin') return new Response('Forbidden', { status: 403 });
 
-  const req = getRequest(params.id ?? '');
+  const req = await getRequest(params.id ?? '');
   if (!req) return new Response('Not found', { status: 404 });
 
   const file = req.cv;
