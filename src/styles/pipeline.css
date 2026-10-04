@@ -117,6 +117,14 @@
 .pl-main { max-width: 1320px; margin: 0 auto; padding: 40px 32px 80px; }
 @media (max-width: 640px) { .pl-main, .pl-tabs__row { padding-left: 20px; padding-right: 20px; } }
 
+/* Below 720px the shared AppBar (src/components/AppBar.astro) wraps into
+   three stacked rows and grows well past the 60px this sticky offset
+   assumes - stop sticking here too, or this bar overlaps the now-taller
+   AppBar instead of sitting under it. Same breakpoint AppBar itself uses. */
+@media (max-width: 720px) {
+  .pl-tabs { position: static; top: auto; }
+}
+
 .pl-h1 {
   font-family: var(--font-display, sans-serif);
   font-weight: 700;
