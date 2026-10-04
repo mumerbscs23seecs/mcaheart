@@ -22,9 +22,17 @@ const { edge = 'block' } = Astro.props;
               tabindex={copy === 1 ? -1 : undefined}
               aria-label={`${s.name} - view M Chadi Alraies' work indexed here`}
             >
-              <img class="societies__logo--light" src={s.logo} alt={s.name} loading="lazy" decoding="async" height="60" />
-              {s.logoDark && (
-                <img class="societies__logo--dark" src={s.logoDark} alt={s.name} loading="lazy" decoding="async" height="60" />
+              {s.logo ? (
+                <>
+                  <img class="societies__logo--light" src={s.logo} alt={s.name} loading="lazy" decoding="async" height="60" />
+                  {s.logoDark && (
+                    <img class="societies__logo--dark" src={s.logoDark} alt={s.name} loading="lazy" decoding="async" height="60" />
+                  )}
+                </>
+              ) : (
+                /* No logo file supplied yet - the abbreviation stands in at
+                   the same height and weight as the marks beside it. */
+                <span class="societies__word">{s.abbr}</span>
               )}
             </a>
           </li>
@@ -56,6 +64,22 @@ const { edge = 'block' } = Astro.props;
     margin-top: var(--space-m);
   }
   .societies__item a { display: block; line-height: 0; }
+  .societies__word {
+    display: grid;
+    place-items: center;
+    height: clamp(52px, 40px + 2vw, 76px);
+    padding-inline: 0.2em;
+    font-family: var(--font-display);
+    font-size: clamp(1.5rem, 1.1rem + 1.2vw, 2.1rem);
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    color: var(--text-strong);
+    opacity: 0.55;
+    transition: opacity 0.4s var(--ease);
+  }
+  .societies__item a:hover .societies__word,
+  .societies__item a:focus-visible .societies__word { opacity: 1; }
   .societies__item--dup { display: none; }
 
   /* Phone: one endless strip instead of a wrapped block of logos. Spacing is

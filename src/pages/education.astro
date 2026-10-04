@@ -1,12 +1,25 @@
 ---
+/**
+ * Education - both series on one page.
+ *
+ * Opens on a short chooser explaining that MCA Heart runs two of them, then
+ * plays each series' own scroll hero in full: Heart Trending (interviews
+ * between cardiologists) first, then Heart of the Matter (residents and
+ * students working through the research). The chooser links jump straight
+ * to a hero's anchor, so the scroll sequence starts from its beginning.
+ *
+ * /heart-trending used to be its own page and now redirects here to
+ * #heart-trending - see src/pages/heart-trending.astro.
+ */
 export const prerender = false;
 
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ParallaxVideoHero from '../components/ParallaxVideoHero.astro';
 import VideoCard from '../components/VideoCard.astro';
+import PlaylistCard from '../components/PlaylistCard.astro';
 import VideoLightbox from '../components/VideoLightbox.astro';
 import CTABanner from '../components/CTABanner.astro';
-import { education, videos, heartOfTheMatterEpisodes } from '../data/site';
+import { site, education, videos, playlists, heartOfTheMatterEpisodes } from '../data/site';
 import { fetchPlaylistVideos } from '../lib/youtube-feed';
 
 const { series, webinar } = education;
@@ -16,23 +29,123 @@ const { series, webinar } = education;
 // long as one has posted recently enough to be in that list.
 const webinarVideo = videos.find((v) => v.title.startsWith('FACET Webinar')) ?? videos[0];
 
-// Pulled live from the Education playlist's public RSS feed - no API key,
-// cached for 20 minutes server-side so it stays fresh without hammering
-// YouTube. Fall back to a static seed of real Heart of the Matter episodes
-// only if the feed has never once answered successfully (same rule as
-// research-group.astro's PubMed fetch and heart-trending.astro's channel
-// fetch) - a feed hiccup should never blank the whole section.
+// Heart of the Matter's episode list is pulled live from its playlist RSS -
+// no API key, cached for 20 minutes server-side - and falls back to a static
+// seed of real episodes only if the feed has never once answered (same rule
+// as research-group.astro's PubMed fetch), so a hiccup never blanks it.
+// The Trending section lists playlists instead, which have no public feed at
+// all and are maintained by hand in site.ts.
 const educationPlaylistId = 'PLU8rCA-F825UA0ogbRMvq6tbaanN8Mfio';
 const liveEducationVideos = await fetchPlaylistVideos(educationPlaylistId, 12);
 const educationVideos = liveEducationVideos.length > 0 ? liveEducationVideos : heartOfTheMatterEpisodes;
+
+const picks = [
+  {
+    num: '01',
+    href: '#heart-trending',
+    name: 'Heart Trending',
+    text: 'Interviews between cardiologists - congress coverage, expert conversations and the evidence behind evolving practice.',
+    cta: 'Watch the interviews',
+    image: '/assets/trending/video-1.jpg',
+  },
+  {
+    num: '02',
+    href: '#heart-of-the-matter',
+    name: 'Heart of the Matter',
+    text: 'Residents and medical students taking apart the latest trials - study design, outcomes, limitations and what it means in practice.',
+    cta: 'Watch the reviews',
+    image: '/assets/education/hotm-thumb.jpg',
+  },
+];
 ---
 
 <BaseLayout
   title="Education"
-  description="Learn with MCA Heart - in-depth reviews of cardiology research through Heart of the Matter and the monthly webinar series."
-  transparentHeader
+  description="Two cardiovascular education series from MCA Heart - Heart Trending, interviews between cardiologists, and Heart of the Matter, residents reviewing the latest research."
 >
+  {/* ----------------------------------------------------------- The chooser */}
+  <section class="section eduintro">
+    <div class="shell shell--wide">
+      <header class="eduintro__head" data-reveal>
+        <h1 class="display eduintro__title">Two series,<br />one mission</h1>
+        <p class="lede eduintro__lede" data-scrub>
+          MCA Heart runs two education series - one where cardiologists talk to each
+          other, and one where residents and students take the research apart. Start
+          wherever you like.
+        </p>
+      </header>
+
+      <div class="eduintro__grid">
+        {picks.map((p, i) => (
+          <a class="edupick card" href={p.href} data-reveal style={`--reveal-delay:${i * 110}ms`}>
+            <span class="media edupick__media">
+              <img src={p.image} alt="" loading="lazy" decoding="async" />
+            </span>
+            <span class="edupick__body">
+              <span class="edupick__num">{p.num}</span>
+              <span class="edupick__title">{p.name}</span>
+              <span class="edupick__text">{p.text}</span>
+              <span class="link-underline edupick__link">{p.cta} <span aria-hidden="true">&darr;</span></span>
+            </span>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  {/* ============================================================ 01 Trending */}
   <ParallaxVideoHero
+    id="heart-trending"
+    title="Heart Trending"
+    layout="lockup"
+    bg="/assets/trending/hero-layers/bg.jpg"
+    layer1={{ src: '/assets/trending/hero-layers/logo.webp', alt: 'Heart Trending logo mark' }}
+    layer2={{ src: '/assets/trending/hero-layers/wordmark.webp', alt: 'Heart Trending' }}
+    tagline="Advancing Cardiovascular Education Through Conversation and Evidence"
+    finalTitle="Conversations that move cardiology forward"
+    accent="#e2001f"
+    navy="#0a1d33"
+    navyDeep="#040d1c"
+    ctaPrimary={{ label: 'Watch Episodes', href: '#gallery' }}
+    ctaSecondary={{ label: 'Subscribe on YouTube', href: site.youtube }}
+  />
+
+  <section class="section trending-intro">
+    <div class="shell shell--narrow">
+      <p class="trending-intro__mark" aria-hidden="true">&#10077;</p>
+      <div class="prose trending-intro__body" data-reveal data-scrub>
+        <p class="trending-intro__lede">
+          MCA Heart Trending is a cardiovascular education platform led by Dr. M. Chadi Alraies,
+          featuring conversations with cardiologists, researchers, and other experts on emerging
+          evidence, clinical practice, and important developments in cardiovascular medicine.
+        </p>
+        <p>
+          Through expert interviews, research discussions, and educational webinars, we explore new
+          ideas, examine the evidence behind evolving practices, and share insights that help advance
+          cardiovascular knowledge and patient care.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section justin" id="gallery">
+    <div class="shell shell--wide">
+      <header class="library__head" data-reveal>
+        <h2 class="display library__title">Playlists</h2>
+        <p class="lede library__note">
+          Every conversation, grouped by the congress or series it came from.
+        </p>
+      </header>
+
+      <div class="library__grid" data-rail="playlists">
+        {playlists.map((p, i) => <PlaylistCard playlist={p} index={i} />)}
+      </div>
+    </div>
+  </section>
+
+  {/* ====================================================== 02 Heart of the Matter */}
+  <ParallaxVideoHero
+    id="heart-of-the-matter"
     title="The Heart of the Matter"
     layout="stacked"
     bg="/assets/education/hero-layers/bg.jpg"
@@ -48,7 +161,6 @@ const educationVideos = liveEducationVideos.length > 0 ? liveEducationVideos : h
     ctaSecondary={{ label: 'Get in Touch', href: '/contact' }}
   />
 
-  {/* ------------------------------------------------------ Heart of the Matter */}
   <section class="section series" id="series">
     <div class="shell shell--wide series__grid">
       <div class="series__copy" data-reveal>
@@ -68,7 +180,6 @@ const educationVideos = liveEducationVideos.length > 0 ? liveEducationVideos : h
         <div class="prose series__body">
           {series.body.map((para) => <p>{para}</p>)}
         </div>
-        <p class="series__cadence">{series.cadence}</p>
       </div>
 
       <div class="series__player" data-reveal style="--reveal-delay:120ms">
@@ -93,12 +204,11 @@ const educationVideos = liveEducationVideos.length > 0 ? liveEducationVideos : h
     </div>
   </section>
 
-  {/* ------------------------------------------------------- Education playlist */}
   {educationVideos.length > 0 && (
     <section class="section playlist">
       <div class="shell shell--wide">
         <header class="playlist__head" data-reveal>
-          <h2 class="display playlist__title">Education</h2>
+          <h2 class="display playlist__title">All episodes</h2>
         </header>
 
         <div class="playlist__grid" data-rail="videos">
@@ -108,7 +218,6 @@ const educationVideos = liveEducationVideos.length > 0 ? liveEducationVideos : h
     </section>
   )}
 
-  {/* ---------------------------------------------------------- Monthly webinar */}
   <section class="section--tall webinar dark-ground">
     <div class="shell shell--wide webinar__grid">
       <div class="webinar__media" data-reveal>
@@ -142,7 +251,6 @@ const educationVideos = liveEducationVideos.length > 0 ? liveEducationVideos : h
     </div>
   </section>
 
-  {/* ------------------------------------------------------------ Coming soon */}
   <section class="section soon">
     <div class="shell shell--narrow center" data-reveal>
       <h2 class="display soon__title">Stay connected</h2>
@@ -161,11 +269,61 @@ const educationVideos = liveEducationVideos.length > 0 ? liveEducationVideos : h
     image="/assets/education/wallpaper.webp"
   />
 
+  {/* One player for every [data-video-id] trigger on the page - both series. */}
   <VideoLightbox />
 </BaseLayout>
 
 <style>
   .phero__cta { margin-top: var(--space-l); }
+
+  /* ------------------------------------------------------------- The chooser */
+  .eduintro__title { font-size: var(--step-4); margin-top: var(--space-s); }
+  .eduintro__lede { margin-top: var(--space-m); max-width: 52ch; }
+
+  .eduintro__grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-m);
+    margin-top: var(--space-xl);
+  }
+  .edupick { display: flex; flex-direction: column; overflow: hidden; }
+  .edupick__media { display: block; aspect-ratio: 16 / 9; }
+  .edupick__media img { width: 100%; height: 100%; object-fit: cover; }
+  .edupick__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: var(--space-m) var(--space-s);
+    flex: 1;
+  }
+  .edupick__num {
+    font-size: var(--step--1);
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    color: var(--blue);
+  }
+  .edupick__title {
+    font-family: var(--font-display);
+    font-size: var(--step-2);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    color: var(--text-strong);
+  }
+  .edupick__text { font-size: var(--step--1); line-height: 1.65; color: var(--text-muted); }
+  .edupick__link {
+    margin-top: auto;
+    padding-top: var(--space-s);
+    font-size: var(--step--1);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--blue);
+  }
+
+  @media (max-width: 760px) {
+    .eduintro__grid { grid-template-columns: 1fr; gap: var(--space-s); margin-top: var(--space-l); }
+    .edupick__media { aspect-ratio: 16 / 10; }
+  }
 
   /* ---------------------------------------------------- Shared play thumbnail */
   .thumb { display: block; width: 100%; padding: 0; }
@@ -209,7 +367,41 @@ const educationVideos = liveEducationVideos.length > 0 ? liveEducationVideos : h
     color: var(--blue);
   }
 
-  /* ------------------------------------------------------ Heart of the Matter */
+  /* ============================================================ 01 Trending */
+  .trending-intro__mark {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-size: 5rem;
+    line-height: 1;
+    color: var(--blue);
+    text-align: center;
+  }
+  /* .prose caps width at --measure but doesn't center itself within its
+     container - left the paragraph block sitting off-center relative to
+     the (full-width) quote mark above it. */
+  .trending-intro__body { margin-top: var(--space-s); margin-inline: auto; }
+  .trending-intro__body p {
+    text-align: center;
+    font-weight: 500;
+    line-height: 1.65;
+    color: var(--text-strong);
+  }
+  .trending-intro__lede { font-size: var(--step-1); }
+
+  .library__title { font-size: var(--step-3); margin-top: var(--space-s); }
+  .library__note { margin-top: var(--space-s); }
+  .library__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr));
+    gap: var(--space-m);
+    margin-top: var(--space-l);
+  }
+
+  @media (max-width: 560px) {
+    .trending-intro__mark { font-size: 3.5rem; }
+  }
+
+  /* ====================================================== 02 Heart of the Matter */
   .series__grid {
     display: grid;
     grid-template-columns: 1fr 1.05fr;
@@ -230,28 +422,21 @@ const educationVideos = liveEducationVideos.length > 0 ? liveEducationVideos : h
     height: auto;
   }
   .series__body { margin-top: 0; }
-  .series__cadence {
-    margin-top: var(--space-m);
-    font-size: var(--step--1);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.16em;
-    color: var(--blue);
-  }
 
   @media (max-width: 880px) { .series__grid { grid-template-columns: 1fr; } }
 
-  /* ------------------------------------------------------- Education playlist */
   .playlist__title { font-size: var(--step-3); margin-top: var(--space-s); }
-  .playlist__note { margin-top: var(--space-s); }
   .playlist__grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr));
     gap: var(--space-m);
     margin-top: var(--space-l);
   }
-  /* Phones: a swipe rail (data-rail) instead of twelve cards in a column. */
+
+  /* Phones: both video rows become swipe rails (data-rail) instead of a
+     twelve-card column each. */
   @media (max-width: 760px) {
+    .library__grid,
     .playlist__grid { grid-template-columns: none; gap: 12px; margin-top: var(--space-m); }
   }
 
@@ -294,24 +479,4 @@ const educationVideos = liveEducationVideos.length > 0 ? liveEducationVideos : h
   /* ------------------------------------------------------------ Coming soon */
   .soon__title { font-size: var(--step-3); margin-top: var(--space-s); }
   .soon__body { margin-top: var(--space-m); }
-  .soon__dots {
-    display: flex;
-    justify-content: center;
-    gap: 0.6rem;
-    margin-top: var(--space-l);
-  }
-  .soon__dots i {
-    width: 7px; height: 7px;
-    border-radius: 0;
-    background: var(--blue);
-    opacity: 0.35;
-    animation: pulse 1.7s var(--ease) infinite;
-  }
-  .soon__dots i:nth-child(2) { animation-delay: 0.22s; }
-  .soon__dots i:nth-child(3) { animation-delay: 0.44s; }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 0.25; transform: scale(1); }
-    50%      { opacity: 1;    transform: scale(1.35); }
-  }
 </style>

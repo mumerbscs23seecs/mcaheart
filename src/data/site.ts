@@ -20,7 +20,6 @@ export type NavItem = { label: string; href?: string; children?: NavLink[] };
 
 export const nav: NavItem[] = [
   { label: 'Research', href: '/research-group' },
-  { label: 'Heart Trending', href: '/heart-trending' },
   { label: 'Education', href: '/education' },
   {
     label: 'Get Involved',
@@ -49,13 +48,22 @@ export const director = {
     'Medical Director, Interventional Cardiology Research, Harper University Hospital',
     'Medical Director, Cardiac Rehab, Rehab Institute of Michigan',
   ],
-  /** Homepage director card - profile links, icon-only buttons. */
-  links: [
-    { label: 'X', icon: 'x', url: 'https://x.com/chadialraies' },
-    { label: 'LinkedIn', icon: 'linkedin', url: 'https://www.linkedin.com/in/chadi-alraies-md-facc-fscai-65131711/' },
+  /** Homepage director card, top row - academic and institutional profiles.
+   *  Sits above the social row and carries no heading of its own. */
+  academicLinks: [
     { label: 'Wayne State University profile', icon: 'university', url: 'https://cardiology.med.wayne.edu/profile/hj4412' },
     { label: 'Detroit Medical Center profile', icon: 'hospital', url: 'https://www.dmc.org/provider/1689828238' },
     { label: 'ResearchGate', icon: 'researchgate', url: 'https://www.researchgate.net/profile/M-Chadi-Alraies' },
+    { label: 'Google Scholar', icon: 'scholar', url: 'https://scholar.google.com/citations?user=iRYSyHEAAAAJ&hl=en' },
+  ],
+  /** Homepage director card, second row - the "Connect" heading sits here. */
+  socialLinks: [
+    { label: 'X', icon: 'x', url: 'https://x.com/chadialraies' },
+    { label: 'Instagram', icon: 'instagram', url: 'https://www.instagram.com/chadi_mca/' },
+    { label: 'LinkedIn', icon: 'linkedin', url: 'https://www.linkedin.com/in/chadi-alraies-md-facc-fscai-65131711/' },
+    // Kept exactly as supplied - Facebook rejects automated requests, so the
+    // share link could not be resolved to a canonical profile URL to tidy it.
+    { label: 'Facebook', icon: 'facebook', url: 'https://www.facebook.com/share/1DmnRtHt8x/?mibextid=wwXIfr' },
   ],
 } as const;
 
@@ -121,14 +129,23 @@ export const stats = [
 /** Landing page - second stat row, same numbers as the research page's
  * "Publications" section (manuscripts/abstracts/researchers a year). */
 export const researchStats = [
-  { value: '75+', label: 'manuscripts published a year' },
-  { value: '150+', label: 'abstracts presented a year' },
+  { value: '75+', label: 'peer-reviewed manuscripts every year' },
+  { value: '150+', label: 'abstracts presented every year' },
   { value: '300+', label: 'active researchers & trainees' },
 ] as const;
 
+/**
+ * "Our work has been presented at". Each entry links to that body's own
+ * index of M Chadi Alraies' work.
+ *
+ * `logo` is null where no logo file has been supplied yet - the row falls
+ * back to the abbreviation set in `abbr`, styled to sit at the same weight
+ * as the logos. Drop a file in /assets/home/ and set `logo` to swap it in.
+ */
 export const societies = [
   {
     name: 'SCAI - Society for Cardiovascular Angiography & Interventions',
+    abbr: 'SCAI',
     logo: '/assets/home/logo-scai.png',
     // White-on-transparent variant for dark mode - the default logo's dark
     // wordmark disappears against a dark page background.
@@ -137,15 +154,33 @@ export const societies = [
   },
   {
     name: 'ACC - American College of Cardiology',
+    abbr: 'ACC',
     logo: '/assets/home/logo-acc.jpg',
     logoDark: '/assets/home/logo-acc-dark.webp',
     url: 'https://www.jacc.org/action/doSearch?AllField=%28chadi+alraies%29+AND+%28ACC%29',
   },
   {
     name: 'TCT - Transcatheter Cardiovascular Therapeutics',
+    abbr: 'TCT',
     logo: '/assets/home/logo-tct.png',
     logoDark: '/assets/home/logo-tct-dark.webp',
     url: 'https://www.jacc.org/action/doSearch?AllField=%28chadi+alraies%29+AND+%28TCT%29',
+  },
+  {
+    name: 'AHA - American Heart Association',
+    abbr: 'AHA',
+    logo: '/assets/home/logo-aha.webp',
+    logoDark: '/assets/home/logo-aha-dark.webp',
+    // OpenAlex, filtered to this author's conference abstracts in Circulation
+    // (the AHA Scientific Sessions abstract record).
+    url: 'https://openalex.org/works?page=1&filter=authorships.author.id:a5087694600,type:conference-abstract,primary_location.source.id:s116251202',
+  },
+  {
+    name: 'CVI - Cardiovascular Innovations',
+    abbr: 'CVI',
+    logo: '/assets/home/logo-cvi.webp',
+    logoDark: '/assets/home/logo-cvi-dark.webp',
+    url: 'https://cvinnovations.org/?s=chadi+alraies',
   },
 ] as const;
 
@@ -321,68 +356,120 @@ export const heartOfTheMatterEpisodes: Video[] = [
   },
 ];
 
+export type Playlist = {
+  title: string;
+  playlistId: string;
+  thumb: string;
+};
+
+/**
+ * The channel's playlists, in the order youtube.com/@hearttrendingwithchadi
+ * /playlists lists them (most recently updated first). Scraped from that page
+ * and checked against it - there is no public feed that lists a channel's
+ * playlists, so this is maintained by hand: add new ones at the top.
+ *
+ * "The Heart of the Matter" is deliberately absent - it has its own section,
+ * hero and full episode list further down the same page.
+ */
+export const playlists: Playlist[] = [
+  {
+    title: 'SIF 2026',
+    playlistId: 'PLU8rCA-F825WHJhXj1KM8RUj3AkoRmTqt',
+    thumb: 'https://i.ytimg.com/vi/rZBdPQ_kRQM/hqdefault.jpg',
+  },
+  {
+    title: 'RSH 2026',
+    playlistId: 'PLU8rCA-F825W-U2d-wqj2N2xh21FOEG4E',
+    thumb: 'https://i.ytimg.com/vi/CmurhEnpf_I/hqdefault.jpg',
+  },
+  {
+    title: 'NYEVS 2025',
+    playlistId: 'PLU8rCA-F825Wc_5Rj5zS5TD-U1z1cCq2y',
+    thumb: 'https://i.ytimg.com/vi/zUnJRbLDdNA/hqdefault.jpg',
+  },
+  {
+    title: 'NCVH Conversations',
+    playlistId: 'PLU8rCA-F825UZcSeLxNy3sEXy5lCWB3_0',
+    thumb: 'https://i.ytimg.com/vi/pnnkpjZ7lBY/hqdefault.jpg',
+  },
+  {
+    title: 'SIF 2025',
+    playlistId: 'PLU8rCA-F825WT8PXUGU8BGbqk1Vxe5OIN',
+    thumb: 'https://i.ytimg.com/vi/hini2dxwD9s/hqdefault.jpg',
+  },
+  {
+    title: 'RSH Interviews',
+    playlistId: 'PLU8rCA-F825XTRkKFd6uALqMmAwv4wrY2',
+    thumb: 'https://i.ytimg.com/vi/mCbGTOgm0oA/hqdefault.jpg',
+  },
+  {
+    title: 'TCT 2024: Wrap Up',
+    playlistId: 'PLU8rCA-F825Vub9nISva8p15aMrfMmBr2',
+    thumb: 'https://i.ytimg.com/vi/k7JguFN_BAY/hqdefault.jpg',
+  },
+  {
+    title: 'ESC Congress 2024, London',
+    playlistId: 'PLU8rCA-F825VeynJWtnetHrHvzUcrIELH',
+    thumb: 'https://i.ytimg.com/vi/jsrkbwsrAs8/hqdefault.jpg',
+  },
+  {
+    title: 'NYEVS 2024 Interviews',
+    playlistId: 'PLU8rCA-F825U1N000-TCtkEWBdNY5DKuD',
+    thumb: 'https://i.ytimg.com/vi/7finr0EvWqE/hqdefault.jpg',
+  },
+  {
+    title: 'Monthly Webinar',
+    playlistId: 'PLU8rCA-F825WQN9WoUmFAk8eOPXb94Hzp',
+    thumb: 'https://i.ytimg.com/vi/w9-jnEb2cR0/hqdefault.jpg',
+  },
+  {
+    title: 'NCVH 2024',
+    playlistId: 'PLU8rCA-F825UAmMK_WHJD_SGaZg5mWXoL',
+    thumb: 'https://i.ytimg.com/vi/Si95Wgru8hY/hqdefault.jpg',
+  },
+  {
+    title: 'SCAI 24',
+    playlistId: 'PLU8rCA-F825Uz-CWqKd0NtMc5rJL648Gh',
+    thumb: 'https://i.ytimg.com/vi/eFSj3dGQAA0/hqdefault.jpg',
+  },
+  {
+    title: 'SIF 2024',
+    playlistId: 'PLU8rCA-F825U86YGVAkCLmc9W78vjV1fh',
+    thumb: 'https://i.ytimg.com/vi/W-SdWJIwfTQ/hqdefault.jpg',
+  },
+  {
+    title: 'NCVH 2023',
+    playlistId: 'PLU8rCA-F825VB9vkORzuWsNAgAb7Aiv7u',
+    thumb: 'https://i.ytimg.com/vi/2vh36qNBOvg/hqdefault.jpg',
+  },
+  {
+    title: 'SCAI 2023',
+    playlistId: 'PLU8rCA-F825XueyMJOeqiqwdzWHVwufsw',
+    thumb: 'https://i.ytimg.com/vi/mcncHPT1a9E/hqdefault.jpg',
+  },
+  {
+    title: 'ARCH Talks',
+    playlistId: 'PLU8rCA-F825WK3G57tX1mrRM-oIOxnsim',
+    thumb: 'https://i.ytimg.com/vi/7aXkxcK52Sw/hqdefault.jpg',
+  },
+  {
+    title: 'Promos',
+    playlistId: 'PLU8rCA-F825X2awHx93RIDKHN4BOQBMP0',
+    thumb: 'https://i.ytimg.com/vi/b_lGJksNumQ/hqdefault.jpg',
+  },
+  {
+    title: 'Patient Education',
+    playlistId: 'PLU8rCA-F825XT2kaEtgseAOPjMZ8_m7CY',
+    thumb: 'https://i.ytimg.com/vi/0i0CelwftRk/hqdefault.jpg',
+  },
+];
+
 /* -------------------------------------------------------------------------- */
 /* Research group                                                             */
 /* -------------------------------------------------------------------------- */
 
-export type Testimonial = {
-  quote: string;
-  name: string;
-  affiliation: string;
-  future: string;
-  photo: string;
-};
-
-export const testimonials: Testimonial[] = [
-  {
-    quote:
-      "I've been part of the MCA Heart Research Lab since 2021, joining after meeting Dr. Yasar Sattar at ACC that year. This group and the mentorship provided by M Chadi Alraies, MD MPH has been one of the most important reasons I matched into cardiology fellowship in the first attempt. The collegiality that exists here and the opportunities in research for trainees of all levels is unparalleled. Privileged to be a part of MCA.",
-    name: 'Varun Victor',
-    affiliation: 'Aultman Hospital / Canton Medical Education Foundation / NEOMED University',
-    future: 'Interventional Cardiology fellowship',
-    photo: '/assets/research/varun-victor.jpg',
-  },
-  {
-    quote:
-      'Joining the MCA Heart Research Lab has not only deepened my research skills but also connected me with like-minded individuals who share my passion for the field. These collaborations have been invaluable as I prepare for my cardiology application.',
-    name: 'Heena Kaushal Asnani',
-    affiliation: 'IM Resident at Roger Williams Medical Center, Boston University',
-    future: 'Cardiology fellowship',
-    photo: '/assets/research/heena-asnani.jpg',
-  },
-  {
-    quote:
-      'This group has allowed me to connect with other passionate professionals interested in Cardiology. The mentorship I’ve received from M Chadi Alraies, MD MPH is invaluable and has really expanded my personal and professional growth.',
-    name: 'Ankit Hanmandlu',
-    affiliation: 'Wayne State University / Detroit Medical Center',
-    future: 'Cardiology',
-    photo: '/assets/research/ankit-hanmandlu.jpg',
-  },
-  {
-    quote:
-      "This group has been instrumental in helping me achieve my goals by exposing me to some of the most important topics in cardiology. The collaborative environment sharpens my skills in identifying valuable research questions in the field. These experiences have laid a strong foundation for my future endeavors in academic and clinical cardiology.",
-    name: 'Amir Behzad Bagheri',
-    affiliation: 'Internal Medicine Department, University of Pittsburgh Medical Center',
-    future: 'Interventional Cardiology',
-    photo: '/assets/research/amir-bagheri.jpg',
-  },
-  {
-    quote:
-      'This group introduced me to clinical research that aligns with my interest in cardiology, building on my experience shadowing and working as a medical assistant intern in the field.',
-    name: 'Mowaffak Alraiyes',
-    affiliation: 'Interventional Cardiology Research Department, Wayne State School of Medicine, DMC',
-    future: 'Medical School',
-    photo: '/assets/research/mowaffak-alraiyes.jpg',
-  },
-  {
-    quote:
-      'This group has helped me make connections and build my CV by doing high-quality research.',
-    name: 'Salman Abdul Basit',
-    affiliation: 'Resident Physician, Internal Medicine, The Wright Center',
-    future: 'Cardiology Aspirant',
-    photo: '/assets/research/salman-basit.jpg',
-  },
-];
+// Testimonials ('What our members say') moved to src/lib/testimonials.ts -
+// they're admin-managed and persisted in Supabase now, not static here.
 
 export const missionVision = [
   {
@@ -406,7 +493,6 @@ export const education = {
     name: 'Heart of the Matter',
     logo: '/assets/education/thotm-logo.png',
     thumb: '/assets/education/hotm-thumb.jpg',
-    cadence: 'New episodes every other Saturday',
     quote:
       'Join our expert team as they review the latest published research articles, delivering insights and practical implications for cardiology.',
     body: [
@@ -449,7 +535,7 @@ export const contactIntents = [
 
 export const footerLinks = {
   quick: [
-    { label: 'Heart Trending', href: '/heart-trending' },
+    { label: 'Heart Trending', href: '/education#heart-trending' },
     { label: 'MCA Heart Research Lab', href: '/research-group' },
     { label: 'Submit an Idea', href: '/submit-idea' },
     { label: 'Join the Lab', href: '/join-lab' },
@@ -460,7 +546,7 @@ export const footerLinks = {
     { label: 'About Us', href: '/research-group#about' },
     { label: 'Our Team', href: '/research-group#voices' },
     { label: 'Networking', href: '/research-group#why-us' },
-    { label: 'Latest Content', href: '/heart-trending' },
+    { label: 'Latest Content', href: '/education#heart-trending' },
     { label: 'Events', href: '/education' },
   ],
   legal: [

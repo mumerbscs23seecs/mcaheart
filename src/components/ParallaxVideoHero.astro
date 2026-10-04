@@ -15,6 +15,9 @@ interface Layer { src: string; alt: string }
 interface CTA { label: string; href: string }
 interface Props {
   title: string;
+  /** Anchor target, so a link elsewhere on the page can jump to this hero
+   *  and start its scroll sequence from the top. */
+  id?: string;
   layout: 'lockup' | 'stacked';
   bg: string;
   layer1: Layer;
@@ -34,6 +37,7 @@ interface Props {
 }
 const {
   title,
+  id,
   layout,
   bg,
   layer1,
@@ -78,10 +82,12 @@ const ecgPath =
   Array.from({ length: ECG_CYCLES }, (_, i) => ecgCycle(i * ECG_CYCLE_WIDTH)).join('');
 ---
 
-<section class="pvh" data-pvh={layout} style={`--pvh-accent:${accent}; --pvh-navy:${navy}; --pvh-navy-deep:${navyDeep}`}>
+<section class="pvh" id={id} data-pvh={layout} style={`--pvh-accent:${accent}; --pvh-navy:${navy}; --pvh-navy-deep:${navyDeep}`}>
   <div class="pvh__track" id={`pvhTrack-${layout}`}>
     <div class="pvh__stage">
-      <h1 class="visually-hidden">{title}</h1>
+      {/* h2, not h1: both heroes are sections of the Education page now, and
+          that page carries its own h1 above them. */}
+      <h2 class="visually-hidden">{title}</h2>
 
       <div class="pvh__layer pvh__bg" id={`pvh-bg-${layout}`}>
         <img src={bg} alt="" fetchpriority="high" />

@@ -18,8 +18,7 @@ const isActive = (item: NavItem) =>
 const dockTabs = [
   { label: 'Home', href: '/', icon: '<path d="M3 11.5 12 4l9 7.5M5.5 9.5V20h5v-5.5h3V20h5V9.5" />' },
   { label: 'Research', href: '/research-group', icon: '<path d="M9 3.5h6M10 3.5V9l-5.6 9.7a.9.9 0 0 0 .8 1.3h13.6a.9.9 0 0 0 .8-1.3L14 9V3.5M7.2 15h9.6" />' },
-  { label: 'Trending', href: '/heart-trending', icon: '<path d="M3 5.5h18v13H3z" /><path d="M10 9.2v5.6l4.6-2.8z" fill="currentColor" />' },
-  { label: 'Learn', href: '/education', icon: '<path d="M12 6.5C10 5 7 4.5 3.5 4.5v13c3.5 0 6.5.5 8.5 2 2-1.5 5-2 8.5-2v-13c-3.5 0-6.5.5-8.5 2Zm0 0v13" />' },
+  { label: 'Education', href: '/education', icon: '<path d="M12 6.5C10 5 7 4.5 3.5 4.5v13c3.5 0 6.5.5 8.5 2 2-1.5 5-2 8.5-2v-13c-3.5 0-6.5.5-8.5 2Zm0 0v13" />' },
 ];
 const involved = nav.find((n) => n.children)?.children ?? [];
 const involvedNotes: Record<string, string> = {
@@ -566,7 +565,7 @@ const moreActive = involved.some((c) => matches(c.href)) || matches('/login');
       inset: auto 0 0;
       z-index: 110;
       display: grid;
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(4, 1fr);
       height: var(--dock-space);
       padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
       background: color-mix(in srgb, var(--bg) 86%, transparent);

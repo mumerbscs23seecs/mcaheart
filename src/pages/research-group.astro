@@ -7,8 +7,9 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import LayeredScrollHero from '../components/LayeredScrollHero.astro';
 import CTABanner from '../components/CTABanner.astro';
 import Societies from '../components/Societies.astro';
-import { testimonials, missionVision, recentPublications as fallbackPublications } from '../data/site';
+import { missionVision, recentPublications as fallbackPublications } from '../data/site';
 import { fetchRecentPublications } from '../lib/pubmed-feed';
+import { listTestimonialsPublic } from '../lib/testimonials';
 
 // Fall back to the static seed list only if PubMed has never once answered
 // successfully (no cache yet, and this fetch also failed) - once a real
@@ -16,6 +17,11 @@ import { fetchRecentPublications } from '../lib/pubmed-feed';
 // instead of quietly reverting to stale placeholder titles.
 const livePublications = await fetchRecentPublications(6);
 const recentPublications = livePublications.length > 0 ? livePublications : fallbackPublications;
+
+// Admin-managed, from Supabase (src/lib/testimonials.ts) - never throws, so
+// a Supabase hiccup just means this section doesn't render rather than
+// breaking the page.
+const testimonials = await listTestimonialsPublic();
 ---
 
 <BaseLayout
@@ -88,6 +94,7 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
   <Societies edge="bottom" />
 
   {/* ------------------------------------------------------------- Testimonials */}
+  {testimonials.length > 0 && (
   <section class="section voices" id="voices">
     <div class="shell shell--wide">
       <header class="voices__head" data-reveal>
@@ -99,15 +106,21 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
           <figure class="voice" data-reveal style={`--reveal-delay:${(i % 3) * 90}ms`}>
             <blockquote class="voice__quote">{t.quote}</blockquote>
             <figcaption class="voice__by">
-              <img
-                class="voice__avatar"
-                src={t.photo}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                width="400"
-                height="400"
-              />
+              {t.hasPhoto ? (
+                <img
+                  class="voice__avatar"
+                  src={`/api/testimonials/${t.id}/photo`}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  width="400"
+                  height="400"
+                />
+              ) : (
+                <span class="voice__avatar voice__avatar--initials" aria-hidden="true">
+                  {t.name.split(' ').map((w) => w[0]).slice(0, 2).join('')}
+                </span>
+              )}
               <span class="voice__meta">
                 <span class="voice__name">{t.name}</span>
                 <span class="voice__affil">{t.affiliation}</span>
@@ -119,6 +132,7 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
       </div>
     </div>
   </section>
+  )}
 
   {/* ---------------------------------------------------------------- Why us */}
   <section class="section--tall why dark-ground" id="why-us">
@@ -348,11 +362,17 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
   /* ------------------------------------------------------------ Testimonials */
   .voices__title { font-size: var(--step-3); margin-top: var(--space-s); }
 
+  /* 3 columns by default - with 15 cards that's 5 rows. Drops to 2 on
+     tablet; phones already turn this into a swipeable rail further down
+     (data-rail, handled by [data-rail] in global.css). */
   .voices__grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: var(--space-m);
     margin-top: var(--space-l);
+  }
+  @media (max-width: 1080px) {
+    .voices__grid { grid-template-columns: repeat(2, 1fr); }
   }
 
   .voice {
@@ -400,6 +420,17 @@ const recentPublications = livePublications.length > 0 ? livePublications : fall
     object-fit: cover;
     flex-shrink: 0;
     border: 1px solid var(--border);
+  }
+  /* No photo uploaded yet - initials on a flat tint instead of a broken
+     image or an empty box. */
+  .voice__avatar--initials {
+    display: grid;
+    place-items: center;
+    background: var(--bg-tint);
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-muted);
   }
   .voice__meta { display: grid; gap: 0.15rem; }
   .voice__name {

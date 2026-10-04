@@ -18,7 +18,7 @@ const { person } = Astro.locals;
 
 // The store is keyed by submitter email, so this is everything they've sent
 // in - from here or from the public form, before they had an account.
-const mine = listIdeas().filter(
+const mine = (await listIdeas()).filter(
   (i) => i.leadEmail.toLowerCase() === person.email.toLowerCase(),
 );
 

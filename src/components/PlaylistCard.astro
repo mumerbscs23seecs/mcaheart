@@ -1,0 +1,127 @@
+---
+import type { Playlist } from '../data/site';
+
+interface Props { playlist: Playlist; index?: number }
+const { playlist, index = 0 } = Astro.props;
+---
+
+{/*
+  Same click-to-load facade as VideoCard: a static thumbnail until activated,
+  then the shared lightbox loads the whole playlist as one embed. No YouTube
+  script or cookie until someone presses play.
+*/}
+<article class="pcard" data-reveal style={`--reveal-delay:${(index % 3) * 90}ms`}>
+  <button
+    class="pcard__trigger"
+    type="button"
+    data-playlist-id={playlist.playlistId}
+    data-video-title={playlist.title}
+    aria-label={`Play the ${playlist.title} playlist`}
+  >
+    <span class="media pcard__media">
+      <img
+        src={playlist.thumb}
+        alt=""
+        loading={index < 3 ? 'eager' : 'lazy'}
+        decoding="async"
+        width="800"
+        height="450"
+      />
+      {/* Stacked edge on the right - the visual shorthand for "this is a set,
+          not one video". */}
+      <span class="pcard__stack" aria-hidden="true"></span>
+      <span class="pcard__play" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26">
+          <path d="M8 5v14l11-7L8 5Z" />
+        </svg>
+      </span>
+    </span>
+  </button>
+
+  <div class="pcard__body">
+    <h3 class="pcard__title">{playlist.title}</h3>
+    <p class="pcard__kind">Playlist</p>
+  </div>
+</article>
+
+<style>
+  .pcard {
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 0;
+    overflow: hidden;
+    transition: border-color 0.3s var(--ease);
+  }
+  .pcard:hover { border-color: var(--ink); }
+
+  .pcard__trigger { display: block; width: 100%; padding: 0; }
+  .pcard__media { display: block; aspect-ratio: 16 / 9; }
+  .pcard__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.5s var(--ease);
+  }
+  .pcard:hover .pcard__media img { transform: scale(1.04); }
+
+  /* The "stack" is two flat bars down the right edge, squared off to match
+     the site's zero-radius language. */
+  .pcard__stack {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 34%;
+    background:
+      linear-gradient(to right, transparent, rgba(12, 12, 11, 0.55));
+    pointer-events: none;
+  }
+  .pcard__stack::before,
+  .pcard__stack::after {
+    content: '';
+    position: absolute;
+    right: 10px;
+    top: 14%;
+    bottom: 14%;
+    width: 4px;
+    background: rgba(255, 255, 255, 0.85);
+  }
+  .pcard__stack::after { right: 19px; opacity: 0.55; }
+
+  .pcard__play {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--surface);
+    background: rgba(0, 0, 0, 0.18);
+    transition: background 0.4s var(--ease);
+  }
+  .pcard__play svg {
+    padding: 0.85rem;
+    box-sizing: content-box;
+    background: var(--blue);
+    border-radius: 0;
+    transition: transform 0.45s var(--ease-out), background 0.35s var(--ease);
+  }
+  .pcard__trigger:hover .pcard__play { background: rgba(0, 0, 0, 0.32); }
+  .pcard__trigger:hover .pcard__play svg { transform: scale(1.1); background: var(--blue-deep); }
+  .pcard__trigger:active .pcard__play { background: rgba(0, 0, 0, 0.32); }
+  .pcard__trigger:active .pcard__play svg { transform: scale(0.94); background: var(--blue-deep); transition-duration: 0.12s; }
+
+  .pcard__body { padding: var(--space-s) var(--space-s) var(--space-m); }
+  .pcard__title {
+    font-size: var(--step-1);
+    letter-spacing: -0.012em;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+  .pcard__kind {
+    margin-top: 0.45rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--blue);
+  }
+</style>

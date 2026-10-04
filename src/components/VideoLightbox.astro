@@ -80,10 +80,19 @@
   const caption = document.querySelector<HTMLElement>('[data-lb-caption]');
 
   if (dialog && frame && caption) {
-    const open = (id: string, title: string) => {
-      // youtube-nocookie keeps this out of the ad-tracking cookie jar.
+    // youtube-nocookie keeps this out of the ad-tracking cookie jar. A
+    // playlist plays as one embed (videoseries?list=…) rather than a single
+    // clip, so a card can open a whole series.
+    const embedSrc = (el: HTMLElement) => {
+      const list = el.dataset.playlistId;
+      return list
+        ? `https://www.youtube-nocookie.com/embed/videoseries?list=${encodeURIComponent(list)}&autoplay=1&rel=0`
+        : `https://www.youtube-nocookie.com/embed/${encodeURIComponent(el.dataset.videoId!)}?autoplay=1&rel=0`;
+    };
+
+    const open = (src: string, title: string) => {
       frame.innerHTML =
-        `<iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0"` +
+        `<iframe src="${src}"` +
         ` title="${title.replace(/"/g, '&quot;')}" allow="accelerometer; autoplay; clipboard-write;` +
         ` encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
       caption.textContent = title;
@@ -96,9 +105,9 @@
       document.body.style.overflow = '';
     };
 
-    document.querySelectorAll<HTMLElement>('[data-video-id]').forEach((btn) => {
+    document.querySelectorAll<HTMLElement>('[data-video-id], [data-playlist-id]').forEach((btn) => {
       btn.addEventListener('click', () =>
-        open(btn.dataset.videoId!, btn.dataset.videoTitle ?? 'Video'),
+        open(embedSrc(btn), btn.dataset.videoTitle ?? 'Video'),
       );
     });
 
