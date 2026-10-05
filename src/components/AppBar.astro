@@ -182,6 +182,12 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
 
 <style is:global>
   .appbar {
+    /* The bar must look identical on every page. The pipeline area swaps
+       :root's fonts to IBM Plex Sans (pipeline.css), which used to leak in
+       here - so the bar re-declares the site's own fonts for itself. */
+    --font-sans: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-display: 'Archivo Expanded', 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-sans);
     position: sticky;
     top: 0;
     z-index: 100;
