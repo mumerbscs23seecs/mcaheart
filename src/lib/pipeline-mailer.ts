@@ -15,22 +15,6 @@ function shell(title: string, body: string) {
 </div>`;
 }
 
-export async function deliverMagicLink(to: string, link: string) {
-  const body = `
-    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
-      Click below to sign in to the research pipeline. The link is single-use and expires in about an hour.
-    </p>
-    <p style="margin:0 0 18px">
-      <a href="${link}" style="display:inline-block;padding:11px 22px;background:#0b3c5d;color:#fff;
-         font:600 14px/1 Arial,sans-serif;text-decoration:none;border-radius:4px">Sign in</a>
-    </p>
-    <p style="margin:0;color:#64748b;font:12px/1.6 Arial,sans-serif">
-      If you didn't request this, ignore it. If the button doesn't work, paste this into your browser:<br>
-      <a href="${link}" style="color:#0b3c5d">${link}</a>
-    </p>`;
-  return sendEmail({ to, from: FROM, subject: '[MCA Pipeline] Sign-in link', html: shell('Your sign-in link', body) });
-}
-
 const linkBtn = (href: string, label: string) =>
   `<a href="${href}" style="display:inline-block;padding:10px 20px;background:#a51c30;color:#fff;font:600 13px/1 Arial,sans-serif;text-decoration:none;border-radius:4px">${label}</a>`;
 

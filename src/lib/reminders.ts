@@ -27,7 +27,7 @@ import { sendEmail } from './email';
 
 /** Comma-separated list in COORDINATOR_EMAILS, else a sensible default. */
 function coordinators(): string[] {
-  const raw = import.meta.env.COORDINATOR_EMAILS ?? 'admin@mcaheart.com, member@mcaheart.com';
+  const raw = import.meta.env.COORDINATOR_EMAILS ?? 'info@mcaheart.com';
   return raw.split(',').map((s) => s.trim()).filter(Boolean);
 }
 

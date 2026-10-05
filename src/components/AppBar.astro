@@ -57,7 +57,7 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
       {
         type: 'menu', key: 'manage', label: 'Manage', badge: 0,
         items: [
-          { key: 'access', label: 'Access', href: '/admin/access', badge: 0 },
+          { key: 'access', label: 'Members', href: '/admin/access', badge: 0 },
           { key: 'testimonials', label: 'Testimonials', href: '/admin/testimonials', badge: 0 },
           { key: 'mentees', label: 'Mentees', href: '/admin/mentees', badge: 0 },
           { key: 'hidden', label: 'Hidden', href: '/admin/hidden', badge: hiddenCount },
@@ -155,6 +155,13 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
             </span>
           </div>
           <hr class="acct__rule" />
+          <a class="acct__signout" href="/account/password">
+            <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+              <rect x="4" y="9" width="12" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.6" />
+              <path fill="none" stroke="currentColor" stroke-width="1.6" d="M7 9V6.5a3 3 0 0 1 6 0V9" />
+            </svg>
+            Change password
+          </a>
           <form method="post" action="/logout">
             <button class="acct__signout" type="submit">
               <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">

@@ -1,12 +1,11 @@
 ---
 import { supabaseForRequest } from '../lib/supabase';
-import { endSession } from '../lib/auth';
+import { clearHintCookie } from '../lib/auth';
 
 export const prerender = false;
 
-// Clear both sessions: the in-memory members-area one and any Supabase pipeline
-// session left in the cookies.
+// End the Supabase session and drop the header's members-menu hint.
 await supabaseForRequest(Astro.request, Astro.cookies).auth.signOut().catch(() => {});
-endSession(Astro.cookies);
+clearHintCookie(Astro.cookies);
 return Astro.redirect('/', 303);
 ---

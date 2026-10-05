@@ -2,7 +2,7 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
-import { getPipelineSession, bridgeAdminSession } from '../../lib/pipeline-auth';
+import { getPipelineSession } from '../../lib/pipeline-auth';
 import { listApplications, getApplication, decideApplication } from '../../lib/applications';
 import { deliverApplicationDecision, renderApplicationDecisionEmail } from '../../lib/recruitment-mailer';
 
@@ -14,8 +14,7 @@ if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
 
 // An approved applicant becomes a real mentee in the pipeline's people
 // table - bridge a session the same way admin/ideas.astro does.
-let session = await getPipelineSession(Astro.request, Astro.cookies);
-session = session ?? (await bridgeAdminSession(Astro.request, Astro.cookies));
+const session = await getPipelineSession(Astro.request, Astro.cookies);
 const supabase = session?.supabase ?? null;
 
 // Fixed tag set admin assigns at approval time, not free text - keeps the

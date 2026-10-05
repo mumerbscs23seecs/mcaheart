@@ -2,7 +2,7 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
-import { getPipelineSession, bridgeAdminSession } from '../../lib/pipeline-auth';
+import { getPipelineSession } from '../../lib/pipeline-auth';
 import { listHiddenProjects } from '../../lib/hidden-papers';
 
 export const prerender = false;
@@ -15,8 +15,7 @@ if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
 // only works on a client carrying the admin's own Supabase session - not
 // supabaseAdmin()'s service-role key. Same bridge the /pipeline middleware
 // uses, borrowed here since /admin/* pages sit outside that middleware.
-let session = await getPipelineSession(Astro.request, Astro.cookies);
-session = session ?? (await bridgeAdminSession(Astro.request, Astro.cookies));
+const session = await getPipelineSession(Astro.request, Astro.cookies);
 const supabase = session?.supabase ?? null;
 
 let flash: { tone: 'ok' | 'error'; text: string } | null = null;

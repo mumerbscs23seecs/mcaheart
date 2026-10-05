@@ -208,7 +208,7 @@ export function renderApplicationDecisionEmail(
       decided either way - this is not a final answer. We may follow up with a few questions, or revisit it
       once a spot opens up, and will get back to you with a final outcome in due course.
     </p>
-    <p style="margin:16px 0 0;color:#64748b;font:12px/1.6 Arial,sans-serif">Questions: researchoperations@mcaheart.com</p>`;
+    <p style="margin:16px 0 0;color:#64748b;font:12px/1.6 Arial,sans-serif">Questions: researchlab@mcaheart.com</p>`;
   }
 
   const html = `<div style="background:#f8fafc;padding:28px">

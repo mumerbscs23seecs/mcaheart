@@ -1,6 +1,8 @@
 ---
 import AuthShell from '../components/AuthShell.astro';
-import { verifyLogin, startSession, currentUser, DEMO_CREDENTIALS } from '../lib/auth';
+import { currentUser, setHintCookie } from '../lib/auth';
+import { supabaseForRequest } from '../lib/supabase';
+import { getPipelineSession } from '../lib/pipeline-auth';
 
 export const prerender = false;
 
@@ -10,22 +12,35 @@ const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : ''
 /** Admins land on the dashboard; members go straight to their pipeline. */
 const homeFor = (role: string) => next || (role === 'admin' ? '/admin' : '/pipeline');
 
+// Already signed in: go home, ignoring ?next - a signed-in visitor only gets
+// bounced here with ?next when that page couldn't see the session (e.g. a
+// not-found URL under /pipeline), so sending them back would loop forever.
 const existing = currentUser(Astro.cookies);
-if (existing) return Astro.redirect(homeFor(existing.role), 302);
+if (existing) return Astro.redirect(existing.role === 'admin' ? '/admin' : '/pipeline', 302);
 
 let error: string | null = null;
 let email = '';
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
-  email = String(form.get('email') ?? '').trim();
+  email = String(form.get('email') ?? '').trim().toLowerCase();
   const password = String(form.get('password') ?? '');
-  const result = verifyLogin(email, password);
-  if (result.ok && result.user) {
-    startSession(Astro.cookies, result.user);
-    return Astro.redirect(homeFor(result.user.role), 303);
+  const supabase = supabaseForRequest(Astro.request, Astro.cookies);
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+  // Same message either way - never reveal which emails have accounts.
+  error = 'Email or password is incorrect.';
+  if (!signInError) {
+    const session = await getPipelineSession(Astro.request, Astro.cookies, supabase);
+    if (session) {
+      const role = session.person.role === 'admin' ? 'admin' : 'member';
+      setHintCookie(Astro.cookies, { id: session.person.id, name: session.person.full_name, email, role });
+      if (session.mustChangePassword) return Astro.redirect('/account/password?first=1', 303);
+      return Astro.redirect(homeFor(role), 303);
+    }
+    // Valid password but no active person behind it - don't leave a half session.
+    await supabase.auth.signOut();
+    error = 'This account does not have access. Contact info@mcaheart.com.';
   }
-  error = result.error ?? 'Email or password is incorrect.';
 }
 ---
 
@@ -51,14 +66,5 @@ if (Astro.request.method === 'POST') {
     <a class="auth-card__link" href="/forgot-password">Forgot your password?</a>
   </form>
 
-  <p class="authpage__note">Access is invite-only - ask the site admin to add you.</p>
-
-  <details class="authpage__demo">
-    <summary>Demo accounts</summary>
-    <table>
-      {DEMO_CREDENTIALS.map((c) => (
-        <tr><td>{c.role}</td><td>{c.email}</td><td>{c.password}</td></tr>
-      ))}
-    </table>
-  </details>
+  <p class="authpage__note">New member? Use the starting password you were given - you'll choose your own right after signing in.</p>
 </AuthShell>

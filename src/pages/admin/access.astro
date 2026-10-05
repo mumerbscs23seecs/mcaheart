@@ -1,17 +1,15 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import '../../styles/admin.css';
+import { currentUser, audit, listAudit } from '../../lib/auth';
+import { supabaseAdmin } from '../../lib/supabase';
 import {
-  currentUser,
-  listUsers,
-  listAudit,
-  addUser,
-  setActive,
-  setRole,
-  createResetToken,
-  getUser,
-} from '../../lib/auth';
-import { deliverAccessLink } from '../../lib/auth-mailer';
+  listAuthUsers,
+  ensureAuthUser,
+  resetToDefaultPassword,
+  sendResetLink,
+  hasRealEmail,
+} from '../../lib/accounts';
 
 export const prerender = false;
 
@@ -19,87 +17,116 @@ const me = currentUser(Astro.cookies);
 if (!me) return Astro.redirect('/login', 302);
 if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
 
-type Flash = { tone: 'ok' | 'error'; text: string; link?: string };
+const admin = supabaseAdmin();
+const { supabase } = Astro.locals;
+
+type Flash = { tone: 'ok' | 'error'; text: string };
 let flash: Flash | null = null;
+const fail = (e: unknown) => ({ tone: 'error' as const, text: e instanceof Error ? e.message : String((e as any)?.message ?? e) });
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   const action = String(form.get('action') ?? '');
+  const id = String(form.get('id') ?? '');
+  const { data: target } = id
+    ? await admin.from('people').select('id,full_name,email,auth_id,role,active').eq('id', id).maybeSingle()
+    : { data: null };
 
-  if (action === 'add') {
-    const res = addUser(
-      {
-        name: String(form.get('name') ?? ''),
-        email: String(form.get('email') ?? ''),
-        role: String(form.get('role') ?? 'member') === 'admin' ? 'admin' : 'member',
-      },
-      me.name,
-    );
-    if (!res.ok) {
-      flash = { tone: 'error', text: res.error ?? 'Could not add that user.' };
-    } else {
-      const link = res.resetToken ? `${Astro.url.origin}/reset-password?token=${res.resetToken}` : undefined;
-      let emailed = false;
-      if (link) {
-        const sent = await deliverAccessLink({ to: res.user!.email, name: res.user!.name, link, kind: 'invite' });
-        emailed = sent.ok;
-      }
-      flash = emailed
-        ? { tone: 'ok', text: `${res.user!.email} added - invite emailed to them.`, link }
-        : { tone: 'error', text: `${res.user!.email} added, but the invite email could not be sent. Share this link directly:`, link };
+  try {
+    if (action === 'add') {
+      const name = String(form.get('name') ?? '').trim();
+      const email = String(form.get('email') ?? '').trim().toLowerCase();
+      const role = String(form.get('role') ?? 'member') === 'admin' ? 'admin' : 'member';
+      const { data: person, error } = await supabase.rpc('create_person', { p_full_name: name, p_email: email, p_role: role });
+      if (error) throw error;
+      await resetToDefaultPassword(person);
+      audit(me.email, 'added member', email, role);
+      flash = { tone: 'ok', text: `Added ${name}. They sign in with the starting password and choose their own.` };
+    } else if (!target) {
+      flash = { tone: 'error', text: 'That person was not found.' };
+    } else if (target.id === me.id && ['deactivate', 'role'].includes(action)) {
+      flash = { tone: 'error', text: 'You cannot change your own access or role.' };
+    } else if (action === 'reset-link') {
+      const res = await sendResetLink(target.email, Astro.url.origin);
+      flash = res.sent
+        ? { tone: 'ok', text: `Reset link emailed to ${target.email}.` }
+        : { tone: 'error', text: res.error ? `Could not send: ${res.error}` : 'No email could be sent to this address.' };
+      if (res.sent) audit(me.email, 'sent reset link', target.email);
+    } else if (action === 'reset-default') {
+      await resetToDefaultPassword(target);
+      audit(me.email, 'reset to starting password', target.email);
+      flash = { tone: 'ok', text: `${target.full_name} is back on the starting password and must choose a new one at next sign-in.` };
+    } else if (action === 'deactivate' || action === 'activate') {
+      const { error } = await admin.from('people').update({ active: action === 'activate' }).eq('id', target.id);
+      if (error) throw error;
+      audit(me.email, action === 'activate' ? 'restored access' : 'revoked access', target.email);
+      flash = { tone: 'ok', text: `${target.full_name}: access ${action === 'activate' ? 'restored' : 'revoked'}.` };
+    } else if (action === 'role') {
+      const role = String(form.get('role') ?? '') === 'admin' ? 'admin' : 'member';
+      const { error } = await admin.from('people').update({ role }).eq('id', target.id);
+      if (error) throw error;
+      if (role === 'admin') await ensureAuthUser(target);
+      audit(me.email, 'changed role', target.email, role);
+      flash = { tone: 'ok', text: `${target.full_name} is now ${role === 'admin' ? 'an admin' : 'a member'}.` };
     }
-  } else if (action === 'deactivate' || action === 'activate') {
-    const id = String(form.get('userId') ?? '');
-    if (id === me.id) {
-      flash = { tone: 'error', text: 'You cannot deactivate your own account.' };
-    } else {
-      const ok = setActive(id, action === 'activate', me.name);
-      flash = ok
-        ? { tone: 'ok', text: `Access ${action === 'activate' ? 'restored' : 'revoked'}.` }
-        : { tone: 'error', text: 'User not found.' };
-    }
-  } else if (action === 'role') {
-    const id = String(form.get('userId') ?? '');
-    const role = String(form.get('role') ?? 'member') === 'admin' ? 'admin' : 'member';
-    if (id === me.id) {
-      flash = { tone: 'error', text: 'You cannot change your own role.' };
-    } else {
-      const ok = setRole(id, role, me.name);
-      flash = ok ? { tone: 'ok', text: 'Role updated.' } : { tone: 'error', text: 'User not found.' };
-    }
-  } else if (action === 'resend') {
-    const target = getUser(String(form.get('userId') ?? ''));
-    const token = target ? createResetToken(target.email) : null;
-    if (!token || !target) {
-      flash = { tone: 'error', text: 'User not found.' };
-    } else {
-      const link = `${Astro.url.origin}/reset-password?token=${token}`;
-      const sent = await deliverAccessLink({ to: target.email, name: target.name, link, kind: 'reset' });
-      flash = sent.ok
-        ? { tone: 'ok', text: `Reset link emailed to ${target.email}.`, link }
-        : { tone: 'error', text: `Could not email ${target.email} - share this link directly:`, link };
-    }
+  } catch (e) {
+    flash = fail(e);
   }
 }
 
-const users = listUsers();
+const show = Astro.url.searchParams.get('show') ?? 'login';
+const q = (Astro.url.searchParams.get('q') ?? '').trim().toLowerCase();
+
+const [{ data: people }, authUsers] = await Promise.all([
+  admin.from('people').select('id,full_name,email,role,active,auth_id').order('full_name'),
+  listAuthUsers(),
+]);
+
+const rows = (people ?? [])
+  .map((p: any) => {
+    const auth = p.auth_id ? authUsers.get(p.auth_id) : undefined;
+    const canLogin = p.active && hasRealEmail(p.email);
+    const login = !hasRealEmail(p.email)
+      ? 'no-email'
+      : !auth
+        ? 'no-login'
+        : auth.mustChange
+          ? 'starting'
+          : 'own';
+    return { ...p, auth, canLogin, login };
+  })
+  .filter((r) => (show === 'all' ? true : show === 'inactive' ? !r.active : r.canLogin))
+  .filter((r) => !q || r.full_name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q))
+  .sort((a, b) => (a.role === b.role ? a.full_name.localeCompare(b.full_name) : a.role === 'admin' ? -1 : 1));
+
+const counts = {
+  login: (people ?? []).filter((p: any) => p.active && hasRealEmail(p.email)).length,
+  inactive: (people ?? []).filter((p: any) => !p.active).length,
+  all: (people ?? []).length,
+};
+
+const LOGIN_LABEL: Record<string, { text: string; tone: string }> = {
+  own: { text: 'own password', tone: 'on' },
+  starting: { text: 'starting password', tone: 'wait' },
+  'no-login': { text: 'no login yet', tone: 'wait' },
+  'no-email': { text: 'no email on file', tone: 'off' },
+};
+const fmt = (t: string | number | null | undefined) =>
+  t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : 'never';
 const auditRows = listAudit().slice(0, 25);
-const fmt = (t: number | null) =>
-  t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
 ---
 
-<AppLayout title="Access control" heading="Access control" user={me} active="access">
+<AppLayout title="Members" heading="Members" user={me} active="access">
   <div class="adm">
     {flash && (
       <div class:list={['adm-flash', `adm-flash--${flash.tone}`]} role="status">
         <p>{flash.text}</p>
-        {flash.link && <a class="link-underline" href={flash.link}>{flash.link}</a>}
       </div>
     )}
 
     {/* ------------------------------------------------------ Add member */}
     <div class="adm-panel">
-      <h2 class="adm-panel__title">Invite a member</h2>
+      <h2 class="adm-panel__title">Add a member</h2>
       <form class="adm-add" method="post">
         <input type="hidden" name="action" value="add" />
         <label class="adm-f"><span>Name</span><input name="name" type="text" required /></label>
@@ -110,58 +137,72 @@ const fmt = (t: number | null) =>
         </label>
         <button class="btn" type="submit">Add</button>
       </form>
-      <p class="adm-hint">The person is emailed a one-time link to set their password. No public sign-up.</p>
+      <p class="adm-hint">They sign in with this email and the starting password, then must choose their own. No public sign-up.</p>
     </div>
 
     {/* --------------------------------------------------------- Members */}
     <div class="adm-panel">
-      <h2 class="adm-panel__title">Members ({users.length})</h2>
+      <h2 class="adm-panel__title">Everyone ({rows.length})</h2>
+      <form class="adm-add" method="get">
+        <label class="adm-f">
+          <span>Show</span>
+          <select name="show" onchange="this.form.submit()">
+            <option value="login" selected={show === 'login'}>Can sign in ({counts.login})</option>
+            <option value="inactive" selected={show === 'inactive'}>Revoked ({counts.inactive})</option>
+            <option value="all" selected={show === 'all'}>Everyone, incl. no email ({counts.all})</option>
+          </select>
+        </label>
+        <label class="adm-f"><span>Search</span><input name="q" type="search" value={q} placeholder="Name or email" /></label>
+        <button class="adm-btn" type="submit">Filter</button>
+      </form>
       <div class="adm-scroll">
         <table class="adm-table">
           <thead>
-            <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last login</th><th>Actions</th></tr>
+            <tr><th>Name</th><th>Email</th><th>Role</th><th>Password</th><th>Last sign-in</th><th>Actions</th></tr>
           </thead>
           <tbody>
-            {users.map((u) => (
+            {rows.map((u) => (
               <tr class:list={[!u.active && 'is-off']}>
-                <td>{u.name}{u.id === me.id && <span class="adm-you"> you</span>}</td>
-                <td class="adm-mono">{u.email}</td>
+                <td>{u.full_name}{u.id === me.id && <span class="adm-you"> you</span>}</td>
+                <td class="adm-mono">{hasRealEmail(u.email) ? u.email : '-'}</td>
                 <td>
                   {u.id === me.id ? (
                     <span class="adm-tag">{u.role}</span>
                   ) : (
                     <form method="post" class="adm-inline">
                       <input type="hidden" name="action" value="role" />
-                      <input type="hidden" name="userId" value={u.id} />
+                      <input type="hidden" name="id" value={u.id} />
                       <select name="role" onchange="this.form.submit()">
-                        <option value="member" selected={u.role === 'member'}>member</option>
+                        <option value="member" selected={u.role !== 'admin'}>member</option>
                         <option value="admin" selected={u.role === 'admin'}>admin</option>
                       </select>
                     </form>
                   )}
                 </td>
                 <td>
-                  {!u.passwordHash
-                    ? <span class="adm-pill adm-pill--wait">invite sent</span>
-                    : u.active
-                      ? <span class="adm-pill adm-pill--on">active</span>
-                      : <span class="adm-pill adm-pill--off">no access</span>}
+                  {!u.active
+                    ? <span class="adm-pill adm-pill--off">revoked</span>
+                    : <span class:list={['adm-pill', `adm-pill--${LOGIN_LABEL[u.login].tone}`]}>{LOGIN_LABEL[u.login].text}</span>}
                 </td>
-                <td class="adm-mono">{fmt(u.lastLoginAt)}</td>
+                <td class="adm-mono">{fmt(u.auth?.lastSignIn)}</td>
                 <td class="adm-actions">
+                  {u.canLogin && (
+                    <form method="post" class="adm-inline">
+                      <input type="hidden" name="id" value={u.id} />
+                      <button class="adm-btn" name="action" value="reset-link" type="submit">Email reset link</button>
+                      {u.role !== 'admin' && (
+                        <button class="adm-btn" name="action" value="reset-default" type="submit">Starting password</button>
+                      )}
+                    </form>
+                  )}
                   {u.id !== me.id && (
                     <form method="post" class="adm-inline">
-                      <input type="hidden" name="userId" value={u.id} />
+                      <input type="hidden" name="id" value={u.id} />
                       {u.active
                         ? <button class="adm-btn adm-btn--danger" name="action" value="deactivate" type="submit">Revoke</button>
                         : <button class="adm-btn" name="action" value="activate" type="submit">Restore</button>}
                     </form>
                   )}
-                  <form method="post" class="adm-inline">
-                    <input type="hidden" name="action" value="resend" />
-                    <input type="hidden" name="userId" value={u.id} />
-                    <button class="adm-btn" type="submit">Reset link</button>
-                  </form>
                 </td>
               </tr>
             ))}
@@ -171,16 +212,18 @@ const fmt = (t: number | null) =>
     </div>
 
     {/* ----------------------------------------------------------- Audit */}
-    <div class="adm-panel">
-      <h2 class="adm-panel__title">Audit log</h2>
-      <ul class="adm-feed">
-        {auditRows.map((e) => (
-          <li>
-            <time>{fmt(e.at)}</time>
-            <span><strong>{e.actor}</strong> - {e.action}{e.target && <> · <span class="adm-mono">{e.target}</span></>}{e.detail && <> ({e.detail})</>}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    {auditRows.length > 0 && (
+      <div class="adm-panel">
+        <h2 class="adm-panel__title">Recent account activity</h2>
+        <ul class="adm-feed">
+          {auditRows.map((e) => (
+            <li>
+              <time>{fmt(e.at)}</time>
+              <span><strong>{e.actor}</strong> - {e.action}{e.target && <> · <span class="adm-mono">{e.target}</span></>}{e.detail && <> ({e.detail})</>}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
   </div>
 </AppLayout>

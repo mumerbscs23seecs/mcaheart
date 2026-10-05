@@ -2,7 +2,7 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
-import { getPipelineSession, bridgeAdminSession } from '../../lib/pipeline-auth';
+import { getPipelineSession } from '../../lib/pipeline-auth';
 import { listIdeas, getIdea, decideIdea } from '../../lib/ideas';
 import { deliverIdeaDecision, renderIdeaDecisionEmail } from '../../lib/idea-mailer';
 import { CONFERENCE_LABELS, COMMITMENT_LABELS, type Conference } from '../../lib/idea-schema';
@@ -16,8 +16,7 @@ if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
 
 // An accepted idea becomes a real Supabase project - bridge a session the
 // same way /admin's dashboard does, transparently, from the in-memory login.
-let session = await getPipelineSession(Astro.request, Astro.cookies);
-session = session ?? (await bridgeAdminSession(Astro.request, Astro.cookies));
+const session = await getPipelineSession(Astro.request, Astro.cookies);
 const supabase = session?.supabase ?? null;
 
 // The real, dated conference instances an approved idea can be sent to

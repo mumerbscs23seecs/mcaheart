@@ -1,7 +1,7 @@
 ---
 import AppLayout from '../layouts/AppLayout.astro';
 import { currentUser } from '../lib/auth';
-import { getPipelineSession, bridgeAdminSession } from '../lib/pipeline-auth';
+import { getPipelineSession } from '../lib/pipeline-auth';
 import { sweepPipelineReminders, type PipelineSweepResult } from '../lib/pipeline-reminders';
 import { getOverride, setOverride, clearOverride, STAT_KEYS, type StatKey } from '../lib/dashboard-overrides';
 
@@ -18,8 +18,7 @@ let pipelineSweep: PipelineSweepResult | null = null;
 // The admin dashboard has its own in-memory login, not a Supabase session - bridge
 // one transparently (same trick /pipeline uses) so every number below comes from
 // the real database, not a placeholder store.
-let session = await getPipelineSession(Astro.request, Astro.cookies);
-session = session ?? (await bridgeAdminSession(Astro.request, Astro.cookies));
+const session = await getPipelineSession(Astro.request, Astro.cookies);
 const supabase = session?.supabase ?? null;
 
 if (Astro.request.method === 'POST') {

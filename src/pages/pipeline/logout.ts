@@ -1,13 +1,13 @@
 import type { APIRoute } from 'astro';
 import { supabaseForRequest } from '../../lib/supabase';
-import { endSession } from '../../lib/auth';
+import { clearHintCookie } from '../../lib/auth';
 
 export const prerender = false;
 
 export const POST: APIRoute = async ({ request, cookies, redirect }) => {
   const supabase = supabaseForRequest(request, cookies);
   await supabase.auth.signOut();
-  endSession(cookies);
+  clearHintCookie(cookies);
   return redirect('/login');
 };
 
