@@ -368,45 +368,28 @@ const DIRECTOR_ICONS: Record<string, string> = {
     .hero__art img { height: auto; width: 100%; }
   }
 
-  /* Phone: a full-screen poster, not the desktop grid shrunk. The heart is
-     the image - large, bleeding off the right edge and tucked behind the
-     headline - with the headline set as big as the width allows, then the
-     lede and two full-width actions in thumb reach. */
+  /* Phone: same composition as tablet - headline left, heart right beside
+     it, lede + two full-width actions underneath in thumb reach. The
+     headline is sized to the room left beside the heart: its longest line
+     ("in Cardiology") is ~6.2em, 6.45 leaves room for the italic y. */
   @media (max-width: 760px) {
     .hero {
-      align-items: stretch;
       min-height: calc(100svh - var(--dock-space));
-      padding-block: calc(var(--header-h) + var(--space-2xs)) var(--space-m);
+      padding-block: calc(var(--header-h) + var(--space-s)) var(--space-m);
     }
     .hero__inner {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: minmax(28svh, 1fr) auto auto;
-      grid-template-areas: 'art' 'title' 'rest';
-      row-gap: var(--space-s);
-      align-items: end;
+      --art-col: clamp(100px, 33vw, 200px);
+      column-gap: var(--space-s);
+      row-gap: var(--space-m);
     }
-    .hero__art {
-      align-self: stretch;
-      justify-self: stretch;
-      animation-name: float-sm;
-    }
-    .hero__art::after { left: auto; right: 2%; width: 58%; bottom: calc(-7svh - 1%); height: 7%; }
-    /* Absolutely placed so the 690px-tall source image never sizes the row. */
-    .hero__art img {
-      position: absolute;
-      right: calc(-0.06 * 100vw);
-      bottom: -7svh;
-      height: calc(100% + 7svh);
-      width: auto;
-      max-width: none;
-    }
+    .hero__art { animation-name: float-sm; }
     .hero__title {
-      position: relative;
-      z-index: 1;
-      align-self: end;
       margin-top: 0;
-      font-size: min(4.25rem, calc((100vw - 2 * var(--gutter)) / 6.35));
-      line-height: 0.94;
+      line-height: 0.98;
+      font-size: min(
+        4.25rem,
+        calc((100vw - 2 * var(--gutter) - var(--art-col) - var(--space-s)) / 6.45)
+      );
     }
     .hero__lede { margin-top: 0; font-size: 1.125rem; max-width: 36ch; }
     .hero__actions {

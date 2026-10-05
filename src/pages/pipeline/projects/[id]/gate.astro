@@ -133,6 +133,12 @@ if (gate === '1') {
   const sep = dest.includes('?') ? '&' : '?';
   if (error) return Astro.redirect(`${dest}${sep}err=${encodeURIComponent(error.message)}`);
   return Astro.redirect(`${dest}${sep}ok=${encodeURIComponent('Flag cleared.')}`);
+} else if (gate === 'full-title') {
+  // Metadata, not a status change - applies directly, no email/preview.
+  const { error } = await supabase.rpc('set_full_title', { p_project: projectId, p_full_title: String(form.get('full_title') ?? '') });
+  const sep = dest.includes('?') ? '&' : '?';
+  if (error) return Astro.redirect(`${dest}${sep}err=${encodeURIComponent(error.message)}`);
+  return Astro.redirect(`${dest}${sep}ok=${encodeURIComponent('Full title saved.')}`);
 } else if (gate === 'hide' || gate === 'unhide') {
   // Visibility toggle, not a status change - applies directly, no email/preview.
   // Hiding works regardless of phase or archive state (any paper, any stage).
@@ -182,6 +188,13 @@ if (step === 'confirm' || step === 'confirm-no-email') {
   if (error) {
     const sep = dest.includes('?') ? '&' : '?';
     return Astro.redirect(`${dest}${sep}err=${encodeURIComponent(error.message)}`);
+  }
+
+  // Submitting to a journal can carry the full title Submissions should show.
+  // Only when one was typed - a blank box never wipes an existing full title.
+  const fullTitle = String(form.get('full_title') ?? '').trim();
+  if (gate === '3' && fullTitle) {
+    await supabase.rpc('set_full_title', { p_project: projectId, p_full_title: fullTitle });
   }
 
   // A reviewed-copy link travels with the abstract / gate-2 / journal decision.

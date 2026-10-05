@@ -10,39 +10,36 @@ const { project: p, isAdmin } = Astro.props;
 // So a change made from a list drops the person back on that list, not the detail page.
 const returnTo = Astro.url.pathname + Astro.url.search;
 
-// Conference outcomes still stay on the detail page - accepting/rejecting an
-// abstract needs a presenter, which this inline cell has no room for.
-// Journal outcomes are handled below instead of being blocked outright.
-const OUTCOME_CODES: Record<string, string[]> = {
-  conference: ['accepted', 'rejected'],
+// Outcomes freeze a specific submission attempt (the open conference /
+// journal attempt id rides in on the project row), so they post to their own
+// gate instead of a plain stage change. Without an open attempt they're not
+// offered at all. 'published' isn't here - once accepted, marking it
+// published later is just an ordinary stage update.
+type Route = { gate: string; outcome: string; rejectStage?: string };
+const OUTCOME_ROUTE: Record<string, Record<string, Route>> = {
+  conference: {
+    accepted: { gate: 'abstract', outcome: 'accepted' },
+    rejected: { gate: 'abstract', outcome: 'rejected' },
+  },
+  journal: {
+    accepted: { gate: 'journal-outcome', outcome: 'accepted' },
+    rejected_comments: { gate: 'journal-outcome', outcome: 'rejected', rejectStage: 'rejected_comments' },
+    rejected_no_comments: { gate: 'journal-outcome', outcome: 'rejected', rejectStage: 'rejected_no_comments' },
+  },
 };
-const blocked = OUTCOME_CODES[p.phase] ?? [];
+const routeFor = (code: string): Route | undefined => OUTCOME_ROUTE[p.phase]?.[code];
+const openAttempt =
+  p.phase === 'journal' ? p.open_journal_attempt_id : p.phase === 'conference' ? p.open_conference_attempt_id : null;
+// A decided abstract is frozen - its status cell becomes read-only.
+const FROZEN: Record<string, string[]> = { conference: ['accepted', 'rejected'] };
+const frozen = FROZEN[p.phase] ?? [];
 
-// Journal outcomes that freeze a specific submission attempt (needs
-// project_list.open_journal_attempt_id from the pipeline schema's
-// add-outcomes-to-dropdown.sql) instead of a plain stage change. 'published'
-// isn't here - once something is accepted, marking it published later is
-// just an ordinary stage update, no attempt to freeze.
-const JOURNAL_OUTCOME_ROUTE: Record<string, { outcome: string; rejectStage?: string }> = {
-  accepted: { outcome: 'accepted' },
-  rejected_comments: { outcome: 'rejected', rejectStage: 'rejected_comments' },
-  rejected_no_comments: { outcome: 'rejected', rejectStage: 'rejected_no_comments' },
-};
-const hasOpenAttempt = !!p.open_journal_attempt_id;
-const routeFor = (code: string) => (p.phase === 'journal' ? JOURNAL_OUTCOME_ROUTE[code] : undefined);
-
-// Admins see the full set (including outcomes, when there's an open attempt
-// to decide); members never see outcome codes - those aren't theirs to set,
+// Admins see the full set (outcomes only when there's an open attempt to
+// decide); members never see outcome codes - those aren't theirs to set,
 // and journal-phase requests aren't supported at all (the coordinator
 // handles Submissions directly).
-const adminOptions = stagesFor(p.phase).filter((s: any) => {
-  if (blocked.includes(s.code)) return false;
-  if (routeFor(s.code) && !hasOpenAttempt) return false;
-  return true;
-});
-const memberOptions = stagesFor(p.phase).filter(
-  (s: any) => !blocked.includes(s.code) && !routeFor(s.code),
-);
+const adminOptions = stagesFor(p.phase).filter((s: any) => !(routeFor(s.code) && !openAttempt));
+const memberOptions = stagesFor(p.phase).filter((s: any) => !routeFor(s.code));
 const options = isAdmin ? adminOptions : memberOptions;
 
 // A handful of stage codes need one more field before they can apply - gate.astro
@@ -53,14 +50,13 @@ const EXTRA_FIELD: Record<string, { field: string; placeholder: string }> = {
 const extraFor = (code: string) => EXTRA_FIELD[`${p.phase}:${code}`];
 
 const warn = p.days_in_stage != null && p.days_in_stage >= 21;
-// advance_stage covers idea / manuscript / journal; request_stage_change covers
-// conference / manuscript / journal. Outcomes needing an attempt (above) route
-// through record_journal_outcome / stay on the detail page instead.
+// Admins: advance_stage (any phase). Members: request_stage_change, which
+// covers conference / manuscript / journal.
 const phaseOK = isAdmin
-  ? ['idea', 'manuscript', 'journal'].includes(p.phase)
+  ? ['idea', 'conference', 'manuscript', 'journal'].includes(p.phase)
   : ['conference', 'manuscript', 'journal'].includes(p.phase);
 const editable =
-  phaseOK && !p.archived_at && !blocked.includes(p.stage) && options.length > 1;
+  phaseOK && !p.archived_at && !frozen.includes(p.stage) && options.length > 1;
 ---
 
 {!editable ? (
@@ -77,9 +73,10 @@ const editable =
             value={s.code}
             selected={s.code === p.stage}
             data-extra-field={extraFor(s.code)?.field ?? ''}
+            data-gate={route?.gate ?? ''}
             data-outcome={route?.outcome ?? ''}
             data-reject-stage={route?.rejectStage ?? ''}
-            data-attempt={route ? p.open_journal_attempt_id : ''}
+            data-attempt={route ? openAttempt : ''}
           >{s.label}</option>
         );
       })}
@@ -175,8 +172,8 @@ const editable =
   // instance on the page). Plain "advance the stage" selections still submit
   // immediately; a selection that needs one more field (data-extra-field)
   // reveals that field's box instead and waits for its own submit button.
-  // A journal outcome (data-outcome) swaps the form over to
-  // gate=journal-outcome first, so its Confirm button posts the right thing.
+  // An outcome (data-outcome) swaps the form over to its own gate first
+  // (journal-outcome / abstract), so its Confirm button posts the right thing.
   document.addEventListener('change', (e) => {
     const select = (e.target as HTMLElement | null)?.closest<HTMLSelectElement>('select[data-status-select]');
     if (!select) return;
@@ -192,7 +189,7 @@ const editable =
     const outcome = chosen?.dataset.outcome;
 
     if (outcome && gateInput) {
-      gateInput.value = 'journal-outcome';
+      gateInput.value = chosen.dataset.gate || 'journal-outcome';
       const addHidden = (name: string, value: string) => {
         const input = document.createElement('input');
         input.type = 'hidden';

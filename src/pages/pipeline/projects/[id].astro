@@ -35,7 +35,7 @@ const { data: roster } = isAdmin
 
 const { data: confAttempts } = await supabase
   .from('conference_attempts')
-  .select('id,outcome,submitted_on,recycled_from,conference:conferences(name)')
+  .select('id,outcome,submitted_on,decided_on,recycled_from,conference:conferences(name),presenter:people!conference_attempts_presenter_id_fkey(full_name)')
   .eq('project_id', id)
   .order('submitted_on', { ascending: false })
   .order('id', { ascending: false });
@@ -255,6 +255,16 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
         </form>
       )}
 
+      {/* Full title - what Submissions shows in place of the short title */}
+      {['manuscript', 'journal'].includes(p.phase) && (
+        <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-actrow">
+          <input type="hidden" name="gate" value="full-title" />
+          <label class="pl-actlbl">Full title</label>
+          <input name="full_title" placeholder="Full academic title (blank = use the short title)" value={p.full_title ?? ''} style="flex:1;min-width:0" />
+          <button class="pl-btn" type="submit">Save</button>
+        </form>
+      )}
+
       {/* Abstract outcome */}
       {pendingAttempt && (
         <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-actrow">
@@ -320,6 +330,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
               <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-mini pl-mini--col">
                 <input type="hidden" name="gate" value="3" />
                 <input name="journal" placeholder="Journal name" required />
+                <input name="full_title" placeholder="Full title (optional - shown on Submissions)" value={p.full_title ?? ''} />
                 <input name="manuscript_url" placeholder="Manuscript link (if not set below)" />
                 <button class="pl-btn" type="submit">Submit</button>
               </form>
@@ -478,6 +489,8 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
                   <dt>{a.conference?.name}</dt>
                   <dd>
                     {a.outcome ?? 'pending'} · Submitted {a.submitted_on ? fmtDate(a.submitted_on) : 'date unknown'}
+                    {a.decided_on && ` · Decided ${fmtDate(a.decided_on)}`}
+                    {a.presenter?.full_name && ` · Presenter ${a.presenter.full_name}`}
                     {recycledFromName && ` · previously submitted to ${recycledFromName}`}
                   </dd>
                 </>

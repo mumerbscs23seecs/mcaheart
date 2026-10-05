@@ -17,3 +17,7 @@ mca-heart-research.zip
 .agents/
 .claude/skills/
 skills-lock.json
+
+# One-off data scripts holding personal data (emails) - keep out of the public repo
+scripts/merge_people_2026_10_05.py
+__pycache__/

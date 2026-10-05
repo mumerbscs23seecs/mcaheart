@@ -2,6 +2,8 @@
 // Platform-neutral: import from Astro API routes, or paste into a Wix backend .js file.
 // Run `node lifecycle.mjs` to self-check.
 
+export const STUDY_TYPES = ['DMC PCI', 'TriNetX', 'SRMA', 'NIS', 'NRD', 'CDC', 'Other'];
+
 export const PHASES = ['idea', 'conference', 'manuscript', 'journal', 'archived'];
 
 // stage code -> { phase, label }. Order within a phase is the array order.
@@ -11,8 +13,15 @@ export const STAGES = [
   ['idea',       'analysis_done', 'Analysis done'],
   ['idea',       'ready',         'Ready'],
 
-  ['conference', 'abstract_wip',  'Abstract being written'],
-  ['conference', 'submitted',     'Submitted to conference'],
+  // The four idea codes repeat here on purpose: gate 1 carries a paper's
+  // progress across instead of resetting it. ('abstract_wip' is retired -
+  // its DB row only survives so old history entries keep a label.)
+  ['conference', 'no_progress',   'No progress'],
+  ['conference', 'plan_final',    'Analysis plan finalized'],
+  ['conference', 'screening',     'Screening/extraction'],
+  ['conference', 'analysis_done', 'Analysis done'],
+  ['conference', 'ready',         'Ready'],
+  ['conference', 'submitted',     'Submitted'],
   ['conference', 'accepted',      'Accepted'],
   ['conference', 'rejected',      'Rejected'],
 
@@ -149,7 +158,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   a.match(stageChangeError(p, 'under_review', admin), /belongs to phase journal/, 'no phase-skipping via stage');
   a.match(stageChangeError(p, 'nonsense', admin), /Unknown stage/);
   a.match(stageChangeError({ ...p, archived_at: '2026-01-01' }, 'ms_3_4', admin), /archived/);
-  a.match(stageChangeError({ phase: 'conference', stage: 'abstract_wip', lead_id: 'u-lead' }, 'accepted', lead),
+  a.match(stageChangeError({ phase: 'conference', stage: 'ready', lead_id: 'u-lead' }, 'accepted', lead),
           /conference outcome/, 'conference outcome is admin-only');
   a.match(stageChangeError({ phase: 'journal', stage: 'under_review', lead_id: 'u-lead' }, 'published', lead),
           /journal outcome/, 'journal outcome is admin-only');

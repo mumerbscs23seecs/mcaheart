@@ -1,6 +1,8 @@
 ---
 import PipelineLayout from '../../../layouts/PipelineLayout.astro';
 import PeoplePicker from '../../../components/PeoplePicker.astro';
+import PipelineStatusCell from '../../../components/PipelineStatusCell.astro';
+import { STUDY_TYPES } from '../../../lib/lifecycle.mjs';
 
 export const prerender = false;
 const { supabase, person } = Astro.locals;
@@ -12,10 +14,15 @@ if (person.role !== 'admin') return Astro.redirect('/pipeline/conferences', 302)
 const { data: conf } = await supabase.from('conferences').select('*').eq('id', id).maybeSingle();
 if (!conf) return Astro.redirect('/pipeline/conferences', 302);
 
-const STUDY_TYPES = ['DMC PCI', 'NIS', 'TriNetX', 'SRMA', 'Other'] as const;
-
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
+  if (String(form.get('action') ?? '') === 'set-type') {
+    const projectId = String(form.get('project_id') ?? '');
+    const studyType = String(form.get('study_type') ?? '');
+    const { error } = await supabase.rpc('set_study_type', { p_project: projectId, p_study_type: studyType });
+    const msg = error ? `err=${encodeURIComponent(error.message)}` : `ok=${encodeURIComponent('Type of research updated.')}`;
+    return Astro.redirect(`/pipeline/conferences/${id}?${msg}`);
+  }
   if (String(form.get('action') ?? '') === 'add-paper') {
     const title = String(form.get('title') ?? '').trim();
     const studyType = String(form.get('study_type') ?? '');
@@ -54,11 +61,28 @@ const { data: score } = await supabase
 // Every attempt at this conference - including papers that have since moved on.
 const { data: attempts } = await supabase
   .from('conference_attempts')
-  .select(
-    'id, outcome, decided_on, recycled_from, project:projects(id,ref,title,phase,stage), presenter:people!conference_attempts_presenter_id_fkey(full_name)',
-  )
-  .eq('conference_id', id)
-  .order('outcome', { ascending: true });
+  .select('id, outcome, project_id')
+  .eq('conference_id', id);
+
+const projectIds = [...new Set((attempts ?? []).map((a: any) => a.project_id))];
+const { data: projectRows } = projectIds.length
+  ? await supabase
+      .from('project_list')
+      .select('id,ref,title,phase,stage,stage_label,study_type,lead_name,analyst_name,days_in_stage,archived_at,hidden_at')
+      .in('id', projectIds)
+  : { data: [] };
+const projectById = new Map((projectRows ?? []).map((r: any) => [r.id, r]));
+
+// Live papers first (still in this conference, undecided), then accepted,
+// then rejected/withdrawn - alphabetical within each group.
+const GROUP: Record<string, number> = { accepted: 1, rejected: 2, withdrawn: 2 };
+const rows = (attempts ?? [])
+  .map((a: any) => ({ attempt: a, p: projectById.get(a.project_id) }))
+  .filter((r: any) => r.p && !r.p.hidden_at)
+  .sort((x: any, y: any) =>
+    (x.attempt.outcome ? GROUP[x.attempt.outcome] ?? 3 : 0) - (y.attempt.outcome ? GROUP[y.attempt.outcome] ?? 3 : 0) ||
+    x.p.title.localeCompare(y.p.title),
+  );
 
 // Numeric MM-DD-YYYY - keeps the date column narrow so title/status columns
 // have the room, instead of the long "September 2, 2024" form.
@@ -68,8 +92,6 @@ const fmtDate = (d: string | null) => {
   return `${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}-${dt.getFullYear()}`;
 };
 const s = score ?? { submitted: 0, accepted: 0, rejected: 0, accept_pct: null };
-const phaseLabel = (p: string) =>
-  ({ idea: 'idea', conference: 'conference', manuscript: 'manuscript', journal: 'journal', archived: 'archived' })[p] ?? p;
 const cap = (x: string | null) => (x ? x[0].toUpperCase() + x.slice(1) : 'Pending');
 ---
 
@@ -109,47 +131,93 @@ const cap = (x: string | null) => (x ? x[0].toUpperCase() + x.slice(1) : 'Pendin
     </form>
   </details>
 
-  {(!attempts || attempts.length === 0) && (
-    <p class="pl-muted" style="margin-top:20px">No abstract outcomes recorded for this conference.</p>
+  {rows.length === 0 && (
+    <p class="pl-muted" style="margin-top:20px">No papers in this conference yet.</p>
   )}
 
-  {attempts && attempts.length > 0 && (
+  {rows.length > 0 && (
     <div class="pl-tablewrap" style="margin-top:16px">
-      <table class="pl-table">
+      <table class="pl-table pl-conf-table">
+        <colgroup>
+          <col class="c-title" /><col class="c-type" /><col class="c-person" /><col class="c-person" /><col class="c-status" /><col class="c-actions" />
+        </colgroup>
         <thead>
           <tr>
             <th>Submission title</th>
-            <th>Presenter</th>
-            <th>Now in</th>
-            <th>Decided</th>
-            <th>Outcome</th>
+            <th>Type</th>
+            <th>Lead</th>
+            <th>Analyst</th>
+            <th>Status</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {attempts.map((a: any) => (
-            <tr>
-              <td class="pl-t__title" data-th="Submission title">
-                <a href={`/pipeline/projects/${a.project?.id}`} data-panel={a.project?.id}>
-                  {a.project?.title ?? '(project removed)'}
-                </a>
-                <span class="pl-t__ref">
-                  {a.project?.ref}{a.recycled_from ? ' · recycled from an earlier attempt' : ''}
-                </span>
-              </td>
-              <td data-th="Presenter">{a.presenter?.full_name ?? '-'}</td>
-              <td class="pl-t__venue" data-th="Now in">{phaseLabel(a.project?.phase ?? '')}</td>
-              <td class="pl-t__date" data-th="Decided">{fmtDate(a.decided_on)}</td>
-              <td data-th="Outcome">
-                <span class:list={['pl-status', a.outcome === 'rejected' && 'pl-status--warn']}>{cap(a.outcome)}</span>
-              </td>
-              <td class="pl-t__actions" data-th="Actions">
-                <a href={`/pipeline/projects/${a.project?.id}`}>Check progress &nearr;</a>
-              </td>
-            </tr>
-          ))}
+          {rows.map(({ attempt: a, p }: any) => {
+            // Only a paper still sitting in this conference with its abstract
+            // undecided gets the live dropdown; anything decided, or that has
+            // since moved on to Ongoing/Submissions, shows this attempt's outcome.
+            const live = !a.outcome && p.phase === 'conference';
+            return (
+              <tr>
+                <td class="pl-t__title" data-th="Submission title">
+                  <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a>
+                  <span class="pl-t__ref">{p.ref}</span>
+                </td>
+                <td data-th="Type">
+                  <form method="post" class="pl-conf-type" data-type-form>
+                    <input type="hidden" name="action" value="set-type" />
+                    <input type="hidden" name="project_id" value={p.id} />
+                    <select class="pl-status" name="study_type" aria-label={`Type of research for ${p.title}`}>
+                      {STUDY_TYPES.map((t: string) => <option value={t} selected={t === p.study_type}>{t}</option>)}
+                    </select>
+                  </form>
+                </td>
+                <td class="pl-conf-person" data-th="Lead">{p.lead_name ?? <span class="pl-muted">-</span>}</td>
+                <td class="pl-conf-person" data-th="Analyst">{p.analyst_name ?? <span class="pl-muted">-</span>}</td>
+                <td data-th="Status">
+                  {live ? (
+                    <PipelineStatusCell project={{ ...p, open_conference_attempt_id: a.id }} isAdmin={true} />
+                  ) : (
+                    <span class:list={['pl-status', a.outcome === 'rejected' && 'pl-status--warn']}>{cap(a.outcome)}</span>
+                  )}
+                </td>
+                <td class="pl-t__actions" data-th="Actions">
+                  <a href={`/pipeline/projects/${p.id}`}>Check progress &nearr;</a>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
   )}
 </PipelineLayout>
+
+<style is:global>
+  /* Fixed layout so the columns hold these proportions no matter what a cell
+     holds: Type / Lead / Analyst share one equal width, Status gets a bit more
+     for its longest label, and the title takes what's left. */
+  .pl-conf-table { table-layout: fixed; min-width: 1040px; }
+  .pl-conf-table .c-title { width: 28%; }
+  .pl-conf-table .c-type,
+  .pl-conf-table .c-person { width: 13%; }
+  .pl-conf-table .c-status { width: 17%; }
+  .pl-conf-table .c-actions { width: 16%; }
+  .pl-conf-table td { overflow-wrap: anywhere; }
+  .pl-conf-person { color: var(--text-strong); font-weight: 500; }
+  .pl-conf-type { margin: 0; }
+  /* Both dropdowns fill their column instead of PipelineStatusCell's fixed
+     250px, so the Type and Status selects line up edge to edge. */
+  .pl-conf-table select.pl-status,
+  .pl-conf-table .pl-status { min-width: 0; max-width: none; width: 100%; }
+  .pl-conf-table .pl-status-form { width: 100%; }
+</style>
+
+<script>
+  // Type of research applies on change - it's metadata, no email/preview.
+  document.addEventListener('change', (e) => {
+    const select = e.target as HTMLElement | null;
+    const form = select?.closest<HTMLFormElement>('[data-type-form]');
+    if (form) form.submit();
+  });
+</script>
