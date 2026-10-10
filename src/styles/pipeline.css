@@ -583,6 +583,8 @@ select.pl-status:focus-visible { outline: 2px solid var(--pl-accent); outline-of
 }
 .pl-actrow input[data-journal-input] { min-width: 230px; }
 .pl-inline-details > summary {
+  /* Only as wide as its text - a block summary made the whole row clickable. */
+  display: inline-block;
   cursor: pointer;
   color: var(--pl-accent);
   font-family: var(--font-sans);
