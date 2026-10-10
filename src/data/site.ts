@@ -546,8 +546,6 @@ export const footerLinks = {
     { label: 'About Us', href: '/research-group#about' },
     { label: 'Our Team', href: '/research-group#voices' },
     { label: 'Networking', href: '/research-group#why-us' },
-    { label: 'Latest Content', href: '/education#heart-trending' },
-    { label: 'Events', href: '/education' },
   ],
   legal: [
     { label: 'Privacy Policy', href: '/privacy' },

@@ -1,0 +1,159 @@
+---
+// One email-address box (To / CC / BCC): each address is a removable chip and
+// submits as its own hidden input named `name`. Type an address and press
+// Enter (or paste several, comma-separated), pick one from the page's
+// <datalist id={listId}>, or click a "recommended" shortcut.
+interface Props {
+  name: string;
+  label: string;
+  initial: string[];
+  listId: string;
+  recommended?: { email: string; label: string }[];
+}
+const { name, label, initial, listId, recommended = [] } = Astro.props;
+---
+
+<div class="echips" data-echips data-name={name}>
+  <span class="echips__label">{label}</span>
+  <div class="echips__box">
+    <span class="echips__list" data-echips-list>
+      {initial.map((e) => (
+        <span class="echips__chip" data-echips-chip={e}>
+          {e}
+          <input type="hidden" name={name} value={e} />
+          <button type="button" class="echips__x" data-echips-remove aria-label={`Remove ${e}`}>×</button>
+        </span>
+      ))}
+    </span>
+    <input class="echips__input" type="text" inputmode="email" list={listId} autocomplete="off"
+      placeholder="Add an email or pick a name" data-echips-input />
+  </div>
+  {recommended.length > 0 && (
+    <p class="echips__rec">
+      Recommended:
+      {recommended.map((r) => (
+        <button type="button" class="echips__recbtn" data-echips-add={r.email}>+ {r.label}</button>
+      ))}
+    </p>
+  )}
+</div>
+
+<style is:global>
+  /* Global, not scoped: chips added in the browser don't get Astro's scoped attribute. */
+  .echips { display: grid; gap: 6px; margin-bottom: 14px; }
+  .echips__label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
+  .echips__box {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    padding: 6px 8px;
+    border: 1px solid var(--border-soft);
+    background: var(--bg, #fff);
+  }
+  .echips__box:focus-within { border-color: var(--pl-accent); }
+  .echips__list { display: contents; }
+  .echips__chip {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 4px 6px 4px 11px;
+    font-size: 0.82rem; font-weight: 600; color: var(--text-strong);
+    background: var(--bg-tint, #f4f2ee);
+    border: 1px solid var(--pl-border, #d8dce6);
+    border-radius: 999px;
+  }
+  .echips__x {
+    appearance: none; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; padding: 0; line-height: 1;
+    border: 1px solid var(--red, #b42318); border-radius: 4px;
+    background: var(--red-wash); color: var(--red, #b42318); font-size: 0.85rem;
+  }
+  .echips__x:hover { background: var(--red, #b42318); color: #fff; }
+  .echips__input {
+    flex: 1 1 200px; min-width: 160px;
+    padding: 5px 4px; border: 0; outline: 0;
+    background: transparent; color: var(--text-strong); font: inherit; font-size: 0.9rem;
+  }
+  .echips__input.is-bad { color: var(--red, #b42318); }
+  .echips__rec { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--text-muted); }
+  .echips__recbtn {
+    cursor: pointer; padding: 3px 9px;
+    font: inherit; font-size: 0.78rem; font-weight: 600;
+    color: var(--pl-accent); background: transparent;
+    border: 1px dashed var(--pl-accent); border-radius: 999px;
+  }
+  .echips__recbtn:hover { background: var(--accent-wash); }
+  .echips__recbtn[disabled] { opacity: 0.4; cursor: default; }
+</style>
+
+<script is:inline>
+  (() => {
+    if (window.__echipsBound) return;
+    window.__echipsBound = true;
+    const RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
+
+    const syncRec = (box) => {
+      const have = new Set([...box.querySelectorAll('[data-echips-chip]')].map((c) => c.dataset.echipsChip));
+      box.querySelectorAll('[data-echips-add]').forEach((b) => { b.disabled = have.has(b.dataset.echipsAdd); });
+    };
+    const add = (box, raw) => {
+      const list = box.querySelector('[data-echips-list]');
+      const input = box.querySelector('[data-echips-input]');
+      const parts = String(raw).split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+      let bad = false;
+      for (const e of parts) {
+        if (!RE.test(e)) { bad = true; continue; }
+        if (list.querySelector(`[data-echips-chip="${CSS.escape(e)}"]`)) continue;
+        const chip = document.createElement('span');
+        chip.className = 'echips__chip';
+        chip.dataset.echipsChip = e;
+        chip.append(e);
+        const h = document.createElement('input');
+        h.type = 'hidden'; h.name = box.dataset.name; h.value = e;
+        const x = document.createElement('button');
+        x.type = 'button'; x.className = 'echips__x'; x.dataset.echipsRemove = '';
+        x.setAttribute('aria-label', 'Remove ' + e); x.textContent = '×';
+        chip.append(h, x);
+        list.appendChild(chip);
+      }
+      input.classList.toggle('is-bad', bad);
+      if (!bad) input.value = '';
+      syncRec(box);
+    };
+
+    // This script runs right after the first box, before the others exist.
+    const init = () => document.querySelectorAll('[data-echips]').forEach(syncRec);
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+    else init();
+
+    document.addEventListener('keydown', (ev) => {
+      const input = ev.target.closest && ev.target.closest('[data-echips-input]');
+      if (!input) return;
+      if (ev.key === 'Enter' || ev.key === ',' || ev.key === ';') {
+        ev.preventDefault();
+        if (input.value.trim()) add(input.closest('[data-echips]'), input.value);
+      } else if (ev.key === 'Backspace' && !input.value) {
+        const last = input.closest('[data-echips]').querySelector('[data-echips-chip]:last-child');
+        if (last) { last.remove(); syncRec(input.closest('[data-echips]')); }
+      }
+    });
+    document.addEventListener('input', (ev) => {
+      const input = ev.target.closest && ev.target.closest('[data-echips-input]');
+      if (!input) return;
+      input.classList.remove('is-bad');
+      // Picking from the suggestion list fills in a whole roster address - add it straight away.
+      const v = input.value.trim().toLowerCase();
+      const list = input.getAttribute('list') && document.getElementById(input.getAttribute('list'));
+      if (list && [...list.options].some((o) => o.value.toLowerCase() === v)) add(input.closest('[data-echips]'), v);
+    });
+    document.addEventListener('click', (ev) => {
+      const x = ev.target.closest && ev.target.closest('[data-echips-remove]');
+      if (x) { const box = x.closest('[data-echips]'); x.closest('[data-echips-chip]').remove(); syncRec(box); return; }
+      const rec = ev.target.closest && ev.target.closest('[data-echips-add]');
+      if (rec) add(rec.closest('[data-echips]'), rec.dataset.echipsAdd);
+    });
+    // Anything typed but not yet turned into a chip still counts on submit.
+    document.addEventListener('submit', (ev) => {
+      ev.target.querySelectorAll('[data-echips-input]').forEach((input) => {
+        if (input.value.trim()) add(input.closest('[data-echips]'), input.value);
+      });
+    }, true);
+  })();
+</script>

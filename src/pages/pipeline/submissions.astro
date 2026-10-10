@@ -15,6 +15,7 @@ let query = supabase
   .eq('phase', 'journal')
   .is('archived_at', null)
   .is('hidden_at', null)
+  .is('deleted_at', null)
   .order('submission_order', { ascending: true, nullsFirst: false })
   .order('stage_changed_at', { ascending: false });
 // Admins get a dedicated "Published" tab, so keep those out of here.
@@ -63,6 +64,7 @@ const { data: rows, error } = await query;
               <td class="pl-t__status" data-th="Status"><PipelineStatusCell project={p} isAdmin={isAdmin} /></td>
               <td class="pl-t__actions" data-th="Actions">
                 <a href={`/pipeline/projects/${p.id}`}>Check progress &nearr;</a>
+                {isAdmin && <a href={`/pipeline/projects/${p.id}/email?from=/pipeline/submissions`}>Email &nearr;</a>}
               </td>
             </tr>
           ))}

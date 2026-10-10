@@ -30,7 +30,7 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
   if (!stage) return to('err', 'Choose a status first.');
   if (reviewUrl && !isDocLink(reviewUrl)) return to('err', DOC_LINK_HINT);
 
-  const { data: p0 } = await supabase.from('projects').select('id,ref,title,phase').eq('id', projectId).maybeSingle();
+  const { data: p0 } = await supabase.from('projects').select('id,ref,title,full_title,phase').eq('id', projectId).maybeSingle();
 
   const { error } = await supabase.rpc('request_stage_change', {
     p_project: projectId,
@@ -49,8 +49,7 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
     if (adminEmails.length) {
       const sent = await deliverRequestSubmitted({
         to: adminEmails,
-        projectTitle: p0.title,
-        ref: p0.ref,
+        projectTitle: p0.full_title || p0.title,
         requester: person.full_name,
         stageLabel,
         note: note ?? undefined,

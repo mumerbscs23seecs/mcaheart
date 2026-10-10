@@ -455,45 +455,37 @@ const moreActive = involved.some((c) => matches(c.href)) || matches('/login');
   .authbar { display: flex; align-items: center; gap: 0.9rem; }
   .authbar__login { padding-block: 0.4rem; padding-inline: 0.9rem; font-size: 0.8rem; }
 
-  /* Members zone: a solid charcoal block so the app nav reads as a distinct area. */
+  /* Members zone: same colours as the rest of the header (light and dark),
+     set apart only by a soft half-transparent rounded outline. */
   .authbar__account {
     display: flex;
     align-items: center;
     gap: clamp(0.8rem, 0.4rem + 0.7vw, 1.3rem);
-    padding: 0.4rem 0.4rem 0.4rem 1.05rem;
-    background: var(--ink);
-    border-radius: 0;
+    padding: 0.3rem 0.3rem 0.3rem 1.05rem;
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--text-strong) 50%, transparent);
+    border-radius: 999px;
   }
   .authbar__account .nav__link { font-weight: 700; font-size: 0.82rem; }
-  .authbar__account .nav__link { color: color-mix(in srgb, var(--bg) 82%, transparent); }
-  .authbar__account .nav__link:hover { color: var(--bg); }
-  .authbar__account .nav__link::after { background: var(--bg); }
-  .authbar__account .nav__link.is-current { color: var(--bg); }
   .authbar__logout { display: flex; margin: 0; }
-  /* A ghost outline instead of a solid light button - a solid white fill
-     here nearly vanished against the pill's own background in dark mode
-     (--ink flips to an off-white there too), reading as two stacked boxes
-     instead of one pill. This scales its border/text with --bg the same
-     way the "Admin" link beside it does, and only goes solid on hover. */
   .authbar__logout-btn {
     cursor: pointer;
     font-family: inherit;
     font-weight: 700;
     padding-block: 0.4rem;
-    padding-inline: 0.9rem;
+    padding-inline: 0.95rem;
     font-size: 0.8rem;
     white-space: nowrap;
     background: transparent;
-    color: var(--bg);
-    border: 1px solid color-mix(in srgb, var(--bg) 45%, transparent);
-    border-radius: 0;
-    transition: background 0.2s var(--ease), color 0.2s var(--ease), border-color 0.2s var(--ease);
+    color: var(--text-strong);
+    border: 1px solid color-mix(in srgb, var(--text-strong) 50%, transparent);
+    border-radius: 999px;
+    transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
   }
   .authbar__logout-btn:hover,
   .authbar__logout-btn:focus-visible {
-    background: color-mix(in srgb, var(--bg) 18%, transparent);
-    color: var(--bg);
-    border-color: var(--bg);
+    background: color-mix(in srgb, var(--text-strong) 8%, transparent);
+    border-color: var(--text-strong);
   }
 
   /* --- Auth block (mobile drawer) --- */

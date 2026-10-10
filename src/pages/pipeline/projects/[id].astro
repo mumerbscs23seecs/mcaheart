@@ -1,6 +1,7 @@
 ---
 import PipelineLayout from '../../../layouts/PipelineLayout.astro';
 import PeoplePicker from '../../../components/PeoplePicker.astro';
+import TeamPicker from '../../../components/TeamPicker.astro';
 import { stagesFor } from '../../../lib/lifecycle.mjs';
 import { personOnProject } from '../../../lib/pipeline-scope';
 import { docLinkLabel, DOC_LINK_HINT } from '../../../lib/doc-links';
@@ -19,11 +20,13 @@ const { data: allConferences } = await supabase
   .select('name,abstract_deadline')
   .order('abstract_deadline', { ascending: false });
 
-const ids = [p.lead_id, p.analyst_id, p.colead_id, p.presenter_id, p.corresponding_id].filter(Boolean);
+const teamMemberIds: string[] = p.team_member_ids ?? [];
+const ids = [p.lead_id, p.analyst_id, p.colead_id, p.presenter_id, p.corresponding_id, ...teamMemberIds].filter(Boolean);
 const { data: peopleRows } = ids.length
   ? await supabase.from('people').select('id,full_name,email').in('id', ids)
   : { data: [] };
 const who = new Map((peopleRows ?? []).map((r: any) => [r.id, r]));
+const teamMembers = teamMemberIds.map((id) => who.get(id)).filter(Boolean) as { id: string; full_name: string }[];
 
 // Full active roster, for the admin-only "Edit people" pickers below -
 // setting analyst_id here is also how that person gets member-portal
@@ -100,40 +103,104 @@ const phaseTab =
 const activeTab = phaseTab;
 const backHref = `/pipeline/${phaseTab}`;
 const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
+
+const lastHistory = (history ?? [])[0];
 ---
 
 <PipelineLayout title={p.title} active={activeTab}>
+  <div class="pl-page">
   <p class="pl-crumb"><a class="pl-link" href={backHref}>← {backLabel}</a></p>
 
-  <header class="pl-phead">
-    <h1 class="pl-h1">{p.title}</h1>
-    <p class="pl-phead__status">
-      <b>{p.stage_label}</b>
-      <span>{p.phase}{p.days_in_stage != null && <> · {p.days_in_stage}d in stage</>}</span>
-    </p>
-  </header>
-  <div class="pl-chips">
-    <span>{p.ref}</span>
-    <span>{p.study_type}</span>
-    {p.current_conference && <span>{p.current_conference}</span>}
-    {p.current_journal && <span>Journal: {p.current_journal}</span>}
-    {p.parked && <span>parked</span>}
-    {p.archived_at && <span class="pl-warn">archived - {p.archive_reason}</span>}
-    {overdue && <span class="pl-warn">overdue {p.days_overdue}d</span>}
-    {stale && !overdue && <span class="pl-warn">stale</span>}
-    {p.needs_reassignment && <span class="pl-warn">needs reassignment</span>}
-    {p.hidden_at && <span class="pl-warn">hidden{p.hidden_reason ? ` - ${p.hidden_reason}` : ''}</span>}
-  </div>
+  <div class="pl-split">
+  <div class="pl-split__main">
+    <section class="pl-submit-card">
+      <div class="pl-submit-card__top">
+        <p class="pl-submit-kind">{p.study_type} · Research Article</p>
 
-  {isAdmin && (
-    <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-mini" style="margin:10px 0 0">
-      <input type="hidden" name="gate" value={p.hidden_at ? 'unhide' : 'hide'} />
-      {!p.hidden_at && <input name="reason" placeholder="Reason (optional)" />}
-      <button class="pl-btn pl-btn--ghost" type="submit">
-        {p.hidden_at ? 'Unhide this paper' : 'Hide this paper'}
-      </button>
-    </form>
-  )}
+        {isAdmin && (
+          <div class="pl-head-actions">
+            <a class="pl-icobtn" href={`/pipeline/projects/${id}/email`} title="Email" aria-label="Email"><svg viewBox="0 0 20 20" width="19" height="19" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M3 5.5l7 5.5 7-5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /></svg></a>
+            <details class="pl-inline-details pl-inline-details--compact">
+              <summary class="pl-icobtn" title={p.hidden_at ? 'Unhide' : 'Hide'} aria-label={p.hidden_at ? 'Unhide' : 'Hide'}>
+                {p.hidden_at ? <Fragment set:html={`<svg viewBox="0 0 20 20" width="19" height="19" aria-hidden="true"><path d="M2.5 10s2.8-5 7.5-5 7.5 5 7.5 5-2.8 5-7.5 5-7.5-5-7.5-5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /><circle cx="10" cy="10" r="2.3" fill="none" stroke="currentColor" stroke-width="1.6" /></svg>`} /> : <Fragment set:html={`<svg viewBox="0 0 20 20" width="19" height="19" aria-hidden="true"><path d="M2.5 10s2.8-5 7.5-5 7.5 5 7.5 5-2.8 5-7.5 5-7.5-5-7.5-5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /><circle cx="10" cy="10" r="2.3" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M3.5 3.5l13 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>`} />}
+              </summary>
+              <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-mini">
+                <input type="hidden" name="gate" value={p.hidden_at ? 'unhide' : 'hide'} />
+                {!p.hidden_at && <input name="reason" placeholder="Reason (optional)" />}
+                <button class="pl-btn pl-btn--ghost" type="submit">{p.hidden_at ? 'Unhide' : 'Confirm'}</button>
+              </form>
+            </details>
+            {p.deleted_at ? (
+              <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-mini">
+                <input type="hidden" name="gate" value="restore" />
+                <button class="pl-icobtn" type="submit" title="Restore" aria-label="Restore"><svg viewBox="0 0 20 20" width="19" height="19" aria-hidden="true"><path d="M4.5 8.5h7a4 4 0 0 1 0 8H8M4.5 8.5 7.5 5.5M4.5 8.5l3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></button>
+              </form>
+            ) : (
+              <details class="pl-inline-details pl-inline-details--compact">
+                <summary class="pl-icobtn pl-icobtn--danger" title="Delete" aria-label="Delete"><svg viewBox="0 0 20 20" width="19" height="19" aria-hidden="true"><path d="M3.5 5.5h13M8 5.5V4h4v1.5M5 5.5l.8 10.5h8.4L15 5.5M8.5 8.5v5M11.5 8.5v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg></summary>
+                <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-mini">
+                  <input type="hidden" name="gate" value="delete" />
+                  <input name="reason" placeholder="Reason (optional)" />
+                  <button class="pl-btn pl-btn--danger" type="submit">Confirm delete</button>
+                </form>
+              </details>
+            )}
+          </div>
+        )}
+      </div>
+
+      <h1 class="pl-h1">{p.full_title || p.title}</h1>
+      {p.full_title && <p class="pl-phead__short">{p.title}</p>}
+
+      <dl class="pl-submit-meta">
+        <div class="pl-submit-meta__row">
+          <dt>Submission Status</dt>
+          <dd>{p.stage_label}{p.days_in_stage != null && <span class="pl-muted"> · {p.days_in_stage}d in stage</span>}</dd>
+        </div>
+        {lastHistory && (
+          <div class="pl-submit-meta__row">
+            <dt>Last Modified</dt>
+            <dd>{fmtDate(lastHistory.at)}{lastHistory.actor && ` by ${lastHistory.actor}`} <span class="pl-muted">· {lastHistory.label}</span></dd>
+          </div>
+        )}
+        {p.next_target && (
+          <div class="pl-submit-meta__row">
+            <dt>
+              <svg class="pl-icon" viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
+                <circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.6" />
+                <path d="M10 6v4l3 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+              </svg>
+              Due by
+            </dt>
+            <dd>{fmtDate(p.next_target)}</dd>
+          </div>
+        )}
+      </dl>
+
+      {p.review_url && (
+        <a class="pl-btn pl-btn--ghost pl-btn--icon" href={p.review_url} target="_blank" rel="noopener">
+          <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
+            <rect x="2.5" y="4.5" width="15" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <path d="M3 5.5l7 5.5 7-5.5" fill="none" stroke="currentColor" stroke-width="1.5" />
+          </svg>
+          Review decision letter
+        </a>
+      )}
+
+      <div class="pl-chips">
+        <span>{p.ref}</span>
+        <span>{p.study_type}</span>
+        {p.current_conference && <span>{p.current_conference}</span>}
+        {p.current_journal && <span class="pl-chip-journal">Journal: {p.current_journal}</span>}
+        {p.parked && <span>parked</span>}
+        {p.archived_at && <span class="pl-warn">archived - {p.archive_reason}</span>}
+        {overdue && <span class="pl-warn">overdue {p.days_overdue}d</span>}
+        {stale && !overdue && <span class="pl-warn">stale</span>}
+        {p.needs_reassignment && <span class="pl-warn">needs reassignment</span>}
+        {p.hidden_at && <span class="pl-warn">hidden{p.hidden_reason ? ` - ${p.hidden_reason}` : ''}</span>}
+        {p.deleted_at && <span class="pl-warn">deleted{p.deleted_reason ? ` - ${p.deleted_reason}` : ''}</span>}
+      </div>
+    </section>
 
   {(projectMentees ?? []).length > 0 && (
     <section class="pl-actions">
@@ -202,7 +269,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
   )}
 
   {isAdmin && !p.archived_at && (
-    <section class="pl-actions">
+    <section class="pl-actions" id="pl-actions">
       <h2>Actions</h2>
 
       {pendingReqs.length > 0 && (
@@ -252,16 +319,6 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
             />
           )}
           <button class="pl-btn" type="submit">Update</button>
-        </form>
-      )}
-
-      {/* Full title - what Submissions shows in place of the short title */}
-      {['manuscript', 'journal'].includes(p.phase) && (
-        <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-actrow">
-          <input type="hidden" name="gate" value="full-title" />
-          <label class="pl-actlbl">Full title</label>
-          <input name="full_title" placeholder="Full academic title (blank = use the short title)" value={p.full_title ?? ''} style="flex:1;min-width:0" />
-          <button class="pl-btn" type="submit">Save</button>
         </form>
       )}
 
@@ -361,7 +418,7 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
     </section>
   )}
   {!isAdmin && !p.archived_at && (
-    <section class="pl-actions">
+    <section class="pl-actions" id="pl-actions">
       <h2>Your status update</h2>
 
       {p.phase === 'idea' && (
@@ -408,9 +465,9 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
     <p class="pl-muted pl-small" style="margin:14px 0">This project is archived - no further status changes.</p>
   )}
 
-  {canLink && (
-    <section class="pl-actions">
-      <h2>Manuscript link</h2>
+  <section class="pl-actions pl-actions--plain">
+    <h2>Manuscript link</h2>
+    {canLink && (
       <form method="post" action={`/pipeline/projects/${id}/link`} class="pl-actrow">
         <label class="pl-actlbl">Draft document</label>
         <input
@@ -423,13 +480,31 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
         />
         <button class="pl-btn" type="submit">Save</button>
       </form>
-      <p class="pl-actrow pl-muted pl-small" style="border:0;padding-top:0">
-        {DOC_LINK_HINT} Whoever is drafting keeps this pointed at the working copy.
-      </p>
-    </section>
-  )}
+    )}
+    <div class="pl-linktiles">
+      {[
+        { label: 'Manuscript draft', url: p.manuscript_url, empty: 'Not set' },
+        { label: 'Reviewed copy', url: p.review_url, empty: 'Not submitted yet' },
+      ].map((t) =>
+        t.url ? (
+          <a class="pl-linktile" href={t.url} target="_blank" rel="noopener">
+            <span class="pl-linktile__label">{t.label}</span>
+            <span class="pl-linktile__value">{docLinkLabel(t.url)} →</span>
+          </a>
+        ) : (
+          <span class="pl-linktile is-disabled" aria-disabled="true">
+            <span class="pl-linktile__label">{t.label}</span>
+            <span class="pl-linktile__value">{t.empty}</span>
+          </span>
+        ),
+      )}
+      <span class:list={['pl-linktile', 'is-static', !p.legacy_source && 'is-disabled']}>
+        <span class="pl-linktile__label">Legacy source</span>
+        <span class="pl-linktile__value">{p.legacy_source || 'None'}</span>
+      </span>
+    </div>
+  </section>
 
-  <div class="pl-detail">
     <div>
       <h2 class="pl-sech">History</h2>
       {(!history || history.length === 0) && (
@@ -444,15 +519,23 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
         ))}
       </ul>
     </div>
+  </div>
 
+  <div class="pl-split__side">
     <aside class="pl-rail">
       <h3>People</h3>
-      <dl>
+      <dl class="pl-rail__inline">
         <dt>Lead</dt><dd>{who.get(p.lead_id)?.full_name ?? '-'}</dd>
         {p.colead_id && <><dt>Co-lead</dt><dd>{who.get(p.colead_id)?.full_name}</dd></>}
         <dt>Analyst</dt><dd>{who.get(p.analyst_id)?.full_name ?? '-'}</dd>
         {p.presenter_id && <><dt>Presenter</dt><dd>{who.get(p.presenter_id)?.full_name}</dd></>}
         <dt>Corresponding author</dt><dd>{who.get(p.corresponding_id)?.full_name ?? <span class="pl-muted">not set</span>}</dd>
+        {teamMembers.length > 0 && (
+          <>
+            <dt>Team members</dt>
+            <dd>{teamMembers.map((m) => m.full_name).join(', ')}</dd>
+          </>
+        )}
       </dl>
 
       {isAdmin && (
@@ -464,13 +547,14 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
             <PeoplePicker name="analyst_id" label="Analyst" roster={roster ?? []} selectedId={p.analyst_id} selectedName={who.get(p.analyst_id)?.full_name} />
             <PeoplePicker name="presenter_id" label="Presenter" roster={roster ?? []} selectedId={p.presenter_id} selectedName={who.get(p.presenter_id)?.full_name} />
             <PeoplePicker name="corresponding_id" label="Corresponding author" roster={roster ?? []} selectedId={p.corresponding_id} selectedName={who.get(p.corresponding_id)?.full_name} />
+            <TeamPicker name="team_member_ids" label="Team members" roster={roster ?? []} selected={teamMembers} />
             <button class="pl-btn" type="submit">Save people</button>
           </form>
         </details>
       )}
 
       <h3>Dates</h3>
-      <dl>
+      <dl class="pl-rail__inline">
         <dt>Opened</dt><dd>{fmtDate(p.created_at)}</dd>
         <dt>In current stage</dt><dd>{p.days_in_stage ?? 0} days</dd>
         <dt>Next target</dt><dd>{p.next_target ? fmtDate(p.next_target) : <span class="pl-muted">none</span>}</dd>
@@ -517,19 +601,9 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
         </>
       )}
 
-      <h3>Links</h3>
-      <dl>
-        <dt>Manuscript draft</dt>
-        <dd>{p.manuscript_url
-          ? <a href={p.manuscript_url} target="_blank" rel="noopener">{docLinkLabel(p.manuscript_url)} →</a>
-          : <span class="pl-muted">not set</span>}</dd>
-        <dt>Reviewed copy</dt>
-        <dd>{p.review_url
-          ? <a href={p.review_url} target="_blank" rel="noopener">{docLinkLabel(p.review_url)} →</a>
-          : <span class="pl-muted">none yet</span>}</dd>
-        <dt>Legacy source</dt><dd class="pl-small">{p.legacy_source}</dd>
-      </dl>
     </aside>
+  </div>
+  </div>
   </div>
 </PipelineLayout>
 
@@ -550,3 +624,105 @@ const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
     sync();
   })();
 </script>
+
+<style>
+
+  /* Submission-portal layout (Hindawi's "Your Progress" tracker is the
+     reference) - one grid for the whole page, not just the header: title
+     card/Actions/Manuscript link/History on the left, Your Progress/People
+     rail on the right. Sharing a single grid (instead of two separate ones
+     stacked on top of each other) is what keeps the rail's left edge lined
+     up with the Your Progress card above it. Stacks on narrow screens. */
+  .pl-split { display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 20px; align-items: start; margin: 18px 0 26px; }
+  @media (max-width: 860px) { .pl-split { grid-template-columns: 1fr; } }
+  .pl-split__main { min-width: 0; }
+  .pl-split__side { display: grid; gap: 20px; }
+
+  /* No border here on purpose - it's just the page's own text now, not a
+     boxed-off card. */
+  .pl-submit-card { padding: 4px 0 22px; }
+  .pl-submit-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+  .pl-submit-kind { margin: 0; color: var(--text-muted, #64748b); font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+  .pl-submit-card .pl-h1 { margin-top: 10px; }
+
+  .pl-head-actions { display: flex; flex-wrap: wrap; gap: 8px; flex: 0 0 auto; }
+  .pl-inline-details--compact { position: relative; }
+  .pl-inline-details--compact > summary { list-style: none; }
+  .pl-inline-details--compact > summary::-webkit-details-marker { display: none; }
+  .pl-inline-details--compact .pl-mini {
+    position: absolute;
+    z-index: 10;
+    top: 100%;
+    right: 0;
+    margin-top: 6px;
+    padding: 10px;
+    flex-wrap: nowrap;
+    background: var(--surface, #fff);
+    border: 1px solid var(--pl-border, #d8dce6);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  }
+  .pl-btn--sm { padding: 6px 14px; font-size: 0.7rem; }
+
+  .pl-phead__short { margin: 4px 0 0; color: var(--pl-accent); font-size: 1.05rem; font-weight: 700; }
+
+  .pl-submit-meta { margin: 16px 0 0; display: grid; gap: 8px; }
+  .pl-submit-meta__row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; font-size: 0.88rem; }
+  .pl-submit-meta__row dt { flex: 0 0 150px; display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted, #64748b); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .pl-submit-meta__row dd { margin: 0; color: var(--text-strong, #1e293b); }
+  .pl-submit-meta__row .pl-icon { color: var(--text-muted); flex-shrink: 0; }
+
+  .pl-btn--icon { display: inline-flex; align-items: center; gap: 7px; margin-top: 14px; }
+
+  .pl-submit-card .pl-chips { margin: 18px 0 0; }
+
+  /* Journal name - the one piece of the chips row worth reading at a
+     glance, so it gets real weight/size instead of the uniform small-caps
+     treatment the rest of the chips share. */
+  .pl-chip-journal {
+    font-size: 0.85rem !important;
+    font-weight: 800 !important;
+    text-transform: none !important;
+    letter-spacing: 0 !important;
+    color: var(--pl-accent) !important;
+    border-color: var(--pl-accent) !important;
+  }
+
+  /* Links as borderless tiles; one with nothing set yet is greyed out and
+     not clickable. */
+  .pl-linktiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px 0 4px; }
+  @media (max-width: 640px) { .pl-linktiles { grid-template-columns: 1fr; } }
+  .pl-linktile {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    background: color-mix(in srgb, var(--text-strong) 5%, transparent);
+    color: var(--text-strong);
+    text-decoration: none;
+    transition: background 0.15s ease;
+  }
+  a.pl-linktile:hover { background: color-mix(in srgb, var(--pl-accent) 12%, transparent); }
+  .pl-linktile__label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+  .pl-linktile__value { font-size: 0.92rem; font-weight: 700; }
+  a.pl-linktile .pl-linktile__value { color: var(--pl-accent); }
+  .pl-linktile.is-static .pl-linktile__value { font-weight: 600; }
+  .pl-linktile.is-disabled { opacity: 0.5; cursor: not-allowed; }
+  .pl-linktile.is-disabled .pl-linktile__value { font-weight: 500; }
+  .pl-actions--plain { border: 0; padding-left: 0; padding-right: 0; background: transparent; }
+  /* People and Dates read "Lead: Name" on one line, not label over value. */
+  .pl-rail .pl-rail__inline dt { float: left; clear: left; margin: 0 6px 0 0; font-size: 0.85rem; line-height: 1.6; color: var(--text-muted); }
+  .pl-rail .pl-rail__inline dt::after { content: ':'; }
+  .pl-rail .pl-rail__inline dd { margin: 0 0 8px; line-height: 1.6; }
+  /* Email / Hide / Delete as bare icons - no box around them. */
+  .pl-head-actions { gap: 4px; align-items: center; }
+  .pl-head-actions .pl-mini { margin-top: 0; }
+  .pl-icobtn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; padding: 0;
+    border: 0; background: transparent;
+    color: var(--text-muted); cursor: pointer; list-style: none;
+  }
+  .pl-icobtn::-webkit-details-marker { display: none; }
+  .pl-icobtn:hover, details[open] > .pl-icobtn { color: var(--pl-accent); }
+  .pl-icobtn--danger:hover, details[open] > .pl-icobtn--danger { color: var(--red, #b42318); }
+</style>

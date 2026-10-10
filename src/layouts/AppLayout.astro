@@ -11,7 +11,7 @@ interface Props {
   heading: string;
   user: User;
   /** Which app nav item is active. */
-  active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'mentees' | 'requests' | 'testimonials' | 'hidden' | 'access' | 'tasks' | 'new-idea';
+  active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'mentees' | 'requests' | 'testimonials' | 'hidden' | 'deleted' | 'access' | 'tasks' | 'new-idea';
 }
 const { title, heading, user, active } = Astro.props;
 ---
@@ -28,6 +28,7 @@ const { title, heading, user, active } = Astro.props;
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#141412" media="(prefers-color-scheme: dark)" />
     <FontLinks />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" />
   </head>
 
   <body class="app">
@@ -41,7 +42,13 @@ const { title, heading, user, active } = Astro.props;
     </main>
 
     <style is:global>
-      .app { min-height: 100dvh; background: var(--bg); }
+      /* Internal pages run on Open Sans; Archivo stays for the public site. */
+      .app {
+        --font-sans: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        --font-display: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        --font-serif: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        min-height: 100dvh; background: var(--bg);
+      }
       .app__main { padding-block: var(--space-l) var(--space-xl); }
       .app__shell {
         max-width: 1140px;

@@ -1,0 +1,114 @@
+---
+import AppLayout from '../../layouts/AppLayout.astro';
+import '../../styles/admin.css';
+import { currentUser } from '../../lib/auth';
+import { getPipelineSession } from '../../lib/pipeline-auth';
+import { listDeletedProjects } from '../../lib/deleted-papers';
+
+export const prerender = false;
+
+const TRASH_DAYS = 60;
+
+const me = currentUser(Astro.cookies);
+if (!me) return Astro.redirect('/login', 302);
+if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+// set_project_deleted() resolves the caller via me() (auth.uid()), which
+// only works on a client carrying the admin's own Supabase session - not
+// supabaseAdmin()'s service-role key. Same bridge /admin/hidden uses, since
+// /admin/* pages sit outside the /pipeline middleware.
+const session = await getPipelineSession(Astro.request, Astro.cookies);
+const supabase = session?.supabase ?? null;
+
+let flash: { tone: 'ok' | 'error'; text: string } | null = null;
+
+if (supabase && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const projectId = String(form.get('projectId') ?? '');
+  const { error } = await supabase.rpc('set_project_deleted', {
+    p_project: projectId,
+    p_deleted: false,
+    p_reason: null,
+  });
+  flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Paper restored.' };
+}
+
+let rows: Awaited<ReturnType<typeof listDeletedProjects>> = [];
+let dbReady = false;
+let dbError = '';
+try {
+  rows = await listDeletedProjects();
+  dbReady = true;
+} catch (err) {
+  dbError = err instanceof Error ? err.message : 'Could not load deleted papers.';
+}
+
+const fmt = (t: string) => new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+const daysLeft = (deletedAt: string) => {
+  const elapsed = (Date.now() - new Date(deletedAt).getTime()) / (24 * 60 * 60 * 1000);
+  return Math.max(0, Math.ceil(TRASH_DAYS - elapsed));
+};
+const PHASE_LABEL: Record<string, string> = {
+  idea: 'Idea',
+  conference: 'Conference',
+  manuscript: 'Ongoing',
+  journal: 'Submissions',
+};
+---
+
+<AppLayout title="Deleted papers" heading="Deleted papers" user={me} active="deleted">
+  <div class="adm">
+    {flash && (
+      <div class:list={['adm-flash', `adm-flash--${flash.tone}`]} role="status">
+        <p>{flash.text}</p>
+      </div>
+    )}
+
+    {!dbReady && (
+      <div class="adm-flash adm-flash--error">
+        <p>
+          Could not load deleted papers.
+          {dbError && <><br /><span class="adm-hint">({dbError})</span></>}
+        </p>
+      </div>
+    )}
+
+    {dbReady && (
+      <div class="adm-panel">
+        <h2 class="adm-panel__title">Deleted ({rows.length})</h2>
+        <p class="adm-hint" style="margin:0 0 14px">
+          A deleted paper is removed from every tab but kept for {TRASH_DAYS} days in case it was a mistake - restore it here. After that it's gone for good.
+        </p>
+        {rows.length === 0 ? (
+          <p class="adm-hint">Nothing deleted right now. Delete a paper from its detail page in the Workflow.</p>
+        ) : (
+          <div class="adm-scroll">
+            <table class="adm-table">
+              <thead>
+                <tr><th>Ref</th><th>Title</th><th>Phase</th><th>Reason</th><th>Deleted</th><th>Vanishes in</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr>
+                    <td class="adm-mono">{r.ref}</td>
+                    <td>{r.full_title || r.title}</td>
+                    <td>{PHASE_LABEL[r.phase] ?? r.phase}</td>
+                    <td>{r.deleted_reason || '-'}</td>
+                    <td class="adm-mono">{fmt(r.deleted_at)}{r.deleted_by_name && <> · {r.deleted_by_name}</>}</td>
+                    <td class="adm-mono">{daysLeft(r.deleted_at)}d</td>
+                    <td class="adm-actions">
+                      <form method="post" class="adm-inline">
+                        <input type="hidden" name="projectId" value={r.id} />
+                        <button class="adm-btn" type="submit">Restore</button>
+                      </form>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    )}
+  </div>
+</AppLayout>

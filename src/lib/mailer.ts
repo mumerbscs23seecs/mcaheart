@@ -3,15 +3,12 @@ import { INTENT_LABELS } from './contact-schema';
 import { sendEmail, type Attachment } from './email';
 
 /**
- * Contact-form delivery. Transport (Gmail SMTP / Resend / log) is handled by
- * src/lib/email.ts. Env vars:
+ * Contact-form delivery, sent from info@ (src/lib/email.ts). Env:
  *
  *   CONTACT_TO    – destination inbox
- *   CONTACT_FROM  – sender (ignored by the Gmail transport)
  */
 
-const TO = import.meta.env.CONTACT_TO ?? 'studio@medishift.in';
-const FROM = import.meta.env.CONTACT_FROM ?? 'MCA Heart <onboarding@resend.dev>';
+const TO = import.meta.env.CONTACT_TO ?? 'researchlab@mcaheart.com';
 
 const NEEDS_LETTER_LABEL: Record<string, string> = { yes: 'Yes', no: 'No' };
 
@@ -65,10 +62,10 @@ function renderRows(data: ContactPayload): string {
     .map(
       ([label, value]) =>
         `<tr>
-           <td style="padding:6px 14px 6px 0;color:#7d6f5e;font:600 12px/1.4 Arial,sans-serif;
+           <td style="padding:6px 14px 6px 0;color:#7d6f5e;font:600 12px/1.4 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;
                       text-transform:uppercase;letter-spacing:.12em;white-space:nowrap;
                       vertical-align:top">${label}</td>
-           <td style="padding:6px 0;color:#1c1714;font:14px/1.5 Arial,sans-serif;white-space:pre-wrap">${escapeHtml(value)}</td>
+           <td style="padding:6px 0;color:#1c1714;font:14px/1.5 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;white-space:pre-wrap">${escapeHtml(value)}</td>
          </tr>`,
     )
     .join('');
@@ -77,9 +74,9 @@ function renderRows(data: ContactPayload): string {
 function renderEmail(data: ContactPayload, note: string): string {
   return `<div style="background:#f7f1e3;padding:28px">
   <div style="max-width:620px;margin:0 auto;background:#fffdf7;border:1px solid rgba(122,43,18,.18);padding:28px">
-    <p style="margin:0 0 4px;color:#9e3b1b;font:700 11px/1 Arial,sans-serif;
+    <p style="margin:0 0 4px;color:#9e3b1b;font:700 11px/1 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;
               text-transform:uppercase;letter-spacing:.24em">MCA Heart</p>
-    <h1 style="margin:0 0 20px;color:#1c1714;font:600 22px/1.2 Georgia,serif">
+    <h1 style="margin:0 0 20px;color:#1c1714;font:600 22px/1.2 'Open Sans','Segoe UI',Helvetica,'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">
       New enquiry from the website
     </h1>
     <table style="border-collapse:collapse;width:100%">${renderRows(data)}</table>
@@ -99,18 +96,17 @@ export interface DeliverOpts {
 export async function deliverEnquiry(data: ContactPayload, opts: DeliverOpts = {}): Promise<void> {
   const note = opts.cvTooLarge
     ? `<hr style="border:0;border-top:1px solid rgba(122,43,18,.18);margin:22px 0" />
-       <p style="margin:0;color:#92600e;font:600 13px/1.5 Arial,sans-serif">
+       <p style="margin:0;color:#92600e;font:600 13px/1.5 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">
          ${escapeHtml(opts.cvFilename ?? 'The CV')} was too large to attach - please follow up with the sender directly for a copy.</p>`
     : opts.attachments?.length
       ? `<hr style="border:0;border-top:1px solid rgba(122,43,18,.18);margin:22px 0" />
-         <p style="margin:0;color:#166534;font:600 13px/1.5 Arial,sans-serif">📎 ${escapeHtml(
+         <p style="margin:0;color:#166534;font:600 13px/1.5 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">📎 ${escapeHtml(
            opts.attachments.map((a) => a.filename).join(', '),
          )} attached.</p>`
       : '';
 
   const sent = await sendEmail({
     to: TO,
-    from: FROM,
     replyTo: data.email,
     subject: `[MCA Heart] ${INTENT_LABELS[data.intent]} - ${data.fullName}`,
     html: renderEmail(data, note),

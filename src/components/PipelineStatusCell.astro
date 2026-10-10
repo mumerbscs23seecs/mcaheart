@@ -99,7 +99,8 @@ const editable =
         return (
           <span class="pl-status-extra" data-status-extra={s.code} hidden>
             <span class="pl-status-extra__label">Confirm &ldquo;{s.label}&rdquo;?</span>
-            <button type="submit" class="pl-status-extra__go pl-status-extra__go--confirm">Confirm</button>
+            <button type="submit" class="pl-status-extra__go pl-status-extra__go--confirm">Yes</button>
+            <button type="button" class="pl-status-extra__go pl-status-extra__go--no" data-status-cancel>No</button>
           </span>
         );
       }
@@ -160,6 +161,10 @@ const editable =
     font-weight: 700;
     cursor: pointer;
     white-space: nowrap;
+  }
+  .pl-status-extra__go--no {
+    background: transparent;
+    color: var(--text-strong, var(--ink));
   }
   .pl-status-extra__go--confirm {
     border-color: var(--pl-accent, var(--ink));
@@ -224,5 +229,22 @@ const editable =
     // Member's placeholder option ("") means "no change chosen yet" - don't submit that.
     if (select.hasAttribute('data-member-select') && !select.value) return;
     form.submit();
+  });
+
+  // "No" on a confirm box: put the status back to what it was, nothing is sent.
+  document.addEventListener('click', (e) => {
+    const no = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-status-cancel]');
+    if (!no) return;
+    const form = no.closest<HTMLFormElement>('[data-status-form]');
+    if (!form) return;
+    const select = form.querySelector<HTMLSelectElement>('select[data-status-select]');
+    if (select) {
+      const original = [...select.options].find((o) => o.defaultSelected);
+      if (original) select.value = original.value;
+    }
+    form.querySelectorAll<HTMLElement>('[data-status-extra]').forEach((box) => { box.hidden = true; });
+    form.querySelectorAll<HTMLElement>('[data-outcome-field]').forEach((el) => el.remove());
+    const gateInput = form.querySelector<HTMLInputElement>('[data-gate-input]');
+    if (gateInput) gateInput.value = 'stage';
   });
 </script>

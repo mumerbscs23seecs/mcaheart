@@ -29,7 +29,12 @@ async function recipientsFor(ids: (string | null)[]) {
 
 const form = await Astro.request.formData();
 const gate = String(form.get('gate') ?? '');
-const step = String(form.get('step') ?? 'preview'); // every action previews first
+// Status changes apply straight away with no email. Emails about a paper are
+// written separately, by choice, from its Email page (projects/[id]/email).
+// The one exception: approving or declining a member's request still emails
+// that member automatically. The preview screen below only appears if a form
+// asks for step=preview.
+const step = String(form.get('step') ?? (gate === 'request-decide' ? 'confirm' : 'confirm-no-email'));
 const ret = String(form.get('return') ?? '');
 const dest = /^\/pipeline\/[\w/-]*(\?[\w=&%-]*)?$/.test(ret) ? ret : back;
 const note = String(form.get('note') ?? '').trim() || undefined;
@@ -39,7 +44,7 @@ if (reviewUrl && !isDocLink(reviewUrl)) {
   return Astro.redirect(`${back}?err=${encodeURIComponent(DOC_LINK_HINT)}`);
 }
 
-const { data: p0 } = await supabase.from('projects').select('*').eq('id', projectId).maybeSingle();
+const { data: p0 } = await supabase.from('project_list').select('*').eq('id', projectId).maybeSingle();
 if (!p0) return Astro.redirect('/pipeline/conferences');
 
 let rpc: { fn: string; args: Record<string, unknown> } | null = null;
@@ -47,6 +52,7 @@ let mail: null | {
   template: TransitionTemplate;
   venue?: string;
   stageLabel?: string;
+  stage?: string;
   to: (string | null)[];
 } = null;
 let actionLabel = 'Update';
@@ -121,10 +127,10 @@ if (gate === '1') {
     // A journal-phase "Submitted - technical check" also records which journal.
     if (!journal) return Astro.redirect(`${back}?err=${encodeURIComponent('Enter the journal name.')}`);
     rpc = { fn: 'set_submitted_journal', args: { p_project: projectId, p_journal: journal } };
-    mail = { template: 'stage_update', venue: journal, stageLabel, to: [p0.lead_id, p0.analyst_id] };
+    mail = { template: 'stage_update', venue: journal, stageLabel, stage, to: [p0.lead_id, p0.analyst_id] };
   } else {
     rpc = { fn: 'advance_stage', args: { p_project: projectId, p_stage: stage } };
-    mail = { template: 'stage_update', stageLabel, to: [p0.lead_id, p0.analyst_id, p0.colead_id] };
+    mail = { template: 'stage_update', stageLabel, stage, to: [p0.lead_id, p0.analyst_id, p0.colead_id] };
   }
   actionLabel = `Set status to ${stageLabel}`;
 } else if (gate === 'clear-reassignment') {
@@ -148,6 +154,17 @@ if (gate === '1') {
   const sep = dest.includes('?') ? '&' : '?';
   if (error) return Astro.redirect(`${dest}${sep}err=${encodeURIComponent(error.message)}`);
   return Astro.redirect(`${dest}${sep}ok=${encodeURIComponent(hide ? 'Paper hidden.' : 'Paper unhidden.')}`);
+} else if (gate === 'delete' || gate === 'restore') {
+  // Soft delete, not a status change - applies directly, no email/preview.
+  // A deleted paper drops out of every tab like a hidden one, lands on
+  // /admin/deleted, and is hard-deleted by the cron sweep 60 days later
+  // unless restored first.
+  const del = gate === 'delete';
+  const reason = String(form.get('reason') ?? '').trim() || null;
+  const { error } = await supabase.rpc('set_project_deleted', { p_project: projectId, p_deleted: del, p_reason: reason });
+  const sep = dest.includes('?') ? '&' : '?';
+  if (error) return Astro.redirect(`${dest}${sep}err=${encodeURIComponent(error.message)}`);
+  return Astro.redirect(`${dest}${sep}ok=${encodeURIComponent(del ? 'Paper deleted.' : 'Paper restored.')}`);
 } else if (gate === 'request-decide') {
   const requestId = String(form.get('request') ?? '');
   const approve = String(form.get('approve') ?? '') === 'yes';
@@ -168,15 +185,22 @@ if (gate === '1') {
   return Astro.redirect(`${back}?err=unknown+action`);
 }
 
-const to = await recipientsFor(mail.to);
+// Recipients default to the people on the paper for this action, but the
+// preview lets the admin remove any of them or add other addresses. Once the
+// preview form has been submitted, its list (recipients_set=1) wins.
+const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
+const to = form.get('recipients_set') === '1'
+  ? [...new Set(form.getAll('recipients').map((v) => String(v).trim().toLowerCase()).filter((e) => EMAIL_RE.test(e)))]
+  : await recipientsFor(mail.to);
 const subjectOverride = String(form.get('email_subject') ?? '').trim();
 const rendered = renderTransitionEmail({
   to,
   template: mail.template,
-  projectTitle: p0.title,
-  ref: p0.ref,
-  venue: mail.venue,
+  projectTitle: p0.full_title || p0.title,
+  venue: mail.venue ?? (p0.phase === 'journal' ? p0.current_journal : p0.current_conference) ?? undefined,
   stageLabel: mail.stageLabel,
+  stage: mail.stage,
+  phase: p0.phase,
   actor: person.full_name,
   note,
   link: `${Astro.url.origin}${back}`,
@@ -221,29 +245,55 @@ if (step === 'confirm' || step === 'confirm-no-email') {
 // same rpc/mail plan above.
 const hidden: Record<string, string> = {};
 for (const [k, v] of form.entries()) {
-  if (k === 'step' || k === 'email_subject' || k === 'note') continue;
+  if (['step', 'email_subject', 'note', 'recipients', 'recipients_set'].includes(k)) continue;
   hidden[k] = String(v);
 }
+
+// Suggestions for the recipients box: everyone active with a real email.
+const { data: rosterRows } = await supabase.from('people').select('full_name,email').eq('active', true).order('full_name');
+const rosterEmails = (rosterRows ?? []).filter((r: any) => REAL(r.email));
 ---
 
 <PipelineLayout title="Preview email">
   <p class="pl-crumb"><a class="pl-link" href={back}>&larr; Back to project</a></p>
   <h1 class="pl-h1">Preview: {actionLabel}</h1>
-  <p class="pl-sub">Nothing has changed yet. Review the email below, edit the subject or note if you like, then send - or apply the change with no email at all.</p>
-
-  <section class="pl-actions">
-    <h2>Recipients</h2>
-    <p class="pl-muted" style="padding:14px 0 4px">
-      {to.length
-        ? to.join(', ')
-        : 'No recipients with a real email on file - the change will still apply, just nothing will send.'}
-    </p>
-  </section>
-
   <form method="post" style="margin-top:18px">
     {Object.entries(hidden).map(([k, v]) => <input type="hidden" name={k} value={v} />)}
-    <div class="pl-actions">
+    <input type="hidden" name="recipients_set" value="1" />
+
+    <section class="pl-actions pl-actions--plain">
+      <h2>Recipients</h2>
+      <div class="rcpt" data-rcpt>
+        <div class="rcpt__chips" data-rcpt-chips>
+          {to.map((e) => (
+            <span class="rcpt__chip" data-rcpt-chip={e}>
+              {e}
+              <input type="hidden" name="recipients" value={e} />
+              <button type="button" class="rcpt__x" data-rcpt-remove aria-label={`Remove ${e}`}>×</button>
+            </span>
+          ))}
+        </div>
+        <input
+          class="rcpt__input"
+          type="text"
+          inputmode="email"
+          list="rcpt-roster"
+          placeholder="Add an email or pick a name, then press Enter"
+          autocomplete="off"
+          data-rcpt-input
+        />
+        <datalist id="rcpt-roster">
+          {rosterEmails.map((r: any) => <option value={r.email}>{r.full_name}</option>)}
+        </datalist>
+        <p class="rcpt__hint" data-rcpt-empty hidden={to.length > 0}>
+          No recipients. The change will still apply, but no email will be sent.
+        </p>
+      </div>
+    </section>
+
+    <div class="pl-actions pl-actions--plain">
       <h2>Email</h2>
+
       <label class="pl-field"><span>Subject</span><input name="email_subject" value={subject} /></label>
       <label class="pl-field"><span>Note (optional - appears in the email)</span><textarea name="note" rows="3">{note ?? ''}</textarea></label>
       <div class="pl-field">
@@ -264,3 +314,93 @@ for (const [k, v] of form.entries()) {
     </div>
   </form>
 </PipelineLayout>
+
+<style is:global>
+  /* Global: chips added in the browser don't get Astro's scoped attribute. */
+  .pl-actions--plain { border: 0; padding-left: 0; padding-right: 0; background: transparent; }
+  .rcpt { padding: 12px 0 4px; }
+  .rcpt__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .rcpt__chips:empty { margin-bottom: 0; }
+  .rcpt__chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 5px 7px 5px 12px;
+    font-size: 0.85rem; font-weight: 600; color: var(--text-strong);
+    background: var(--bg-tint, #f4f2ee);
+    border: 1px solid var(--pl-border, #d8dce6);
+    border-radius: 999px;
+  }
+  .rcpt__x {
+    appearance: none; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; padding: 0; line-height: 1;
+    border: 1px solid var(--red, #b42318); border-radius: 4px;
+    background: var(--red-wash); color: var(--red, #b42318); font-size: 0.85rem;
+  }
+  .rcpt__x:hover { background: var(--red, #b42318); color: #fff; }
+  .rcpt__input {
+    width: 100%; max-width: 520px;
+    padding: 9px 12px;
+    border: 1px solid var(--border-soft); border-radius: 0;
+    background: var(--bg, #fff); color: var(--text-strong); font: inherit;
+  }
+  .rcpt__input.is-bad { border-color: var(--red, #b42318); }
+  .rcpt__hint { margin: 8px 0 0; font-size: 0.85rem; color: var(--text-muted); }
+  .rcpt__hint[hidden] { display: none; }
+</style>
+
+<script is:inline>
+  (() => {
+    const box = document.querySelector('[data-rcpt]');
+    if (!box) return;
+    const chips = box.querySelector('[data-rcpt-chips]');
+    const input = box.querySelector('[data-rcpt-input]');
+    const empty = box.querySelector('[data-rcpt-empty]');
+    const RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
+    const roster = new Set([...document.querySelectorAll('#rcpt-roster option')].map((o) => o.value.toLowerCase()));
+    const sync = () => { empty.hidden = chips.children.length > 0; };
+    const has = (e) => [...chips.querySelectorAll('[data-rcpt-chip]')].some((c) => c.dataset.rcptChip === e);
+
+    const add = (raw) => {
+      const parts = String(raw).split(/[\s,;]+/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+      let bad = false;
+      for (const e of parts) {
+        if (!RE.test(e)) { bad = true; continue; }
+        if (has(e)) continue;
+        const chip = document.createElement('span');
+        chip.className = 'rcpt__chip';
+        chip.dataset.rcptChip = e;
+        chip.append(e);
+        const h = document.createElement('input');
+        h.type = 'hidden'; h.name = 'recipients'; h.value = e;
+        const x = document.createElement('button');
+        x.type = 'button'; x.className = 'rcpt__x'; x.dataset.rcptRemove = '';
+        x.setAttribute('aria-label', 'Remove ' + e); x.textContent = '×';
+        chip.append(h, x);
+        chips.appendChild(chip);
+      }
+      input.classList.toggle('is-bad', bad);
+      if (!bad) input.value = '';
+      sync();
+    };
+
+    input.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter' || ev.key === ',' || ev.key === ';') {
+        ev.preventDefault();
+        if (input.value.trim()) add(input.value);
+      }
+    });
+    // Picking a name from the suggestion list fills in a whole roster address - add it straight away.
+    input.addEventListener('input', () => {
+      input.classList.remove('is-bad');
+      if (roster.has(input.value.trim().toLowerCase())) add(input.value);
+    });
+    // Anything typed but not yet added still counts when the form is submitted.
+    input.form.addEventListener('submit', () => { if (input.value.trim()) add(input.value); });
+    chips.addEventListener('click', (ev) => {
+      const x = ev.target.closest('[data-rcpt-remove]');
+      if (!x) return;
+      x.closest('[data-rcpt-chip]').remove();
+      sync();
+    });
+  })();
+</script>

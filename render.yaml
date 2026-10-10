@@ -22,24 +22,22 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
-      # Contact form delivery
-      - key: RESEND_API_KEY
+      # Email - everything is sent from researchlab@mcaheart.com over SMTP
+      # (ZeptoMail or Zoho Mail; see src/lib/email.ts).
+      - key: SMTP_HOST
         sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      # Where form submissions are delivered
       - key: CONTACT_TO
         sync: false
-      - key: CONTACT_FROM
-        sync: false
-      # Gmail SMTP fallback (optional - leave unset to skip)
-      - key: GMAIL_USER
-        sync: false
-      - key: GMAIL_APP_PASSWORD
-        sync: false
-      # Recruitment / ideas notification routing (optional)
       - key: IDEAS_TO
         sync: false
-      - key: IDEAS_FROM
+      - key: RECRUIT_TO
         sync: false
-      - key: NOTIFY_FROM
+      - key: DEFAULT_MEMBER_PASSWORD
         sync: false
       - key: COORDINATOR_EMAILS
         sync: false

@@ -7,7 +7,7 @@ import type { Attachment } from '../../lib/email';
 
 export const prerender = false;
 
-/** Attach to the notification email only when comfortably under Gmail's 25 MB. */
+/** Attach to the notification email only when comfortably under typical 20-25 MB mail limits. */
 const EMAIL_ATTACH_MAX = 8 * 1024 * 1024;
 
 const json = (body: unknown, status = 200, headers: HeadersInit = {}) =>
@@ -120,7 +120,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
   }
   // Record is saved above either way - don't make the confirmation message
-  // wait on SMTP (Gmail auth failure + Resend fallback can take seconds).
+  // wait on SMTP (an SMTP round trip can take seconds).
   deliverApplication(parsed.data, { attachments, filesInPanel }).catch((err) => {
     console.error('[recruitment] email failed (record kept):', err);
   });

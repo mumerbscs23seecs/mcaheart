@@ -3,12 +3,13 @@ import { pendingIdeaCount } from '../lib/ideas';
 import { pendingApplicationCount } from '../lib/applications';
 import { unreadRequestCount } from '../lib/requests';
 import { hiddenProjectCount } from '../lib/hidden-papers';
+import { deletedProjectCount } from '../lib/deleted-papers';
 import { getNotifications } from '../lib/notifications';
 import ThemeToggle from './ThemeToggle.astro';
 import LogoMark from './LogoMark.astro';
 
 interface Props {
-  active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'mentees' | 'requests' | 'testimonials' | 'hidden' | 'access' | 'tasks' | 'new-idea';
+  active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'mentees' | 'requests' | 'testimonials' | 'hidden' | 'deleted' | 'access' | 'tasks' | 'new-idea';
   name: string;
   role: string;
   email: string;
@@ -36,6 +37,7 @@ const pendingIdeas = isAdmin ? await safeCount(pendingIdeaCount) : 0;
 const pendingApps = isAdmin ? await safeCount(pendingApplicationCount) : 0;
 const unreadRequests = isAdmin ? await safeCount(unreadRequestCount) : 0;
 const hiddenCount = isAdmin ? await safeCount(hiddenProjectCount) : 0;
+const deletedCount = isAdmin ? await safeCount(deletedProjectCount) : 0;
 
 // Two kinds of entry: a plain link, or a dropdown ('menu') grouping a few
 // related pages - Review (things waiting on a decision) and Manage
@@ -61,6 +63,7 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
           { key: 'testimonials', label: 'Testimonials', href: '/admin/testimonials', badge: 0 },
           { key: 'mentees', label: 'Mentees', href: '/admin/mentees', badge: 0 },
           { key: 'hidden', label: 'Hidden', href: '/admin/hidden', badge: hiddenCount },
+          { key: 'deleted', label: 'Deleted', href: '/admin/deleted', badge: deletedCount },
           { key: 'tasks', label: 'Tasks', href: '/pipeline/tasks', badge: 0 },
         ],
       },
@@ -72,7 +75,7 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
 <header class="appbar">
   <div class="appbar__inner">
     <a class="appbar__brand" href="/" aria-label="MCA Heart - home">
-      <LogoMark size="1.9em" />
+      <LogoMark size="1.9em" background="dark" />
       <span><b>MCA</b> HEART</span>
     </a>
 
@@ -139,12 +142,11 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
         </div>
       </span>
 
+      <ThemeToggle variant="plain" />
+
       <span class="acct" data-acct>
-        <button type="button" class="acct__trigger" data-acct-toggle aria-haspopup="true" aria-expanded="false">
+        <button type="button" class="acct__trigger" data-acct-toggle aria-haspopup="true" aria-expanded="false" aria-label="Account menu">
           <span class="acct__avatar">{initials}</span>
-          <svg class="acct__chev" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
-            <path fill="none" stroke="currentColor" stroke-width="1.8" d="m5 7.5 5 5 5-5" />
-          </svg>
         </button>
         <div class="acct__panel" data-acct-panel hidden>
           <div class="acct__head">
@@ -173,20 +175,17 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
           </form>
         </div>
       </span>
-
-      <span class="appbar__divider" aria-hidden="true"></span>
-      <ThemeToggle />
     </div>
   </div>
 </header>
 
 <style is:global>
   .appbar {
-    /* The bar must look identical on every page. The pipeline area swaps
-       :root's fonts to IBM Plex Sans (pipeline.css), which used to leak in
-       here - so the bar re-declares the site's own fonts for itself. */
-    --font-sans: 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    --font-display: 'Archivo Expanded', 'Archivo', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    /* The bar must look identical on every page it appears on (Workflow and
+       admin), so it pins Open Sans itself rather than inheriting whatever
+       the page around it uses. */
+    --font-sans: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-display: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     font-family: var(--font-sans);
     position: sticky;
     top: 0;
@@ -359,26 +358,25 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
   .nbell__item b { display: block; font-size: 0.85rem; font-weight: 700; color: var(--text-strong); }
   .nbell__item span { display: block; font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
   .nbell__item time { display: block; font-size: 0.72rem; color: var(--text-faint); margin-top: 4px; }
-  .appbar__divider { width: 1px; height: 26px; background: var(--border-soft); flex-shrink: 0; }
 
   /* ---------- account menu ---------- */
   .acct { position: relative; }
   .acct__trigger {
-    display: inline-flex; align-items: center; gap: 0.35rem;
-    padding: 0.3rem 0.55rem 0.3rem 0.3rem;
-    background: var(--accent-wash);
-    border: 0; border-radius: 999px;
-    color: var(--text);
+    display: inline-flex; align-items: center;
+    padding: 0;
+    background: none;
+    border: 0; border-radius: 50%;
     cursor: pointer;
   }
-  .acct__trigger:hover { background: var(--accent-wash-strong); }
-  .acct__chev { color: var(--text-muted); transition: transform 0.15s var(--ease); }
-  .acct.is-open .acct__chev { transform: rotate(180deg); }
+  .acct__trigger:hover .acct__avatar { opacity: 0.85; }
 
+  /* A solid dark badge (not the pink wash the rest of the account controls
+     use) - --ink/--bg flip together with the theme, so this stays a solid
+     filled circle with readable initials in both modes. */
   .acct__avatar {
     display: grid; place-items: center;
-    width: 30px; height: 30px; border-radius: 50%;
-    background: var(--accent-wash-strong); color: var(--blue);
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--ink); color: var(--bg);
     font-size: 0.74rem; font-weight: 800; letter-spacing: 0.01em;
     flex-shrink: 0;
   }
@@ -435,6 +433,23 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
       width: 100%; box-shadow: none;
     }
   }
+  /* ---------- red bar ----------
+     The bar itself is solid crimson in both themes, so everything sitting
+     directly on it is white. Dropdown panels (menus, bell, account) keep
+     their normal theme colours - only the bar chrome is overridden here. */
+  .appbar { background: #7a1322; border-bottom-color: #5c0e19; }
+  .appbar__brand, .appbar__brand b,
+  .appbar__link, .appbar__menu-chev { color: #fff; }
+  .appbar__link:hover { color: rgba(255, 255, 255, 0.78); }
+  .appbar__link.is-active { border-bottom-color: #fff; }
+  .appbar__link .appbar__badge-n,
+  .nbell__dot { background: #fff; color: #7a1322; box-shadow: 0 0 0 2px #7a1322; }
+  .nbell__btn { color: #fff; }
+  .nbell__btn:hover, .nbell.is-open .nbell__btn { color: #fff; background: rgba(255, 255, 255, 0.16); }
+  .appbar .theme-toggle { color: #fff; }
+  .appbar .theme-toggle:hover, .appbar .theme-toggle:active { background: rgba(255, 255, 255, 0.16); color: #fff; }
+  .appbar .acct { margin-left: 0.6rem; }
+  .appbar .acct__trigger .acct__avatar { background: #fff; color: #7a1322; }
 </style>
 
 <script is:inline>

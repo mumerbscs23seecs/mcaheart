@@ -39,7 +39,7 @@ if (Astro.request.method === 'POST') {
     }
     // Valid password but no active person behind it - don't leave a half session.
     await supabase.auth.signOut();
-    error = 'This account does not have access. Contact info@mcaheart.com.';
+    error = 'This account does not have access. Contact researchlab@mcaheart.com.';
   }
 }
 ---

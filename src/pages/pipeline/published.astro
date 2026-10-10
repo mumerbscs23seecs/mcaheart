@@ -16,6 +16,7 @@ let query = supabase
   .eq('stage', 'published')
   .is('archived_at', null)
   .is('hidden_at', null)
+  .is('deleted_at', null)
   .order('stage_changed_at', { ascending: false });
 if (q) query = query.ilike('title', `%${q}%`);
 
@@ -70,6 +71,7 @@ const fmt = (d: string | null) => {
               <td data-th="Status"><span class="pl-status">Published</span></td>
               <td class="pl-t__actions" data-th="Actions">
                 <a href={`/pipeline/projects/${p.id}`}>Check progress &nearr;</a>
+                <a href={`/pipeline/projects/${p.id}/email?from=/pipeline/published`}>Email &nearr;</a>
               </td>
             </tr>
           ))}

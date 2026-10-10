@@ -24,6 +24,7 @@ export const STAGES = [
   ['conference', 'submitted',     'Submitted'],
   ['conference', 'accepted',      'Accepted'],
   ['conference', 'rejected',      'Rejected'],
+  ['conference', 'not_sent',      'Not sent/Not completed'],
 
   ['manuscript', 'ms_1_4',        '1/6 Analysis shared / being revised'],
   ['manuscript', 'ms_2_4',        '2/6 Results & methods being written'],

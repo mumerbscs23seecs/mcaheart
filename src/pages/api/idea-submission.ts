@@ -108,7 +108,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   // --- 5. Save, then deliver in the background ---------------------------
   // The record is saved either way, so the confirmation message shouldn't
-  // wait on SMTP (Gmail's auth failure + Resend fallback can take several
+  // wait on SMTP (an SMTP round trip can take several
   // seconds) - fire the email and respond immediately.
   try {
     await addIdea(parsed.data, attachment?.filename ?? null);

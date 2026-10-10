@@ -51,6 +51,7 @@ if (!isAdmin) {
     .eq('phase', 'conference')
     .is('archived_at', null)
     .is('hidden_at', null)
+    .is('deleted_at', null)
     .order('stage_changed_at', { ascending: false });
   q = scopeProjects(q, person);
   const { data } = await q;

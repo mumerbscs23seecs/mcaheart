@@ -3,14 +3,12 @@ import { CONFERENCE_LABELS, COMMITMENT_LABELS } from './idea-schema';
 import { sendEmail, type Attachment } from './email';
 
 /**
- * Research-idea emails. Transport (Gmail SMTP / Resend / log) lives in
+ * Research-idea emails, sent from researchlab@ (src/lib/email.ts).
  * src/lib/email.ts. Env vars:
  *
  *   IDEAS_TO    – where new submissions are sent
- *   IDEAS_FROM  – sender (ignored by the Gmail transport)
  */
-const TO = import.meta.env.IDEAS_TO ?? import.meta.env.CONTACT_TO ?? 'studio@medishift.in';
-const FROM = import.meta.env.IDEAS_FROM ?? 'MCA Heart <onboarding@resend.dev>';
+const TO = import.meta.env.IDEAS_TO ?? 'researchlab@mcaheart.com';
 
 export type { Attachment };
 
@@ -56,9 +54,9 @@ function rows(data: IdeaPayload): string {
   return items
     .map(
       ([k, v]) => `<tr>
-        <td style="padding:8px 16px 8px 0;color:#64748b;font:600 12px/1.4 Arial,sans-serif;
+        <td style="padding:8px 16px 8px 0;color:#64748b;font:600 12px/1.4 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;
                    text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;vertical-align:top">${k}</td>
-        <td style="padding:8px 0;color:#1e293b;font:14px/1.6 Arial,sans-serif;white-space:pre-wrap">${esc(v)}</td>
+        <td style="padding:8px 0;color:#1e293b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;white-space:pre-wrap">${esc(v)}</td>
       </tr>`,
     )
     .join('');
@@ -67,12 +65,12 @@ function rows(data: IdeaPayload): string {
 function renderEmail(data: IdeaPayload, hasFile: boolean): string {
   return `<div style="background:#f8fafc;padding:28px">
   <div style="max-width:660px;margin:0 auto;background:#fff;border:1px solid rgba(43,57,144,.14);border-radius:12px;padding:28px">
-    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart</p>
-    <h1 style="margin:0 0 18px;color:#1e293b;font:600 21px/1.25 Georgia,serif">New research-idea submission</h1>
+    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart</p>
+    <h1 style="margin:0 0 18px;color:#1e293b;font:600 21px/1.25 'Open Sans','Segoe UI',Helvetica,'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">New research-idea submission</h1>
     <table style="border-collapse:collapse;width:100%">${rows(data)}</table>
     ${
       hasFile
-        ? `<p style="margin:20px 0 0;color:#166534;font:600 13px/1.5 Arial,sans-serif">📎 A supporting document is attached to this email.</p>`
+        ? `<p style="margin:20px 0 0;color:#166534;font:600 13px/1.5 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">📎 A supporting document is attached to this email.</p>`
         : ''
     }
   </div>
@@ -109,58 +107,58 @@ export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: stri
   // Outcome/Comments block every decision shares.
   const lead =
     opts.decision === 'withheld'
-      ? `<p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">Dear ${esc(opts.leadName)},</p>
-    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">Thank you for taking the time to submit your research idea.</p>
-    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
+      ? `<p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">Dear ${esc(opts.leadName)},</p>
+    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">Thank you for taking the time to submit your research idea.</p>
+    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">
       Following review and discussion with Dr. Alraies and/or the Analysis Team, your proposal '<strong>${esc(opts.title)}</strong>'
       has been placed in the withhold category. The study concept is of interest; however, additional details
       and modifications are required before a final decision can be made regarding acceptance and project
       initiation.
     </p>
-    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
+    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">
       Any comments or recommendations from the reviewers can be found at the end of this email. We invite you
       to revise the proposal and address the points outlined below - once the requested information is
       provided, the proposal will be reconsidered.
     </p>
-    <p style="margin:0 0 24px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
+    <p style="margin:0 0 24px;color:#1e293b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">
       Thank you for your contribution and interest in collaborative research.<br /><br />
       Kind regards,<br />On behalf of Dr. Alraies and the Research Team
     </p>`
-      : `<p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">Dear ${esc(opts.leadName)},</p>
-    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
+      : `<p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">Dear ${esc(opts.leadName)},</p>
+    <p style="margin:0 0 14px;color:#1e293b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">
       Thank you for submitting your idea '<strong>${esc(opts.title)}</strong>' to the MCA Heart Research Lab. We
       evaluate ideas based on clinical relevance, methodological practicality, and publication value. Any
       relevant comments and the outcome of your idea submission are at the bottom of this email.
     </p>
-    <p style="margin:0 0 24px;color:#1e293b;font:14px/1.6 Arial,sans-serif">
+    <p style="margin:0 0 24px;color:#1e293b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">
       Best regards,<br />MCA HEART RESEARCH LAB
     </p>`;
 
   const html = `<div style="background:#f8fafc;padding:28px">
   <div style="max-width:600px;margin:0 auto;background:#fff;border:1px solid rgba(165,28,48,.14);border-radius:12px;padding:28px">
-    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart</p>
-    <h1 style="margin:0 0 18px;color:#1e293b;font:600 20px/1.3 Georgia,serif">Idea submission outcome</h1>
+    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart</p>
+    <h1 style="margin:0 0 18px;color:#1e293b;font:600 20px/1.3 'Open Sans','Segoe UI',Helvetica,'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">Idea submission outcome</h1>
 
     ${lead}
 
     <table style="border-collapse:collapse;width:100%;border-top:1px solid rgba(165,28,48,.14);padding-top:16px">
       <tr>
-        <td style="padding:16px 0 4px;color:#64748b;font:600 12px/1.4 Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em">Outcome</td>
+        <td style="padding:16px 0 4px;color:#64748b;font:600 12px/1.4 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em">Outcome</td>
       </tr>
       <tr>
-        <td style="padding:0 0 14px;color:${OUTCOME_COLOR[opts.decision]};font:700 15px/1.5 Arial,sans-serif">${OUTCOME_LABEL[opts.decision]}</td>
+        <td style="padding:0 0 14px;color:${OUTCOME_COLOR[opts.decision]};font:700 15px/1.5 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">${OUTCOME_LABEL[opts.decision]}</td>
       </tr>
       <tr>
-        <td style="padding:0 0 4px;color:#64748b;font:600 12px/1.4 Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em">${opts.decision === 'withheld' ? 'Comments by Team' : 'Comments'}</td>
+        <td style="padding:0 0 4px;color:#64748b;font:600 12px/1.4 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;text-transform:uppercase;letter-spacing:.08em">${opts.decision === 'withheld' ? 'Comments by Team' : 'Comments'}</td>
       </tr>
       <tr>
-        <td style="padding:0;color:#1e293b;font:14px/1.6 Arial,sans-serif;white-space:pre-wrap">${comments}</td>
+        <td style="padding:0;color:#1e293b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;white-space:pre-wrap">${comments}</td>
       </tr>
     </table>
 
     ${
       opts.decision === 'approved'
-        ? `<p style="margin:24px 0 0;padding:12px 14px;background:#f1f5f9;border-radius:8px;color:#1e293b;font:13px/1.6 Arial,sans-serif">
+        ? `<p style="margin:24px 0 0;padding:12px 14px;background:#f1f5f9;border-radius:8px;color:#1e293b;font:13px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">
       <strong>Important instructions:</strong> Now that your idea is approved for further processing, the lead
       author must complete and provide the full manuscript within 1 month from the date the analysis is
       provided. Failure to follow this timeline may result in the lead author's demotion from first
@@ -168,7 +166,7 @@ export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: stri
     </p>`
         : ''
     }
-    <p style="margin:18px 0 0;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.14em">Operations@MCAHeart</p>
+    <p style="margin:18px 0 0;color:#a51c30;font:700 11px/1 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;text-transform:uppercase;letter-spacing:.14em">Operations@MCAHeart</p>
   </div>
 </div>`;
 
@@ -178,14 +176,13 @@ export function renderIdeaDecisionEmail(opts: IdeaDecisionOpts): { subject: stri
 /** Accept/decline notification to the person who submitted the idea. */
 export async function deliverIdeaDecision(opts: IdeaDecisionOpts): Promise<void> {
   const { subject, html } = renderIdeaDecisionEmail(opts);
-  const sent = await sendEmail({ to: opts.to, from: FROM, subject, html });
+  const sent = await sendEmail({ to: opts.to, subject, html });
   if (!sent.ok) throw new Error(sent.error ?? 'Email delivery failed.');
 }
 
 export async function deliverIdea(data: IdeaPayload, attachment?: Attachment): Promise<void> {
   const sent = await sendEmail({
     to: TO,
-    from: FROM,
     replyTo: data.leadEmail,
     subject: `[MCA Heart] Research idea - ${data.title}`,
     html: renderEmail(data, Boolean(attachment)),

@@ -1,33 +1,30 @@
 /**
- * Single email sender for the whole site. Transport is chosen at runtime:
+ * Single email sender for the whole site. Every email goes out from
+ * researchlab@mcaheart.com, over SMTP.
  *
- *   1. GMAIL_USER + GMAIL_APP_PASSWORD set  → send via Gmail SMTP (nodemailer)
- *   2. else RESEND_API_KEY set              → send via the Resend HTTP API
- *   3. else                                 → log to stdout (local dev / demo)
+ * Env (Render):
+ *   SMTP_PASS   - required. ZeptoMail: the SMTP credential's password.
+ *                 Zoho Mail: an app password for researchlab@.
+ *   SMTP_USER   - ZeptoMail: "emailapikey". Zoho Mail: defaults to
+ *                 researchlab@mcaheart.com, so it can be left unset.
+ *   SMTP_HOST   - ZeptoMail: smtp.zeptomail.com. Zoho Mail: defaults to
+ *                 smtp.zoho.com (smtp.zoho.in / .eu if the account lives there).
+ *   ALWAYS_BCC  - optional, comma-separated, bcc'd on everything.
  *
- * Gmail note: Gmail ignores a custom From address and sends as the authenticated
- * account, so with the SMTP transport the address is forced to GMAIL_USER (the
- * display name is kept). Move to Resend + a verified domain for a real
- * noreply@ sender.
- *
- * ALWAYS_BCC: comma-separated addresses (env var) silently bcc'd on every
- * email this function sends, site-wide - the recipient never sees them.
+ * With no SMTP_PASS (local dev), emails are logged instead of sent.
  */
 import type { Transporter } from 'nodemailer';
 
-const GMAIL_USER = import.meta.env.GMAIL_USER as string | undefined;
-const GMAIL_PASS = import.meta.env.GMAIL_APP_PASSWORD as string | undefined;
-const RESEND_KEY = import.meta.env.RESEND_API_KEY as string | undefined;
-const DEFAULT_FROM = (import.meta.env.MAIL_FROM ??
-  import.meta.env.NOTIFY_FROM ??
-  'MCA Heart <onboarding@resend.dev>') as string;
-const ALWAYS_BCC = ((import.meta.env.ALWAYS_BCC as string | undefined) ?? '')
+const env = import.meta.env;
+const FROM_ADDRESS = 'researchlab@mcaheart.com';
+const FROM_NAME = 'MCA Heart Research Lab';
+const SMTP_HOST = (env.SMTP_HOST as string | undefined) || 'smtp.zoho.com';
+const SMTP_USER = (env.SMTP_USER as string | undefined) || FROM_ADDRESS;
+const SMTP_PASS = ((env.SMTP_PASS as string | undefined) ?? '').replace(/\s+/g, '');
+const ALWAYS_BCC = ((env.ALWAYS_BCC as string | undefined) ?? '')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
-
-const hasGmail = Boolean(GMAIL_USER && GMAIL_PASS);
-const hasResend = Boolean(RESEND_KEY);
 
 export interface Attachment {
   filename: string;
@@ -39,75 +36,37 @@ export interface Mail {
   to: string | string[];
   subject: string;
   html: string;
-  from?: string;
   replyTo?: string;
+  cc?: string | string[];
   /** Extra bcc for this one email, on top of ALWAYS_BCC. */
   bcc?: string | string[];
   attachments?: Attachment[];
 }
 
-/** "Name <addr@x>" | "addr@x" -> display name or "". */
-function displayName(from: string): string {
-  const m = from.match(/^\s*"?([^"<]*?)"?\s*<[^>]+>\s*$/);
-  return m ? m[1]!.trim() : '';
-}
-
 let transport: Transporter | null = null;
-async function gmailTransport(): Promise<Transporter> {
+async function getTransport(): Promise<Transporter> {
   if (transport) return transport;
   const nodemailer = await import('nodemailer');
   transport = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user: GMAIL_USER!, pass: GMAIL_PASS!.replace(/\s+/g, '') },
+    host: SMTP_HOST,
+    port: 465,
+    secure: true,
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
   });
   return transport;
 }
 
-async function viaGmail(to: string[], bcc: string[], mail: Mail, from: string): Promise<string> {
-  const t = await gmailTransport();
-  const name = displayName(from) || 'MCA Heart';
-  const info = await t.sendMail({
-    from: `"${name}" <${GMAIL_USER}>`,
-    to,
-    bcc: bcc.length ? bcc : undefined,
-    replyTo: mail.replyTo,
-    subject: mail.subject,
-    html: mail.html,
-    attachments: mail.attachments?.map((a) => ({ filename: a.filename, content: a.content, encoding: 'base64' })),
-  });
-  return info.messageId;
-}
-
-async function viaResend(to: string[], bcc: string[], mail: Mail, from: string): Promise<string> {
-  const res = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from,
-      to,
-      bcc: bcc.length ? bcc : undefined,
-      reply_to: mail.replyTo,
-      subject: mail.subject,
-      html: mail.html,
-      attachments: mail.attachments,
-    }),
-  });
-  if (!res.ok) throw new Error(`Resend ${res.status}: ${await res.text()}`);
-  const body = (await res.json()) as { id?: string };
-  return body.id ?? 'sent';
-}
-
 export async function sendEmail(mail: Mail): Promise<{ ok: boolean; id?: string; error?: string }> {
   const to = Array.isArray(mail.to) ? mail.to : [mail.to];
-  const from = mail.from ?? DEFAULT_FROM;
+  const cc = (mail.cc ? (Array.isArray(mail.cc) ? mail.cc : [mail.cc]) : []).filter((addr) => !to.includes(addr));
   const perCallBcc = mail.bcc ? (Array.isArray(mail.bcc) ? mail.bcc : [mail.bcc]) : [];
-  // Dedupe, and never bcc someone who's already a direct recipient.
-  const bcc = [...new Set([...perCallBcc, ...ALWAYS_BCC])].filter((addr) => !to.includes(addr));
+  // Dedupe, and never bcc someone who's already a direct or cc recipient.
+  const bcc = [...new Set([...perCallBcc, ...ALWAYS_BCC])].filter((addr) => !to.includes(addr) && !cc.includes(addr));
 
-  // No transport configured - log and succeed so local dev / the demo work.
-  if (!hasGmail && !hasResend) {
-    console.info('[email] no transport configured - would send:', {
+  if (!SMTP_PASS) {
+    console.info('[email] SMTP_PASS not set - would send:', {
       to,
+      cc,
       bcc,
       subject: mail.subject,
       attachments: mail.attachments?.map((a) => a.filename) ?? [],
@@ -116,30 +75,22 @@ export async function sendEmail(mail: Mail): Promise<{ ok: boolean; id?: string;
     return { ok: true, id: 'logged-only' };
   }
 
-  const errors: string[] = [];
-
-  // 1. Gmail SMTP (preferred when set); fall through to Resend on failure.
-  if (hasGmail) {
-    try {
-      return { ok: true, id: await viaGmail(to, bcc, mail, from) };
-    } catch (err) {
-      const msg = `Gmail SMTP: ${(err as Error).message.split('\n')[0]}`;
-      errors.push(msg);
-      if (hasResend) console.warn(`[email] ${msg} - falling back to Resend`);
-    }
+  try {
+    const t = await getTransport();
+    const info = await t.sendMail({
+      from: `"${FROM_NAME}" <${FROM_ADDRESS}>`,
+      to,
+      cc: cc.length ? cc : undefined,
+      bcc: bcc.length ? bcc : undefined,
+      replyTo: mail.replyTo,
+      subject: mail.subject,
+      html: mail.html,
+      attachments: mail.attachments?.map((a) => ({ filename: a.filename, content: a.content, encoding: 'base64' })),
+    });
+    return { ok: true, id: info.messageId };
+  } catch (err) {
+    const msg = `SMTP (${SMTP_HOST}): ${(err as Error).message.split('\n')[0]}`;
+    console.error('[email]', msg);
+    return { ok: false, error: msg };
   }
-
-  // 2. Resend HTTP.
-  if (hasResend) {
-    try {
-      return { ok: true, id: await viaResend(to, bcc, mail, from) };
-    } catch (err) {
-      errors.push((err as Error).message);
-    }
-  }
-
-  return { ok: false, error: errors.join(' | ') || 'Email delivery failed.' };
 }
-
-/** Which transport is preferred - handy for logging/health checks. */
-export const mailTransport = hasGmail ? 'gmail' : hasResend ? 'resend' : 'log';

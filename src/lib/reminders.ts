@@ -27,7 +27,7 @@ import { sendEmail } from './email';
 
 /** Comma-separated list in COORDINATOR_EMAILS, else a sensible default. */
 function coordinators(): string[] {
-  const raw = import.meta.env.COORDINATOR_EMAILS ?? 'info@mcaheart.com';
+  const raw = import.meta.env.COORDINATOR_EMAILS ?? 'researchlab@mcaheart.com';
   return raw.split(',').map((s) => s.trim()).filter(Boolean);
 }
 
@@ -40,11 +40,11 @@ function digestHtml(items: Submission[]): string {
     .map(
       (s) => `
       <tr>
-        <td style="padding:8px 12px 8px 0;font:14px/1.5 Arial,sans-serif;color:#1e293b">
+        <td style="padding:8px 12px 8px 0;font:14px/1.5 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;color:#1e293b">
           ${s.title}<br>
           <span style="color:#64748b;font-size:12px">${s.lead} &middot; ${s.target} &middot; ${s.status}</span>
         </td>
-        <td style="padding:8px 0;font:600 13px/1.5 Arial,sans-serif;color:#a51c30;white-space:nowrap;vertical-align:top">
+        <td style="padding:8px 0;font:600 13px/1.5 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;color:#a51c30;white-space:nowrap;vertical-align:top">
           ${daysSince(s.updatedAt)} days idle
         </td>
       </tr>`,
@@ -53,15 +53,15 @@ function digestHtml(items: Submission[]): string {
 
   return `<div style="background:#f8fafc;padding:28px">
   <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid rgba(43,57,144,.12);border-radius:12px;padding:28px">
-    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart · Workflow</p>
-    <h1 style="margin:0 0 6px;color:#1e293b;font:600 20px/1.3 Georgia,serif">${items.length} submission${items.length === 1 ? '' : 's'} need a nudge</h1>
-    <p style="margin:0 0 18px;color:#64748b;font:14px/1.6 Arial,sans-serif">
+    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart · Workflow</p>
+    <h1 style="margin:0 0 6px;color:#1e293b;font:600 20px/1.3 'Open Sans','Segoe UI',Helvetica,'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">${items.length} submission${items.length === 1 ? '' : 's'} need a nudge</h1>
+    <p style="margin:0 0 18px;color:#64748b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">
       No recorded activity in over a week and still open. Review in the
       <a href="https://www.mcaheart.com/admin" style="color:#a51c30">admin dashboard</a>.
     </p>
     <table style="border-collapse:collapse;width:100%">${rows}</table>
     <hr style="border:0;border-top:1px solid rgba(43,57,144,.12);margin:20px 0">
-    <p style="margin:0;color:#94a3b8;font:12px/1.6 Arial,sans-serif">
+    <p style="margin:0;color:#94a3b8;font:12px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">
       Weekly digest. You will not get another reminder for these items for 7 days.
     </p>
   </div>

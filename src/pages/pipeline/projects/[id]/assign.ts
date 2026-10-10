@@ -19,6 +19,7 @@ export const POST: APIRoute = async ({ params, request, locals, redirect }) => {
 
   const form = await request.formData();
   const pick = (name: string) => String(form.get(name) ?? '').trim() || null;
+  const teamMemberIds = [...new Set(form.getAll('team_member_ids').map((v) => String(v).trim()).filter(Boolean))];
 
   const { error } = await supabase.rpc('assign_people', {
     p_project: id,
@@ -29,5 +30,9 @@ export const POST: APIRoute = async ({ params, request, locals, redirect }) => {
     p_corresponding_id: pick('corresponding_id'),
   });
   if (error) return redirect(`${back}?err=${encodeURIComponent(error.message)}`);
+
+  const { error: teamError } = await supabase.rpc('set_team_members', { p_project: id, p_member_ids: teamMemberIds });
+  if (teamError) return redirect(`${back}?err=${encodeURIComponent(teamError.message)}`);
+
   return redirect(`${back}?ok=${encodeURIComponent('People updated.')}`);
 };

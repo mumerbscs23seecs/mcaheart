@@ -1,0 +1,208 @@
+---
+// Multi-person picker for the "Team Members" field on a project's People
+// panel - anyone added here gets the same portal visibility into the paper
+// that the five fixed roles (lead/analyst/etc) already grant (see
+// pipeline-scope.ts). Unlike PeoplePicker this holds any number of people:
+// type to search the full active roster, click a match to add a chip,
+// click a chip's x to remove it. Submits one hidden input per selected
+// person, all sharing `name` - the surrounding <form>'s FormData.getAll
+// picks them all up, same as assign.ts does for team_member_ids.
+interface RosterPerson { id: string; full_name: string }
+interface Props {
+  name: string;
+  label: string;
+  roster: RosterPerson[];
+  selected: RosterPerson[];
+}
+const { name, label, roster, selected } = Astro.props;
+---
+
+<div class="tpick" data-tpick data-field-name={name}>
+  <label class="pl-field">
+    <span>{label}</span>
+    <div class="tpick__chips" data-tpick-chips>
+      {selected.map((p) => (
+        <span class="tpick__chip" data-tpick-chip={p.id}>
+          {p.full_name}
+          <input type="hidden" name={name} value={p.id} />
+          <button type="button" class="tpick__chip-x" data-tpick-remove={p.id} aria-label={`Remove ${p.full_name}`}>×</button>
+        </span>
+      ))}
+    </div>
+    <input type="text" class="tpick__input" autocomplete="off" placeholder="Type a name…" data-tpick-input />
+  </label>
+  <ul class="tpick__menu" data-tpick-menu hidden></ul>
+  <script type="application/json" data-tpick-roster set:html={JSON.stringify(roster)} />
+</div>
+
+<style is:global>
+  /* Global, not scoped - most of this UI (chips, menu rows) is built by
+     the script below (document.createElement), and Astro's scoped-CSS
+     attribute only lands on elements written directly in this template.
+     A scoped rule silently never matches those, so e.g. the chip's remove
+     button rendered with no styling at all for any chip added through the
+     picker (as opposed to one already selected on page load). */
+  .tpick { position: relative; }
+  .tpick__chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .tpick__chips:empty { margin-bottom: 0; }
+  .tpick__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 6px 4px 10px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-strong, #1e293b);
+    background: var(--bg-tint, #f4f2ee);
+    border: 1px solid var(--pl-border, #d8dce6);
+    border-radius: 999px;
+  }
+  .tpick__chip-x {
+    appearance: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    line-height: 1;
+    padding: 0;
+    border: 1px solid var(--red, #b42318);
+    border-radius: 4px;
+    background: var(--red-wash);
+    color: var(--red, #b42318);
+    font-size: 0.85rem;
+  }
+  .tpick__chip-x:hover { background: var(--red, #b42318); color: #fff; }
+  .tpick__menu {
+    position: absolute;
+    z-index: 20;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin: 4px 0 0;
+    padding: 4px;
+    list-style: none;
+    max-height: 220px;
+    overflow-y: auto;
+    background: var(--surface, #fff);
+    border: 1px solid var(--pl-border, #d8dce6);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  }
+  .tpick__menu[hidden] { display: none; }
+  .tpick__opt { padding: 7px 9px; font-size: 0.85rem; border-radius: 4px; cursor: pointer; }
+  .tpick__opt:hover { background: var(--bg-tint, #f4f2ee); }
+  .tpick__opt--muted { color: var(--text-muted, #595959); font-style: italic; }
+</style>
+
+<script>
+  type RosterPerson = { id: string; full_name: string };
+
+  const rosterFor = (container: HTMLElement): RosterPerson[] => {
+    const script = container.querySelector<HTMLScriptElement>('[data-tpick-roster]');
+    try {
+      return JSON.parse(script?.textContent ?? '[]');
+    } catch {
+      return [];
+    }
+  };
+
+  const selectedIds = (container: HTMLElement): Set<string> =>
+    new Set(
+      [...container.querySelectorAll<HTMLElement>('[data-tpick-chip]')].map((c) => c.dataset.tpickChip ?? ''),
+    );
+
+  const closeAllMenus = () => {
+    document.querySelectorAll<HTMLElement>('[data-tpick-menu]').forEach((m) => (m.hidden = true));
+  };
+
+  const addChip = (container: HTMLElement, id: string, fullName: string) => {
+    const chips = container.querySelector<HTMLElement>('[data-tpick-chips]')!;
+    const inputName = container.dataset.fieldName ?? '';
+    const chip = document.createElement('span');
+    chip.className = 'tpick__chip';
+    chip.dataset.tpickChip = id;
+    chip.append(fullName);
+    const hidden = document.createElement('input');
+    hidden.type = 'hidden';
+    hidden.name = inputName;
+    hidden.value = id;
+    chip.appendChild(hidden);
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'tpick__chip-x';
+    x.dataset.tpickRemove = id;
+    x.setAttribute('aria-label', `Remove ${fullName}`);
+    x.textContent = '×';
+    chip.appendChild(x);
+    chips.appendChild(chip);
+  };
+
+  const renderMenu = (container: HTMLElement, query: string) => {
+    const menu = container.querySelector<HTMLElement>('[data-tpick-menu]')!;
+    const roster = rosterFor(container);
+    const picked = selectedIds(container);
+    const q = query.trim().toLowerCase();
+    const pool = roster.filter((p) => !picked.has(p.id));
+    const matches = q ? pool.filter((p) => p.full_name.toLowerCase().includes(q)) : pool;
+
+    menu.innerHTML = '';
+    if (!matches.length) {
+      const li = document.createElement('li');
+      li.className = 'tpick__opt tpick__opt--muted';
+      li.textContent = q ? 'No match' : 'Everyone on the roster is already added';
+      menu.appendChild(li);
+      menu.hidden = false;
+      return;
+    }
+    matches.slice(0, 30).forEach((p) => {
+      const li = document.createElement('li');
+      li.className = 'tpick__opt';
+      li.textContent = p.full_name;
+      li.dataset.id = p.id;
+      li.dataset.name = p.full_name;
+      menu.appendChild(li);
+    });
+    menu.hidden = false;
+  };
+
+  document.addEventListener('input', (e) => {
+    const input = (e.target as HTMLElement | null)?.closest<HTMLInputElement>('[data-tpick-input]');
+    if (!input) return;
+    renderMenu(input.closest<HTMLElement>('[data-tpick]')!, input.value);
+  });
+
+  document.addEventListener('focusin', (e) => {
+    const input = (e.target as HTMLElement | null)?.closest<HTMLInputElement>('[data-tpick-input]');
+    if (!input) return;
+    renderMenu(input.closest<HTMLElement>('[data-tpick]')!, input.value);
+  });
+
+  document.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement | null;
+
+    const opt = target?.closest<HTMLElement>('[data-tpick-menu] li');
+    if (opt && opt.dataset.id) {
+      const container = opt.closest<HTMLElement>('[data-tpick]')!;
+      addChip(container, opt.dataset.id, opt.dataset.name ?? '');
+      const input = container.querySelector<HTMLInputElement>('[data-tpick-input]')!;
+      input.value = '';
+      renderMenu(container, '');
+      input.focus();
+      return;
+    }
+
+    const remove = target?.closest<HTMLElement>('[data-tpick-remove]');
+    if (remove) {
+      remove.closest<HTMLElement>('[data-tpick-chip]')?.remove();
+      return;
+    }
+
+    if (!target?.closest('[data-tpick]')) closeAllMenus();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeAllMenus();
+  });
+</script>

@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { runReminderSweep } from '../../../lib/reminders';
 import { sweepPipelineReminders } from '../../../lib/pipeline-reminders';
+import { purgeDeletedProjects } from '../../../lib/deleted-papers';
 
 // On-demand endpoint the scheduler calls. Not prerendered.
 export const prerender = false;
@@ -29,8 +30,9 @@ export const POST: APIRoute = async ({ request, url }) => {
   const dry = url.searchParams.get('dry') === '1';
   const result = await runReminderSweep({ dryRun: dry, actor: 'cron' });
   const pipeline = await sweepPipelineReminders(dry);
+  const trash = dry ? { purged: 0, refs: [] } : await purgeDeletedProjects();
 
-  return new Response(JSON.stringify({ ok: true, result, pipeline }, null, 2), {
+  return new Response(JSON.stringify({ ok: true, result, pipeline, trash }, null, 2), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });

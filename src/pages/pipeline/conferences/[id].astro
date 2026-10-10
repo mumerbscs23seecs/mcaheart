@@ -92,19 +92,39 @@ const fmtDate = (d: string | null) => {
   return `${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}-${dt.getFullYear()}`;
 };
 const s = score ?? { submitted: 0, accepted: 0, rejected: 0, accept_pct: null };
+const pending = Math.max(0, (s.submitted ?? 0) - (s.accepted ?? 0) - (s.rejected ?? 0));
 const cap = (x: string | null) => (x ? x[0].toUpperCase() + x.slice(1) : 'Pending');
 ---
 
 <PipelineLayout title={conf.name} active="conferences">
   <p class="pl-crumb"><a class="pl-link" href="/pipeline/conferences">← Conferences</a></p>
-  <h1 class="pl-h1">{conf.name}</h1>
-  <p class="pl-sub">Abstract deadline {fmtDate(conf.abstract_deadline)}. This page never changes after the meeting.</p>
+  <div class="cf-head">
+    <div class="cf-head__main">
+      <h1 class="pl-h1">{conf.name}</h1>
+      <p class="pl-sub cf-deadline">Deadline: {fmtDate(conf.abstract_deadline)}</p>
+    </div>
 
-  <div class="pl-score">
-    <div><b>{s.submitted}</b><span>Submitted</span></div>
-    <div><b>{s.accepted}</b><span>Accepted</span></div>
-    <div><b>{s.rejected}</b><span>Rejected</span></div>
-    <div><b>{s.accept_pct != null ? `${s.accept_pct}%` : '-'}</b><span>Acceptance</span></div>
+    <div class="cf-stats">
+      <div class="cf-stats__nums">
+        <div><b>{s.submitted}</b><span>Submitted</span></div>
+        <div><b class="is-ok">{s.accepted}</b><span>Accepted</span></div>
+        <div><b class="is-bad">{s.rejected}</b><span>Rejected</span></div>
+        <div><b>{s.accept_pct != null ? `${s.accept_pct}%` : '-'}</b><span>Acceptance</span></div>
+      </div>
+      {s.submitted > 0 && (
+        <>
+          <div class="cf-bar" role="img" aria-label={`${s.accepted} accepted, ${s.rejected} rejected, ${pending} pending out of ${s.submitted}`}>
+            <i class="cf-bar__ok" style={`width:${(s.accepted / s.submitted) * 100}%`}></i>
+            <i class="cf-bar__bad" style={`width:${(s.rejected / s.submitted) * 100}%`}></i>
+          </div>
+          <p class="cf-legend">
+            <span class="cf-legend__ok">Accepted {s.accepted}</span>
+            <span class="cf-legend__bad">Rejected {s.rejected}</span>
+            <span class="cf-legend__pending">Pending {pending}</span>
+          </p>
+        </>
+      )}
+    </div>
   </div>
 
   <details class="pl-inline-details" style="margin:14px 0 0">
@@ -183,6 +203,7 @@ const cap = (x: string | null) => (x ? x[0].toUpperCase() + x.slice(1) : 'Pendin
                 </td>
                 <td class="pl-t__actions" data-th="Actions">
                   <a href={`/pipeline/projects/${p.id}`}>Check progress &nearr;</a>
+                  <a href={`/pipeline/projects/${p.id}/email?from=/pipeline/conferences/${id}`}>Email &nearr;</a>
                 </td>
               </tr>
             );
@@ -211,6 +232,30 @@ const cap = (x: string | null) => (x ? x[0].toUpperCase() + x.slice(1) : 'Pendin
   .pl-conf-table select.pl-status,
   .pl-conf-table .pl-status { min-width: 0; max-width: none; width: 100%; }
   .pl-conf-table .pl-status-form { width: 100%; }
+
+  /* Header: name on the left, the scorecard and a split bar on the right. */
+  .cf-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 20px 40px; margin-bottom: 18px; }
+  .cf-head__main { min-width: 0; }
+  .cf-stats { flex: 0 1 420px; }
+  .cf-stats__nums { display: flex; gap: clamp(18px, 3vw, 34px); }
+  .cf-stats__nums b {
+    display: block; font-family: var(--font-display, sans-serif); font-weight: 800;
+    font-size: clamp(1.6rem, 1.2rem + 1.4vw, 2.2rem); line-height: 1; letter-spacing: -0.03em;
+    color: var(--text-strong); font-variant-numeric: tabular-nums;
+  }
+  .cf-stats__nums b.is-ok { color: var(--pl-good, #166534); }
+  .cf-stats__nums b.is-bad { color: var(--pl-accent); }
+  .cf-stats__nums span { display: block; margin-top: 6px; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+  .cf-bar { display: flex; height: 8px; margin-top: 16px; background: var(--border-soft); overflow: hidden; }
+  .cf-bar i { display: block; height: 100%; }
+  .cf-bar__ok { background: var(--pl-good, #166534); }
+  .cf-bar__bad { background: var(--pl-accent); }
+  .cf-legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 8px 0 0; font-size: 0.78rem; color: var(--text-muted); }
+  .cf-legend span::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; vertical-align: 1px; }
+  .cf-legend__ok::before { background: var(--pl-good, #166534); }
+  .cf-legend__bad::before { background: var(--pl-accent); }
+  .cf-legend__pending::before { background: var(--border-soft); outline: 1px solid var(--border); }
+  .cf-deadline { margin-top: 10px; }
 </style>
 
 <script>

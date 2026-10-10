@@ -35,7 +35,7 @@ export async function sweepPipelineReminders(dryRun = false): Promise<PipelineSw
 
   const { data: rows, error } = await db
     .from('project_list')
-    .select('id,ref,title,stage_label,days_in_stage,reminder_level,lead_id,colead_id,analyst_id')
+    .select('id,ref,title,full_title,stage_label,days_in_stage,reminder_level,lead_id,colead_id,analyst_id')
     .eq('phase', 'manuscript')
     .is('archived_at', null)
     .is('hidden_at', null)
@@ -78,8 +78,7 @@ export async function sweepPipelineReminders(dryRun = false): Promise<PipelineSw
       await deliverPipelineReminder({
         to,
         stage: STEP[target],
-        projectTitle: r.title,
-        ref: r.ref,
+        projectTitle: r.full_title || r.title,
         daysIdle: d,
         currentStage: r.stage_label ?? 'in progress',
         link: `${SITE}/pipeline/projects/${r.id}`,
