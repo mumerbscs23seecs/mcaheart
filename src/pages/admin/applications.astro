@@ -3,7 +3,11 @@ import AppLayout from '../../layouts/AppLayout.astro';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
 import { getPipelineSession } from '../../lib/pipeline-auth';
-import { listApplications, getApplication, decideApplication } from '../../lib/applications';
+import {
+  listApplications, getApplication, decideApplication,
+  listVotes, castVote, reviewerFor, scoreVotes, REVIEWERS,
+  type Vote, type VoteSet,
+} from '../../lib/applications';
 import { deliverApplicationDecision, renderApplicationDecisionEmail } from '../../lib/recruitment-mailer';
 
 export const prerender = false;
@@ -54,18 +58,62 @@ type Preview = {
 };
 let flash: Flash | null = null;
 let preview: Preview | null = null;
+// Which application to show expanded after a POST, so a vote doesn't collapse it.
+let openId = '';
+
+// Jawad / Burhan (either of their logins), or null for any other admin.
+const myReviewer = reviewerFor(me.email);
+const VOTE_LABEL: Record<Vote, string> = { accept: 'Accept', withhold: 'Withhold', reject: 'Reject' };
+const RESULT_LABEL = { approved: 'Accept', withheld: 'Withhold', declined: 'Reject' } as const;
+
+// Votes need mca-pipeline/add-application-votes.sql. Until it's run, the page
+// falls back to the old single-click decision so nothing breaks.
+async function loadVotes(): Promise<{ ready: boolean; map: Map<string, VoteSet> }> {
+  try {
+    return { ready: true, map: await listVotes() };
+  } catch {
+    return { ready: false, map: new Map() };
+  }
+}
 
 const decisionFromAction = (action: string): Decision =>
   action.includes('approve') ? 'approved' : action.includes('withhold') ? 'withheld' : 'declined';
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
-  const action = String(form.get('action') ?? '');
+  let action = String(form.get('action') ?? '');
   const appId = String(form.get('appId') ?? '');
   const note = String(form.get('note') ?? '');
   const decision: Decision =
     (['approved', 'withheld', 'declined'] as const).find((d) => d === form.get('decision')) ??
     decisionFromAction(action);
+
+  openId = appId;
+
+  if (action === 'vote') {
+    const vote = String(form.get('vote') ?? '') as Vote;
+    if (!myReviewer) flash = { tone: 'error', text: 'Only Jawad and Burhan vote on applications.' };
+    else if (!['accept', 'withhold', 'reject'].includes(vote)) flash = { tone: 'error', text: 'Pick Accept, Withhold or Reject.' };
+    else {
+      const r = await castVote(appId, myReviewer, vote, String(form.get('vote_note') ?? ''), me.email);
+      flash = r.ok
+        ? { tone: 'ok', text: `Voted ${VOTE_LABEL[vote]}. You can change it until the decision is sent.` }
+        : { tone: 'error', text: r.error ?? 'Could not record your vote.' };
+    }
+  }
+
+  // Once votes are in use, the decision has to be the one the two votes add up to.
+  if (action.startsWith('preview-') || action === 'confirm') {
+    const { ready, map } = await loadVotes();
+    const result = ready ? scoreVotes(map.get(appId)) : null;
+    if (ready && !result) {
+      flash = { tone: 'error', text: 'Both Jawad and Burhan need to vote before a decision can be sent.' };
+      action = '';
+    } else if (result && result.decision !== decision) {
+      flash = { tone: 'error', text: `The votes add up to ${RESULT_LABEL[result.decision]}, so that is the decision to send.` };
+      action = '';
+    }
+  }
 
   if (action === 'preview-approve' || action === 'preview-withhold' || action === 'preview-decline') {
     const app = await getApplication(appId);
@@ -129,6 +177,8 @@ try {
   dbError = err instanceof Error ? err.message : 'Could not load applications.';
 }
 const pending = apps.filter((a) => a.status === 'pending').length;
+const { ready: votesReady, map: votes } = await loadVotes();
+const voteCount = (id: string) => REVIEWERS.filter((r) => votes.get(id)?.[r.key]).length;
 
 const fmtDate = (t: number | null) =>
   t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
@@ -227,11 +277,14 @@ const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
 
     <div class="ideas__list">
       {apps.map((a) => (
-        <details class="idea">
+        <details class="idea" open={a.id === openId}>
           <summary class="idea__summary">
             <span class:list={['idea__pill', `idea__pill--${a.status}`]}>{a.status}</span>
             <span class="idea__title">{a.name}</span>
-            <span class="idea__meta">{a.jobStatus} · {a.expertise} · {ago(a.submittedAt)}</span>
+            <span class="idea__meta">
+              {a.jobStatus} · {a.expertise} · {ago(a.submittedAt)}
+              {votesReady && a.status === 'pending' && <> · <b class="idea__votes">{voteCount(a.id)}/2 voted</b></>}
+            </span>
             <span class="idea__chev" aria-hidden="true">▾</span>
           </summary>
 
@@ -253,7 +306,82 @@ const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
               </div>
             </dl>
 
-            {a.status === 'pending' ? (
+            {a.status === 'pending' && votesReady ? (() => {
+              const v = votes.get(a.id) ?? {};
+              const result = scoreVotes(v);
+              const mine = myReviewer ? v[myReviewer] : undefined;
+              const step = result ? (result.decision === 'approved' ? 'approve' : result.decision === 'withheld' ? 'withhold' : 'decline') : '';
+              return (
+                <div class="vote">
+                  <div class="vote__board">
+                    {REVIEWERS.map((r) => {
+                      const cast = v[r.key];
+                      return (
+                        <div class="vote__who">
+                          <span class="vote__name">{r.key === myReviewer ? `${r.name} (you)` : r.name}</span>
+                          {result && cast ? (
+                            <span class:list={['vote__tag', `vote__tag--${cast.vote}`]}>{VOTE_LABEL[cast.vote]}</span>
+                          ) : r.key === myReviewer && cast ? (
+                            <span class:list={['vote__tag', `vote__tag--${cast.vote}`]}>Voted {VOTE_LABEL[cast.vote]}</span>
+                          ) : cast ? (
+                            <span class="vote__tag vote__tag--done">Voted</span>
+                          ) : (
+                            <span class="vote__tag vote__tag--waiting">Not voted yet</span>
+                          )}
+                          {result && cast?.note && <p class="vote__note">“{cast.note}”</p>}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {result && (
+                    <div class:list={['vote__result', `vote__result--${result.decision}`]}>
+                      <p><strong>Score {result.score} of 4: {RESULT_LABEL[result.decision]}</strong></p>
+                      <p class="vote__rule">Accept 2, Withhold 1, Reject 0. A total of 3-4 is Accept, 2 is Withhold, 0-1 is Reject.</p>
+                    </div>
+                  )}
+
+                  {myReviewer && (
+                    <form method="post" class="vote__form">
+                      <input type="hidden" name="appId" value={a.id} />
+                      <input type="hidden" name="action" value="vote" />
+                      <label class="idea__notelabel" for={`vnote-${a.id}`}>{mine ? 'Change your vote' : 'Your vote'}</label>
+                      <textarea class="idea__note" id={`vnote-${a.id}`} name="vote_note" rows="2"
+                        placeholder="Note for the other reviewer (optional, not sent to the applicant)">{mine?.note ?? ''}</textarea>
+                      <div class="idea__actions">
+                        {(['accept', 'withhold', 'reject'] as Vote[]).map((opt) => (
+                          <button
+                            class:list={['btn', opt === 'accept' ? 'idea__approve' : opt === 'withhold' ? 'idea__withhold' : 'btn--red', mine && mine.vote !== opt && 'vote__btn--dim']}
+                            name="vote" value={opt} type="submit">
+                            {mine?.vote === opt ? `✓ ${VOTE_LABEL[opt]}` : VOTE_LABEL[opt]}
+                          </button>
+                        ))}
+                      </div>
+                    </form>
+                  )}
+
+                  {!myReviewer && !result && (
+                    <p class="adm-hint">Waiting for Jawad and Burhan to vote. The decision opens once both have.</p>
+                  )}
+
+                  {result && (
+                    <form method="post" class="idea__decide">
+                      <input type="hidden" name="appId" value={a.id} />
+                      <label class="idea__notelabel" for={`note-${a.id}`}>Comments to the applicant (optional)</label>
+                      <textarea class="idea__note" id={`note-${a.id}`} name="note" rows="2"
+                        placeholder="You'll see the full email before it sends."></textarea>
+                      <div class="idea__actions">
+                        <button
+                          class:list={['btn', result.decision === 'approved' ? 'idea__approve' : result.decision === 'withheld' ? 'idea__withhold' : 'btn--red']}
+                          name="action" value={`preview-${step}`} type="submit">
+                          {RESULT_LABEL[result.decision]} and preview the email…
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              );
+            })() : a.status === 'pending' ? (
               <form method="post" class="idea__decide">
                 <input type="hidden" name="appId" value={a.id} />
                 <label class="idea__notelabel" for={`note-${a.id}`}>Comments to the applicant (optional)</label>
@@ -345,6 +473,27 @@ const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
   .idea__decision--withheld { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn); }
   .idea__decision--declined { background: var(--red-wash); border: 1px solid var(--red-border); color: var(--red); }
   .idea__decision-note { margin-top: 0.3rem; font-style: italic; color: var(--text); }
+
+  .idea__votes { font-weight: 700; color: var(--text-strong); }
+  .vote { margin-top: var(--space-m); display: grid; gap: 0.9rem; }
+  .vote__board { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.6rem; }
+  .vote__who { padding: 0.75rem 0.9rem; background: var(--bg-tint); display: grid; gap: 0.35rem; align-content: start; }
+  .vote__name { font-size: 0.85rem; font-weight: 600; color: var(--text-strong); }
+  .vote__tag { justify-self: start; font-size: 0.78rem; font-weight: 700; padding: 0.15rem 0.55rem; }
+  .vote__tag--accept { color: var(--ok); background: var(--ok-bg); }
+  .vote__tag--withhold { color: var(--warn); background: var(--warn-bg); }
+  .vote__tag--reject { color: var(--red); background: var(--red-wash); }
+  .vote__tag--done { color: var(--text-strong); background: var(--surface); border: 1px solid var(--border-soft); }
+  .vote__tag--waiting { color: var(--text-muted); background: transparent; border: 1px dashed var(--border); }
+  .vote__note { margin: 0; font-size: 0.82rem; font-style: italic; color: var(--text); }
+  .vote__result { padding: 0.8rem 1rem; font-size: 0.9rem; }
+  .vote__result p { margin: 0; }
+  .vote__result--approved { background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok); }
+  .vote__result--withheld { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn); }
+  .vote__result--declined { background: var(--red-wash); border: 1px solid var(--red-border); color: var(--red); }
+  .vote__rule { margin-top: 0.25rem !important; font-size: 0.78rem; color: var(--text-muted); }
+  .vote__form { display: grid; gap: 0.5rem; }
+  .vote__btn--dim { opacity: 0.55; }
 
   .mentee-tags { border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 0.7rem 0.9rem; margin: 0; }
   .mentee-tags__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }

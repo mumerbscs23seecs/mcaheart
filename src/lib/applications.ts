@@ -133,3 +133,72 @@ export async function decideApplication(
   audit(reviewer, `${decision} application`, app.name, note.trim() || undefined);
   return { ok: true, application: app };
 }
+
+/* ------------------------------ two-reviewer votes ----------------------------- */
+// mca-pipeline/add-application-votes.sql. Jawad and Burhan each vote on a
+// pending application; once both have, the total score decides the outcome.
+
+export type Vote = 'accept' | 'withhold' | 'reject';
+export type ReviewerKey = 'jawad' | 'burhan';
+
+// Either of a reviewer's logins counts as that reviewer.
+export const REVIEWERS: { key: ReviewerKey; name: string; emails: string[] }[] = [
+  { key: 'jawad', name: 'Jawad Basit', emails: ['jawadbasit1@gmail.com', 'jawad.basit@mcaheart.com'] },
+  { key: 'burhan', name: 'Muhammad Burhan', emails: ['0muhammadb@gmail.com', 'muhammad.burhan@mcaheart.com'] },
+];
+
+export function reviewerFor(email: string | null | undefined): ReviewerKey | null {
+  const e = (email ?? '').trim().toLowerCase();
+  return REVIEWERS.find((r) => r.emails.includes(e))?.key ?? null;
+}
+
+export interface CastVote {
+  vote: Vote;
+  note: string | null;
+  votedAt: number;
+}
+export type VoteSet = Partial<Record<ReviewerKey, CastVote>>;
+
+const POINTS: Record<Vote, number> = { accept: 2, withhold: 1, reject: 0 };
+
+/** Both votes in -> the total and the decision it maps to; otherwise null. */
+export function scoreVotes(votes: VoteSet | undefined): { score: number; decision: 'approved' | 'withheld' | 'declined' } | null {
+  if (!votes) return null;
+  const cast = REVIEWERS.map((r) => votes[r.key]);
+  if (cast.some((v) => !v)) return null;
+  const score = cast.reduce((sum, v) => sum + POINTS[v!.vote], 0);
+  return { score, decision: score >= 3 ? 'approved' : score === 2 ? 'withheld' : 'declined' };
+}
+
+/** Every application's votes, keyed by application id. Throws if the table isn't there yet. */
+export async function listVotes(): Promise<Map<string, VoteSet>> {
+  const { data, error } = await supabaseAdmin().from('application_votes').select('application_id,reviewer,vote,note,voted_at');
+  if (error) throw new Error(error.message);
+  const out = new Map<string, VoteSet>();
+  for (const r of data ?? []) {
+    const set = out.get(r.application_id) ?? {};
+    set[r.reviewer as ReviewerKey] = { vote: r.vote, note: r.note, votedAt: new Date(r.voted_at).getTime() };
+    out.set(r.application_id, set);
+  }
+  return out;
+}
+
+export async function castVote(
+  appId: string,
+  reviewer: ReviewerKey,
+  vote: Vote,
+  note: string,
+  email: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const { data: app } = await supabaseAdmin().from('applications').select('status').eq('id', appId).maybeSingle();
+  if (!app) return { ok: false, error: 'Application not found.' };
+  if (app.status !== 'pending') return { ok: false, error: `That application was already ${app.status}.` };
+  const { error } = await supabaseAdmin()
+    .from('application_votes')
+    .upsert(
+      { application_id: appId, reviewer, vote, note: note.trim() || null, voted_by_email: email, voted_at: new Date().toISOString() },
+      { onConflict: 'application_id,reviewer' },
+    );
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
