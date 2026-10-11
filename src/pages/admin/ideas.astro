@@ -6,7 +6,12 @@ import { supabaseAdmin } from '../../lib/supabase';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
 import { getPipelineSession } from '../../lib/pipeline-auth';
-import { listIdeas, getIdea, decideIdea } from '../../lib/ideas';
+import {
+  listIdeas, getIdea, decideIdea, listIdeaReviews, saveIdeaReview,
+  OUTCOME_LABEL, OUTCOME_STATUS, RECOMMENDATION_LABEL,
+  type IdeaOutcome, type IdeaReview, type Recommendation,
+} from '../../lib/ideas';
+import { reviewerFor, REVIEWERS } from '../../lib/applications';
 import { deliverIdeaDecision, renderIdeaDecisionEmail } from '../../lib/idea-mailer';
 import { CONFERENCE_LABELS, COMMITMENT_LABELS, type Conference } from '../../lib/idea-schema';
 import type { IdeaRecord } from '../../lib/ideas';
@@ -52,28 +57,41 @@ function studyTypeFor(idea: IdeaRecord): string {
 }
 
 type Flash = { tone: 'ok' | 'error'; text: string };
-type Decision = 'approved' | 'withheld' | 'declined';
-type Preview = {
-  ideaId: string;
-  decision: Decision;
-  note: string;
-  to: string;
-  subject: string;
-  html: string;
-  /** Only meaningful when decision === 'approved'. */
-  conference: string;
-  cc: string[];
-  bcc: string[];
-};
 let flash: Flash | null = null;
-let preview: Preview | null = null;
+// Which idea to show expanded after a POST, so saving a review doesn't collapse it.
+let openId = '';
 
-/** Short pipeline "target" label for an approved idea. */
-const targetFor = (c: Conference) =>
-  c === 'flexible' ? 'Conference - flexible' : c === 'none' ? 'Manuscript only' : c;
+// Jawad / Burhan (either of their logins), or null for any other admin.
+const myReviewer = reviewerFor(me.email);
+const reviewerName = (k: string) => REVIEWERS.find((r) => r.key === k)?.name ?? k;
+const OUTCOMES = Object.keys(OUTCOME_LABEL) as IdeaOutcome[];
+const OUTCOME_HINT: Record<IdeaOutcome, string> = {
+  approved: 'Adds it to the pipeline and a conference',
+  rejected: 'Closes the idea',
+  modify: 'Held until the author revises it',
+  details: 'Held until the author replies',
+};
 
-const decisionFromAction = (action: string): Decision =>
-  action.includes('approve') ? 'approved' : action.includes('withhold') ? 'withheld' : 'declined';
+// Initial reviews need mca-pipeline/add-idea-reviews.sql. Until it's run, the
+// review step is skipped and any admin can tick the outcome straight away.
+async function loadReviews(): Promise<{ ready: boolean; map: Map<string, IdeaReview[]> }> {
+  try {
+    return { ready: true, map: await listIdeaReviews() };
+  } catch {
+    return { ready: false, map: new Map() };
+  }
+}
+
+/** Why `me` can't make the final decision on this idea yet, or null if they can. */
+function decisionBlocked(reviews: IdeaReview[], ready: boolean): string | null {
+  if (!ready) return null;
+  if (reviews.length === 0) return 'Jawad or Burhan needs to add an initial review first.';
+  if (myReviewer && reviews.every((r) => r.reviewer === myReviewer)) {
+    const other = REVIEWERS.find((r) => r.key !== myReviewer)!.name;
+    return `You wrote the initial review, so ${other} makes the final decision.`;
+  }
+  return null;
+}
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
@@ -81,35 +99,36 @@ if (Astro.request.method === 'POST') {
   const ideaId = String(form.get('ideaId') ?? '');
   const note = String(form.get('note') ?? '');
   const conference = String(form.get('conference') ?? '');
-  const decision: Decision =
-    (['approved', 'withheld', 'declined'] as const).find((d) => d === form.get('decision')) ??
-    decisionFromAction(action);
+  const outcome = OUTCOMES.find((o) => o === form.get('outcome')) ?? null;
+  openId = ideaId;
 
-  // --- Phase 1: build the preview -------------------------------------------
-  if (action === 'preview-approve' || action === 'preview-withhold' || action === 'preview-decline') {
-    const idea = await getIdea(ideaId);
-    if (!idea) flash = { tone: 'error', text: 'Idea not found.' };
-    else if (idea.status !== 'pending') flash = { tone: 'error', text: `That idea was already ${idea.status}.` };
-    else if (decision === 'approved' && !conference) {
-      flash = { tone: 'error', text: 'Choose which conference to send this to before approving.' };
-    } else {
-      const { subject, html } = renderIdeaDecisionEmail({
-        to: idea.leadEmail,
-        leadName: idea.leadName,
-        title: idea.title,
-        decision,
-        note: note.trim() || null,
-      });
-      preview = { ideaId, decision, note, to: idea.leadEmail, subject, html, conference, cc: emailsFrom(form, 'cc'), bcc: emailsFrom(form, 'bcc') };
+  // --- Step 1: the initial review ---------------------------------------------
+  if (action === 'review') {
+    const rec = String(form.get('recommendation') ?? '') as Recommendation;
+    if (!myReviewer) flash = { tone: 'error', text: 'Only Jawad and Burhan add initial reviews.' };
+    else if (!(rec in RECOMMENDATION_LABEL)) flash = { tone: 'error', text: 'Pick Accept, Reject or Modify.' };
+    else {
+      const r = await saveIdeaReview(ideaId, myReviewer, rec, String(form.get('review_comment') ?? ''), me.email);
+      flash = r.ok
+        ? { tone: 'ok', text: `Initial review saved (${RECOMMENDATION_LABEL[rec]}). You can change it until the decision is sent.` }
+        : { tone: 'error', text: r.error ?? 'Could not save your review.' };
     }
   }
 
-  // --- Phase 2: confirmed - record + send --------------------------------
+  // --- Step 2: the final decision (previewed live on the page) -------------------
   if (action === 'confirm') {
-    if (decision === 'approved' && !conference) {
+    const { ready, map } = await loadReviews();
+    const blocked = decisionBlocked(map.get(ideaId) ?? [], ready);
+    if (blocked) flash = { tone: 'error', text: blocked };
+    else if (!outcome) flash = { tone: 'error', text: 'Tick one box for the outcome.' };
+    else if (outcome === 'approved' && !conference) {
       flash = { tone: 'error', text: 'Choose which conference to send this to before approving.' };
-    } else {
-    const result = await decideIdea(ideaId, decision, me.name, note);
+    }
+  }
+
+  if (action === 'confirm' && !flash && outcome) {
+    const decision = OUTCOME_STATUS[outcome];
+    const result = await decideIdea(ideaId, outcome, me.name, note);
     if (!result.ok || !result.idea) {
       flash = { tone: 'error', text: result.error ?? 'Could not record that decision.' };
     } else {
@@ -175,22 +194,24 @@ if (Astro.request.method === 'POST') {
         }
       }
       let emailed = true;
+      let notSetUp = false;
       try {
-        await deliverIdeaDecision({
+        notSetUp = !(await deliverIdeaDecision({
           to: idea.leadEmail,
-          leadName: idea.leadName,
           title: idea.title,
-          decision,
+          outcome,
           note: idea.decisionNote,
           cc: emailsFrom(form, 'cc'),
           bcc: emailsFrom(form, 'bcc'),
-        });
+        }));
       } catch (err) {
         emailed = false;
         console.error('[ideas] decision email failed:', err);
       }
-      const verb = decision === 'approved' ? 'Approved' : decision === 'withheld' ? 'Withheld' : 'Declined';
-      flash = emailed
+      const verb = OUTCOME_LABEL[outcome];
+      flash = notSetUp
+        ? { tone: 'error', text: `${verb} and recorded${decision === 'approved' ? pipelineNote : ''}, but no email was sent: email sending isn't set up on this server (it only works on mcaheart.com).` }
+        : emailed
         ? {
             tone: 'ok',
             text: `${verb}${decision === 'approved' ? pipelineNote : ''} - email sent to ${idea.leadEmail}.`,
@@ -199,7 +220,6 @@ if (Astro.request.method === 'POST') {
             tone: 'error',
             text: `${verb} and recorded${decision === 'approved' ? pipelineNote : ''}, but the email to ${idea.leadEmail} could not be sent.`,
           };
-    }
     }
   }
 }
@@ -224,39 +244,15 @@ const ago = (t: number) => {
   return `${d} days ago`;
 };
 
-/** Field-by-field breakdown for the expanded view. */
-const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
-  ['Lead investigator', i.leadName],
-  ['Email', i.leadEmail],
-  ['Contact number', i.contactNumber],
-  ['Type of research', i.researchType],
-  ...(i.researchType === 'Database'
-    ? ([['Proposed database(s)', (i.databases ?? []).join(', ')]] as Array<[string, string]>)
-    : []),
-  ['Population (P)', i.population],
-  ['Intervention / exposure (I)', i.intervention],
-  ['Control / comparison (C)', i.comparison],
-  ['Outcomes (O)', i.outcomes],
-  ['Rationale', i.rationale],
-  ...((i.researchType === 'Database'
-    ? [
-        ['Proposed study design', i.studyDesign],
-        ['Prior published studies', i.priorStudies],
-        ['Latest study on topic', i.latestStudy],
-      ]
-    : [
-        ['Previous meta-analysis conducted', i.previousMetaDate],
-        ['New studies planned for inclusion', i.newStudies],
-        ['Approx. sample-size increase', i.sampleSizeIncrease],
-      ]) as Array<[string, string]>),
-  ['Target conference', CONFERENCE_LABELS[i.conference]],
-  ['Manuscript commitment', COMMITMENT_LABELS[i.researchType][i.commitment]],
-  ['Supporting document', i.attachmentName ?? '- none -'],
-];
-
 // CC / BCC suggestions for the decision email: everyone active with a real email.
 const { data: rosterRows } = await supabaseAdmin().from('people').select('full_name,email').eq('active', true).order('full_name');
 const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.endsWith('@import.invalid'));
+
+const { ready: reviewsReady, map: reviews } = await loadReviews();
+
+/** Label for a decided idea: the ticked box, or the plain status for older ones. */
+const decidedLabel = (i: IdeaRecord) =>
+  i.decisionOutcome ? OUTCOME_LABEL[i.decisionOutcome] : i.status === 'approved' ? 'Approved' : i.status === 'withheld' ? 'Withheld' : 'Declined';
 ---
 
 <AppLayout title="Ideas" heading="Research ideas" user={me} active="ideas">
@@ -277,50 +273,7 @@ const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.end
       </div>
     )}
 
-    {dbReady && (preview ? (
-      <div class="mailprev">
-        <h2 class="mailprev__title">
-          Preview - {preview.decision === 'approved' ? 'approval' : preview.decision === 'withheld' ? 'hold' : 'decline'} email
-        </h2>
-        <dl class="mailprev__head">
-          <div><dt>To</dt><dd>{preview.to}</dd></div>
-          <div><dt>Subject</dt><dd>{preview.subject}</dd></div>
-        </dl>
-
-        <iframe class="mailprev__frame" srcdoc={preview.html} title="Email preview" sandbox=""></iframe>
-
-        <form method="post" class="mailprev__form">
-          <input type="hidden" name="ideaId" value={preview.ideaId} />
-          <input type="hidden" name="decision" value={preview.decision} />
-          {preview.decision === 'approved' && (
-            <p class="mailprev__target">Sending to pipeline, targeting <strong>{preview.conference}</strong>.</p>
-          )}
-          <input type="hidden" name="conference" value={preview.conference} />
-          <div class="mailprev__copy">
-            <EmailChips name="cc" label="CC" initial={preview.cc} listId="copy-roster" recommended={COPY_SUGGESTIONS} />
-            <EmailChips name="bcc" label="BCC" initial={preview.bcc} listId="copy-roster" recommended={COPY_SUGGESTIONS} />
-            <datalist id="copy-roster">
-              {copyRoster.map((r: any) => <option value={r.email}>{r.full_name}</option>)}
-            </datalist>
-          </div>
-          <label class="idea__notelabel" for="prev-note">Comments to the submitter</label>
-          <textarea class="idea__note" id="prev-note" name="note" rows="3"
-            placeholder="Add or edit comments, then refresh the preview.">{preview.note}</textarea>
-          <div class="mailprev__actions">
-            <button class="adm-btn" type="submit"
-              name="action" value={`preview-${preview.decision === 'approved' ? 'approve' : preview.decision === 'withheld' ? 'withhold' : 'decline'}`}>
-              Refresh preview
-            </button>
-            <button
-              class:list={['btn', preview.decision === 'approved' ? 'idea__approve' : preview.decision === 'withheld' ? 'idea__withhold' : 'btn--red']}
-              type="submit" name="action" value="confirm">
-              Send email &amp; {preview.decision === 'approved' ? 'approve' : preview.decision === 'withheld' ? 'withhold' : 'decline'}
-            </button>
-            <a class="mailprev__cancel" href="/admin/ideas">Cancel</a>
-          </div>
-        </form>
-      </div>
-    ) : (
+    {dbReady && (
       <>
     <p class="ideas__count">
       <strong>{pending}</strong> awaiting review · {ideas.length} total
@@ -330,61 +283,240 @@ const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.end
 
     <div class="ideas__list">
       {ideas.map((i) => (
-        <details class="idea">
+        <details class="idea" open={i.id === openId}>
           <summary class="idea__summary">
             <span class:list={['idea__pill', `idea__pill--${i.status}`]}>{i.status}</span>
             <span class="idea__title">{i.title}</span>
             <span class="idea__meta">
               {i.leadName} · {i.researchType} · {i.conference === 'none' ? 'no conference' : i.conference === 'flexible' ? 'conf. flexible' : i.conference} · {ago(i.submittedAt)}
+              {reviewsReady && i.status === 'pending' && (
+                <> · <b class="idea__stage">{(reviews.get(i.id) ?? []).length ? 'Awaiting final decision' : 'Awaiting initial review'}</b></>
+              )}
             </span>
             <span class="idea__chev" aria-hidden="true">▾</span>
           </summary>
 
           <div class="idea__body">
-            <dl class="idea__dl">
-              {detailRows(i).map(([k, v]) => (
-                <div class="idea__pair">
-                  <dt>{k}</dt>
-                  <dd>{v}</dd>
-                </div>
-              ))}
-            </dl>
+            {(() => {
+              const list = reviews.get(i.id) ?? [];
+              const pendingIdea = i.status === 'pending';
+              const first = list[0];
+              return (
+                <>
+                  {pendingIdea && reviewsReady && (
+                    <ol class="steps" aria-label="Review progress">
+                      <li class:list={['steps__item', first ? 'is-done' : 'is-current']}>
+                        <span class="steps__num">{first ? '✓' : '1'}</span>
+                        <span class="steps__text">
+                          <b>Initial review</b>
+                          <small>{first ? `${reviewerName(first.reviewer)} · ${RECOMMENDATION_LABEL[first.recommendation]}` : 'Jawad or Burhan'}</small>
+                        </span>
+                      </li>
+                      <li class:list={['steps__item', first && 'is-current']}>
+                        <span class="steps__num">2</span>
+                        <span class="steps__text"><b>Final decision</b><small>{first ? `${REVIEWERS.find((r) => r.key !== first.reviewer)?.name ?? 'The other reviewer'}` : 'The other reviewer'}</small></span>
+                      </li>
+                      <li class="steps__item">
+                        <span class="steps__num">3</span>
+                        <span class="steps__text"><b>Email sent</b><small>To the author</small></span>
+                      </li>
+                    </ol>
+                  )}
 
-            {i.status === 'pending' ? (
-              <form method="post" class="idea__decide">
-                <input type="hidden" name="ideaId" value={i.id} />
-                <label class="idea__notelabel" for={`conf-${i.id}`}>Send to conference (required to approve)</label>
-                <select class="idea__note" id={`conf-${i.id}`} name="conference" required>
-                  <option value="" selected={!defaultConferenceFor(i)}>Choose…</option>
-                  {conferenceOptions.map((c) => <option value={c} selected={c === defaultConferenceFor(i)}>{c}</option>)}
-                </select>
-                <label class="idea__notelabel" for={`note-${i.id}`}>Comments to the submitter (optional)</label>
-                <textarea class="idea__note" id={`note-${i.id}`} name="note" rows="2"
-                  placeholder="e.g. which database to use, or why it wasn't taken forward. You'll see the full email before it sends."></textarea>
-                <div class="idea__actions">
-                  <button class="btn idea__approve" name="action" value="preview-approve" type="submit">Approve &amp; add to pipeline…</button>
-                  <button class="btn idea__withhold" name="action" value="preview-withhold" type="submit" formnovalidate>Withhold…</button>
-                  <button class="btn btn--red" name="action" value="preview-decline" type="submit" formnovalidate>Decline…</button>
-                </div>
-                <p class="idea__hint-inline">Next step shows the email to review before it's sent.</p>
-              </form>
-            ) : (
-              <div class:list={['idea__decision', `idea__decision--${i.status}`]}>
-                <p><strong>{i.status === 'approved' ? 'Approved' : i.status === 'withheld' ? 'Withheld' : 'Declined'}</strong> by {i.reviewedBy} · {fmtDate(i.reviewedAt)}</p>
-                {i.decisionNote && <p class="idea__decision-note">“{i.decisionNote}”</p>}
-              </div>
-            )}
+                  <section class="prop" aria-label="Proposal">
+                    <div class="prop__who">
+                      <div>
+                        <p class="prop__name">{i.leadName}</p>
+                        <p class="prop__contact">
+                          <a href={`mailto:${i.leadEmail}`}>{i.leadEmail}</a>
+                          <span>{i.contactNumber}</span>
+                        </p>
+                      </div>
+                      <div class="prop__chips">
+                        <span class="chip">{i.researchType}</span>
+                        {(i.databases ?? []).map((d) => <span class="chip">{d}</span>)}
+                        <span class="chip">{CONFERENCE_LABELS[i.conference]}</span>
+                        {i.attachmentName && <span class="chip chip--file">{i.attachmentName}</span>}
+                      </div>
+                    </div>
+
+                    <div class="pico">
+                      {([['P', 'Population', i.population], ['I', 'Intervention / exposure', i.intervention], ['C', 'Comparison', i.comparison], ['O', 'Outcomes', i.outcomes]] as const).map(([letter, label, text]) => (
+                        <div class="pico__cell">
+                          <span class="pico__letter">{letter}</span>
+                          <div><p class="prop__label">{label}</p><p class="prop__text">{text}</p></div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div class="prop__grid">
+                      <div class="prop__block prop__block--wide"><p class="prop__label">Rationale</p><p class="prop__text">{i.rationale}</p></div>
+                      {(i.researchType === 'Database'
+                        ? [['Proposed study design', i.studyDesign], ['Prior published studies', i.priorStudies], ['Latest study on topic', i.latestStudy]]
+                        : [['Previous meta-analysis', i.previousMetaDate], ['New studies to include', i.newStudies], ['Sample-size increase', i.sampleSizeIncrease]]
+                      ).map(([label, text]) => (
+                        <div class="prop__block"><p class="prop__label">{label}</p><p class="prop__text">{text || '-'}</p></div>
+                      ))}
+                      <div class="prop__block prop__block--wide"><p class="prop__label">Manuscript commitment</p><p class="prop__text">{COMMITMENT_LABELS[i.researchType][i.commitment]}</p></div>
+                    </div>
+                  </section>
+
+                  {reviewsReady && list.map((r) => (
+                    <article class:list={['rcard', `rcard--${r.recommendation}`]}>
+                      <span class="rcard__avatar" aria-hidden="true">{reviewerName(r.reviewer).split(' ').map((w) => w[0]).join('').slice(0, 2)}</span>
+                      <div class="rcard__main">
+                        <p class="rcard__head">
+                          <b>{reviewerName(r.reviewer)}{r.reviewer === myReviewer ? ' (you)' : ''}</b>
+                          <span class="rcard__rec">{RECOMMENDATION_LABEL[r.recommendation]}</span>
+                          <span class="rcard__when">{fmtDate(r.reviewedAt)}</span>
+                        </p>
+                        <p class:list={['rcard__comment', !r.comment && 'is-empty']}>{r.comment ?? 'No comments added.'}</p>
+                      </div>
+                    </article>
+                  ))}
+
+                  {pendingIdea ? (() => {
+                    const mine = list.find((r) => r.reviewer === myReviewer);
+                    const blocked = decisionBlocked(list, reviewsReady);
+                    return (
+                      <>
+                        {reviewsReady && myReviewer && (list.length === 0 || mine) && (
+                          <form method="post" class="panel">
+                            <input type="hidden" name="ideaId" value={i.id} />
+                            <input type="hidden" name="action" value="review" />
+                            <h3 class="panel__title">{mine ? 'Your initial review' : 'Add your initial review'}</h3>
+                            <div class="opts opts--3">
+                              {(['accept', 'reject', 'modify'] as Recommendation[]).map((opt) => (
+                                <label class:list={['opt', `opt--${opt}`]}>
+                                  <input type="radio" name="recommendation" value={opt} required checked={mine?.recommendation === opt} />
+                                  <span class="opt__dot" aria-hidden="true"></span>
+                                  <span class="opt__label">{RECOMMENDATION_LABEL[opt]}</span>
+                                </label>
+                              ))}
+                            </div>
+                            <label class="field">
+                              <span class="field__label">Comments for the final reviewer</span>
+                              <textarea name="review_comment" rows="3" placeholder="What should the other reviewer know?">{mine?.comment ?? ''}</textarea>
+                            </label>
+                            <div class="panel__foot">
+                              <button class="btn" type="submit">{mine ? 'Update review' : 'Save review'}</button>
+                            </div>
+                          </form>
+                        )}
+
+                        {reviewsReady && !myReviewer && list.length === 0 && (
+                          <p class="waiting">Waiting for Jawad or Burhan to add an initial review.</p>
+                        )}
+
+                        {!blocked && (() => {
+                          const initial = renderIdeaDecisionEmail({ to: i.leadEmail, title: i.title, outcome: 'none' as IdeaOutcome, note: null });
+                          return (
+                            <form method="post" class="panel decide" data-decide data-title={i.title}>
+                              <input type="hidden" name="ideaId" value={i.id} />
+                              <input type="hidden" name="action" value="confirm" />
+                              <div class="decide__controls">
+                                <h3 class="panel__title">Final decision</h3>
+                                <div class="opts">
+                                  {OUTCOMES.map((o) => (
+                                    <label class:list={['opt', `opt--${o}`]}>
+                                      <input type="radio" name="outcome" value={o} required />
+                                      <span class="opt__dot" aria-hidden="true"></span>
+                                      <span class="opt__label">{OUTCOME_LABEL[o]}<small>{OUTCOME_HINT[o]}</small></span>
+                                    </label>
+                                  ))}
+                                </div>
+                                <label class="field tick__conf">
+                                  <span class="field__label">Send to conference</span>
+                                  <select name="conference">
+                                    <option value="" selected={!defaultConferenceFor(i)}>Choose…</option>
+                                    {conferenceOptions.map((c) => <option value={c} selected={c === defaultConferenceFor(i)}>{c}</option>)}
+                                  </select>
+                                </label>
+                                <label class="field">
+                                  <span class="field__label">Explanation</span>
+                                  <textarea name="note" rows="4" placeholder="Shown in bold under the boxes in the email."></textarea>
+                                </label>
+                                <details class="copyto">
+                                  <summary>CC / BCC</summary>
+                                  <div class="copyto__body">
+                                    <EmailChips name="cc" label="CC" initial={[]} listId="copy-roster" recommended={COPY_SUGGESTIONS} />
+                                    <EmailChips name="bcc" label="BCC" initial={[]} listId="copy-roster" recommended={COPY_SUGGESTIONS} />
+                                  </div>
+                                </details>
+                                <button class="btn decide__send" type="submit" data-decide-send disabled>Send email</button>
+                              </div>
+                              <div class="mailwin">
+                                <div class="mailwin__bar" aria-hidden="true"><i></i><i></i><i></i></div>
+                                <dl class="mailwin__head">
+                                  <div><dt>To</dt><dd>{i.leadEmail}</dd></div>
+                                  <div><dt>Subject</dt><dd>{initial.subject}</dd></div>
+                                </dl>
+                                <iframe class="mailwin__frame" srcdoc={initial.html} title="Email preview" sandbox="" data-decide-frame></iframe>
+                              </div>
+                            </form>
+                          );
+                        })()}
+                      </>
+                    );
+                  })() : (
+                    <div class:list={['outcome', `outcome--${i.status}`]}>
+                      <p class="outcome__head"><b>{decidedLabel(i)}</b><span>by {i.reviewedBy} · {fmtDate(i.reviewedAt)}</span></p>
+                      {i.decisionNote && <p class="outcome__note">{i.decisionNote}</p>}
+                      {i.decisionOutcome && (() => {
+                        const sent = renderIdeaDecisionEmail({ to: i.leadEmail, title: i.title, outcome: i.decisionOutcome, note: i.decisionNote });
+                        return (
+                          <details class="outcome__mail">
+                            <summary>Show the email</summary>
+                            <div class="mailwin">
+                              <dl class="mailwin__head">
+                                <div><dt>To</dt><dd>{i.leadEmail}</dd></div>
+                                <div><dt>Subject</dt><dd>{sent.subject}</dd></div>
+                              </dl>
+                              <iframe class="mailwin__frame" srcdoc={sent.html} title="Email that was sent" sandbox=""></iframe>
+                            </div>
+                          </details>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </details>
       ))}
     </div>
       </>
-    ))}
+    )}
+    <datalist id="copy-roster">
+      {copyRoster.map((r: any) => <option value={r.email}>{r.full_name}</option>)}
+    </datalist>
   </div>
 </AppLayout>
 
+<script>
+  import { renderIdeaDecisionEmail, type IdeaOutcome } from '../../lib/idea-email-template';
+
+  // Live preview: every tick or keystroke re-renders the email beside the form.
+  document.querySelectorAll<HTMLFormElement>('[data-decide]').forEach((form) => {
+    const frame = form.querySelector<HTMLIFrameElement>('[data-decide-frame]')!;
+    const send = form.querySelector<HTMLButtonElement>('[data-decide-send]')!;
+    const conf = form.querySelector<HTMLSelectElement>('select[name=conference]')!;
+    const note = form.querySelector<HTMLTextAreaElement>('textarea[name=note]')!;
+    const title = form.dataset.title ?? '';
+    const update = () => {
+      const outcome = form.querySelector<HTMLInputElement>('input[name=outcome]:checked')?.value as IdeaOutcome | undefined;
+      frame.srcdoc = renderIdeaDecisionEmail({ to: '', title, outcome: outcome ?? ('none' as IdeaOutcome), note: note.value }).html;
+      conf.required = outcome === 'approved';
+      send.disabled = !outcome;
+    };
+    form.addEventListener('input', update);
+    form.addEventListener('change', update);
+    update();
+  });
+</script>
+
 <style>
-  .mailprev__copy { display: grid; gap: 0.2rem; margin-bottom: 0.4rem; }
   .ideas__count { font-size: 0.86rem; color: var(--text-muted); }
   .ideas__count strong { color: var(--text-strong); }
   .ideas__list { display: grid; gap: 0.6rem; }
@@ -414,13 +546,12 @@ const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.end
     grid-area: pill;
     align-self: start;
     margin-top: 0.1rem;
-    font-size: 0.64rem;
+    font-size: 0.75rem;
     font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    padding: 0.2rem 0.5rem;
+    padding: 0.2rem 0.55rem;
     border-radius: 0;
   }
+  .idea__pill::first-letter { text-transform: uppercase; }
   .idea__pill--pending { color: var(--warn); background: var(--warn-bg); }
   .idea__pill--approved { color: var(--ok); background: var(--ok-bg); }
   .idea__pill--withheld { color: var(--warn); background: var(--warn-bg); }
@@ -431,52 +562,141 @@ const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.end
   .idea__chev { grid-area: chev; color: var(--text-muted); transition: transform 0.2s var(--ease); }
   .idea[open] .idea__chev { transform: rotate(180deg); }
 
-  .idea__body { padding: 0.4rem 1.1rem 1.2rem; border-top: 1px solid var(--border-soft); }
+  .idea__body { padding: 1.2rem 1.25rem 1.5rem; border-top: 1px solid var(--border-soft); display: grid; gap: 1.25rem; }
+  .idea__stage { font-weight: 700; color: var(--text-strong); }
 
-  .idea__dl { display: grid; gap: 0; margin: 0.6rem 0 0; }
-  .idea__pair {
-    display: grid;
-    grid-template-columns: 200px 1fr;
-    gap: 0.75rem;
-    padding: 0.55rem 0;
-    border-bottom: 1px solid var(--border-soft);
+  /* Progress through the two-step review. */
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--border-soft); }
+  .steps__item { display: flex; align-items: center; gap: 0.7rem; padding: 0.75rem 1rem; color: var(--text-muted); position: relative; }
+  .steps__item + .steps__item { border-left: 1px solid var(--border-soft); }
+  .steps__num {
+    width: 1.75rem; height: 1.75rem; flex: none; display: grid; place-items: center; border-radius: 50%;
+    border: 1.5px solid var(--border); font-size: 0.8rem; font-weight: 700; color: var(--text-muted);
   }
-  .idea__pair dt {
-    font-size: 0.7rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--text-muted);
-  }
-  .idea__pair dd { margin: 0; font-size: 0.88rem; line-height: 1.6; color: var(--text); white-space: pre-wrap; }
-  @media (max-width: 640px) { .idea__pair { grid-template-columns: 1fr; gap: 0.15rem; } }
+  .steps__text { display: grid; line-height: 1.3; }
+  .steps__text b { font-size: 0.85rem; color: inherit; }
+  .steps__text small { font-size: 0.75rem; }
+  .steps__item.is-done { color: var(--text); }
+  .steps__item.is-done .steps__num { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .steps__item.is-current { color: var(--text-strong); background: var(--bg-tint); box-shadow: inset 0 -2px 0 var(--blue); }
+  .steps__item.is-current .steps__num { border-color: var(--blue); color: var(--blue); }
+  @media (max-width: 640px) { .steps { grid-template-columns: 1fr; } .steps__item + .steps__item { border-left: 0; border-top: 1px solid var(--border-soft); } }
 
-  .idea__decide { margin-top: var(--space-m); display: grid; gap: 0.5rem; }
-  .idea__notelabel { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text); }
-  .idea__note {
-    width: 100%;
-    padding: 0.65rem 0.85rem;
-    background: var(--bg);
-    border: 1px solid var(--border-soft);
-    border-radius: var(--radius);
-    font-size: 0.9rem;
-    line-height: 1.55;
-    resize: vertical;
-  }
-  .idea__note:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--accent-wash-strong); }
-  .idea__actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.2rem; }
-  .idea__approve { --btn-bg: var(--ok); --btn-bd: var(--ok); }
-  .idea__withhold { --btn-bg: var(--warn); --btn-bd: var(--warn); }
+  /* The proposal itself. */
+  .prop { display: grid; gap: 1rem; }
+  .prop__who { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 0.8rem 2rem; }
+  .prop__name { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text-strong); }
+  .prop__contact { margin: 0.2rem 0 0; display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; font-size: 0.85rem; color: var(--text-muted); }
+  .prop__contact a { color: var(--blue); }
+  .prop__chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .chip { font-size: 0.75rem; font-weight: 600; padding: 0.3rem 0.65rem; background: var(--bg-tint); color: var(--text-strong); }
+  .chip--file { background: transparent; border: 1px solid var(--border-soft); }
+  .prop__label { margin: 0 0 0.25rem; font-size: 0.85rem; font-weight: 700; color: var(--text-strong); }
+  .prop__text { margin: 0; font-size: 0.9rem; line-height: 1.6; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; }
 
-  .idea__decision {
-    margin-top: var(--space-m);
-    padding: 0.8rem 1rem;
-    border-radius: var(--radius);
-    font-size: 0.85rem;
-    line-height: 1.5;
+  .pico { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--border-soft); border: 1px solid var(--border-soft); }
+  .pico__cell { display: flex; gap: 0.8rem; padding: 0.9rem 1rem; background: var(--surface); }
+  .pico__letter {
+    width: 1.9rem; height: 1.9rem; flex: none; display: grid; place-items: center;
+    background: var(--blue); color: #fff; font-weight: 800; font-size: 0.9rem;
   }
-  .idea__decision--approved { background: var(--ok-bg); border: 1px solid var(--ok-border); color: var(--ok); }
-  .idea__decision--withheld { background: var(--warn-bg); border: 1px solid var(--warn-border); color: var(--warn); }
-  .idea__decision--declined { background: var(--red-wash); border: 1px solid var(--red-border); color: var(--red); }
-  .idea__decision-note { margin-top: 0.3rem; font-style: italic; color: var(--text); }
+  .prop__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem 1.5rem; }
+  .prop__block--wide { grid-column: 1 / -1; }
+  @media (max-width: 760px) { .pico, .prop__grid { grid-template-columns: 1fr; } }
+
+  /* An initial review. */
+  .rcard { display: flex; gap: 0.9rem; padding: 1rem 1.1rem; background: var(--bg-tint); border-left: 3px solid var(--rc, var(--border)); }
+  .rcard--accept { --rc: var(--ok); }
+  .rcard--modify { --rc: var(--warn); }
+  .rcard--reject { --rc: var(--red); }
+  .rcard__avatar {
+    width: 2.3rem; height: 2.3rem; flex: none; display: grid; place-items: center; border-radius: 50%;
+    background: var(--surface); border: 1px solid var(--border-soft); font-size: 0.8rem; font-weight: 700; color: var(--text-strong);
+  }
+  .rcard__main { min-width: 0; flex: 1; }
+  .rcard__head { margin: 0 0 0.3rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.88rem; color: var(--text-strong); }
+  .rcard__rec { font-size: 0.75rem; font-weight: 700; padding: 0.12rem 0.55rem; color: var(--rc); background: color-mix(in srgb, var(--rc) 12%, transparent); }
+  .rcard__when { margin-left: auto; font-size: 0.75rem; color: var(--text-muted); }
+  .rcard__comment { margin: 0; font-size: 0.9rem; line-height: 1.6; color: var(--text); white-space: pre-wrap; }
+  .rcard__comment.is-empty { color: var(--text-muted); font-style: italic; }
+
+  .waiting { margin: 0; padding: 0.9rem 1rem; border: 1px dashed var(--border); font-size: 0.88rem; color: var(--text-muted); }
+
+  /* Review / decision panels. */
+  .panel { border: 1px solid var(--border-soft); padding: 1.1rem 1.2rem 1.2rem; display: grid; gap: 0.9rem; background: var(--surface); }
+  .panel__title { margin: 0; font-size: 1rem; font-weight: 700; color: var(--text-strong); }
+  .panel__foot { display: flex; justify-content: flex-end; }
+
+  .opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+  .opts--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 560px) { .opts, .opts--3 { grid-template-columns: 1fr; } }
+  .opt {
+    --oc: var(--text-muted);
+    position: relative; display: flex; align-items: flex-start; gap: 0.65rem; padding: 0.75rem 0.85rem;
+    border: 1px solid var(--border-soft); cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  }
+  .opt--accept, .opt--approved { --oc: var(--ok); }
+  .opt--reject, .opt--rejected { --oc: var(--red); }
+  .opt--modify { --oc: var(--warn); }
+  .opt--details { --oc: #2563a8; }
+  .opt:hover { border-color: var(--oc); }
+  .opt input { position: absolute; opacity: 0; pointer-events: none; }
+  .opt__dot {
+    width: 1.05rem; height: 1.05rem; flex: none; margin-top: 0.1rem; border: 1.5px solid var(--border);
+    display: grid; place-items: center; color: #fff; font-size: 0.72rem; font-weight: 800; line-height: 1;
+  }
+  .opt__label { display: grid; gap: 0.15rem; font-size: 0.88rem; font-weight: 600; color: var(--text-strong); line-height: 1.35; }
+  .opt__label small { font-size: 0.75rem; font-weight: 400; color: var(--text-muted); }
+  .opt:has(input:checked) { border-color: var(--oc); background: color-mix(in srgb, var(--oc) 8%, transparent); box-shadow: inset 0 0 0 1px var(--oc); }
+  .opt input:checked + .opt__dot { background: var(--oc); border-color: var(--oc); }
+  .opt input:checked + .opt__dot::after { content: '✓'; }
+  .opt:has(input:focus-visible) { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+  .field { display: grid; gap: 0.35rem; }
+  .field__label { font-size: 0.78rem; font-weight: 700; color: var(--text-strong); }
+  .field textarea, .field select {
+    width: 100%; padding: 0.65rem 0.8rem; background: var(--bg); border: 1px solid var(--border-soft);
+    font: inherit; font-size: 0.9rem; line-height: 1.55; color: var(--text); resize: vertical;
+  }
+  .field textarea:focus, .field select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--accent-wash-strong); }
+
+  /* The conference picker only matters when the idea is approved. */
+  .tick__conf { display: none; }
+  .decide:has(input[value="approved"]:checked) .tick__conf { display: grid; }
+
+  .copyto { border: 1px solid var(--border-soft); }
+  .copyto summary { padding: 0.6rem 0.8rem; font-size: 0.82rem; font-weight: 700; color: var(--text-strong); cursor: pointer; list-style: none; }
+  .copyto summary::-webkit-details-marker { display: none; }
+  .copyto summary::before { content: '+ '; color: var(--blue); }
+  .copyto[open] summary::before { content: '− '; }
+  .copyto__body { padding: 0 0.8rem 0.8rem; display: grid; gap: 0.3rem; }
+
+  .decide { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 1.4rem; align-items: start; }
+  .decide__controls { display: grid; gap: 0.9rem; align-content: start; }
+  .decide__send { width: 100%; justify-content: center; }
+  .decide__send:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* The preview, framed like a mail window. */
+  .mailwin { border: 1px solid var(--border-soft); background: var(--surface); position: sticky; top: 130px; }
+  .mailwin__bar { display: flex; gap: 6px; padding: 0.55rem 0.75rem; background: var(--bg-tint); border-bottom: 1px solid var(--border-soft); }
+  .mailwin__bar i { width: 9px; height: 9px; border-radius: 50%; background: var(--border); }
+  .mailwin__head { margin: 0; padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--border-soft); display: grid; gap: 0.25rem; }
+  .mailwin__head div { display: grid; grid-template-columns: 4.2rem 1fr; gap: 0.5rem; font-size: 0.82rem; }
+  .mailwin__head dt { font-weight: 700; color: var(--text-muted); }
+  .mailwin__head dd { margin: 0; color: var(--text-strong); overflow-wrap: anywhere; }
+  .mailwin__frame { display: block; width: 100%; height: 620px; border: 0; background: #f3f3f3; }
+  @media (max-width: 960px) { .decide { grid-template-columns: 1fr; } .mailwin { position: static; } }
+
+  /* A decided idea. */
+  .outcome { padding: 0.9rem 1.1rem; border-left: 3px solid var(--oc); background: color-mix(in srgb, var(--oc) 7%, transparent); }
+  .outcome--approved { --oc: var(--ok); }
+  .outcome--withheld { --oc: var(--warn); }
+  .outcome--declined { --oc: var(--red); }
+  .outcome__head { margin: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; align-items: baseline; font-size: 0.9rem; }
+  .outcome__head b { color: var(--oc); }
+  .outcome__head span { font-size: 0.8rem; color: var(--text-muted); }
+  .outcome__mail { margin-top: 0.7rem; }
+  .outcome__mail summary { font-size: 0.85rem; font-weight: 700; color: var(--blue); cursor: pointer; }
+  .outcome__mail .mailwin { position: static; margin: 0.6rem auto 0; max-width: 760px; }
+  .outcome__note { margin: 0.4rem 0 0; font-size: 0.9rem; line-height: 1.6; color: var(--text); white-space: pre-wrap; }
 </style>

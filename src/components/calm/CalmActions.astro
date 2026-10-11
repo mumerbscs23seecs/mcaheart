@@ -1,0 +1,16 @@
+---
+import { icon } from '../../lib/calm';
+
+interface Props {
+  actions: { icon: string; label: string; href: string; external?: boolean; panel?: string }[];
+}
+const { actions } = Astro.props;
+---
+
+<div class="cv-acts">
+  {actions.map((a) => (
+    <a class="cv-ib" href={a.href} data-tip={a.label} aria-label={a.label}
+      target={a.external ? '_blank' : undefined} rel={a.external ? 'noopener' : undefined}
+      set:html={icon(a.icon)} />
+  ))}
+</div>

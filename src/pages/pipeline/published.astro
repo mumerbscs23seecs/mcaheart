@@ -1,5 +1,11 @@
 ---
 import PipelineLayout from '../../layouts/PipelineLayout.astro';
+import PipelineStatusCell from '../../components/PipelineStatusCell.astro';
+import CalmBar from '../../components/calm/CalmBar.astro';
+import CalmActions from '../../components/calm/CalmActions.astro';
+import CalmStatus from '../../components/calm/CalmStatus.astro';
+import CalmDock from '../../components/calm/CalmDock.astro';
+import { stageColor, fmtDate } from '../../lib/calm';
 
 export const prerender = false;
 const { supabase, person } = Astro.locals;
@@ -7,77 +13,84 @@ const { supabase, person } = Astro.locals;
 // Admin-only view. Members see published papers under Submissions.
 if (person.role !== 'admin') return Astro.redirect('/pipeline/submissions', 302);
 
-const q = (Astro.url.searchParams.get('q') ?? '').trim();
-
-let query = supabase
+const { data: rows, error } = await supabase
   .from('project_list')
-  .select('id,ref,title,lead_name,current_journal,journals_tried,created_at,stage_changed_at')
+  .select('id,ref,title,full_title,phase,stage,stage_label,lead_name,current_journal,journals_tried,open_journal_attempt_id,days_in_stage,created_at,stage_changed_at,archived_at')
   .eq('phase', 'journal')
   .eq('stage', 'published')
   .is('archived_at', null)
   .is('hidden_at', null)
   .is('deleted_at', null)
   .order('stage_changed_at', { ascending: false });
-if (q) query = query.ilike('title', `%${q}%`);
+const list = rows ?? [];
 
-const { data: rows, error } = await query;
-
-// Numeric MM-DD-YYYY - keeps the date column narrow so title/status columns
-// have the room, instead of the long "September 2, 2024" form.
-const fmt = (d: string | null) => {
-  if (!d) return '-';
-  const dt = new Date(d);
-  return `${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}-${dt.getFullYear()}`;
-};
+// "Open journal site": the attempt's own portal link when one was saved,
+// otherwise a web search for the journal's name (same as Submissions).
+const attemptIds = list.map((p: any) => p.open_journal_attempt_id).filter(Boolean);
+const { data: attempts } = attemptIds.length
+  ? await supabase.from('journal_attempts').select('id,portal_url').in('id', attemptIds)
+  : { data: [] };
+const portal = new Map((attempts ?? []).map((a: any) => [a.id, a.portal_url]));
+const journalHref = (p: any) =>
+  portal.get(p.open_journal_attempt_id) ||
+  (p.current_journal ? `https://www.google.com/search?q=${encodeURIComponent(`${p.current_journal} journal`)}` : null);
 ---
 
 <PipelineLayout title="Published" active="published">
-  <div class="pl-head">
-    <h1 class="pl-h1">Published <span class="pl-h1__count">({(rows ?? []).length})</span></h1>
-    <form class="pl-filter" method="get">
-      <input type="search" name="q" placeholder="Filter by title" value={q} />
-      <button class="pl-btn pl-btn--ghost" type="submit">Filter</button>
-    </form>
-  </div>
+  <div class="cv">
+    <CalmBar title="Published" count={list.length} />
+    {error && <p class="pl-flash pl-flash--err">{error.message}</p>}
 
-  {error && <p class="pl-flash pl-flash--err">{error.message}</p>}
-  {rows && rows.length === 0 && <p class="pl-muted" style="margin-top:20px">Nothing published yet.</p>}
-
-  {rows && rows.length > 0 && (
-    <div class="pl-tablewrap">
-      <table class="pl-table">
+    {list.length === 0 ? (
+      <p class="pl-muted cv-empty">Nothing published yet.</p>
+    ) : (
+      <table class="cv-table">
         <thead>
           <tr>
             <th>Submission title</th>
-            <th>Journal</th>
-            <th>Submitted</th>
-            <th>Published</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th class="cv-classic cv-hide-sm" style="width:185px">Lead</th>
+            <th class="cv-classic cv-hide-sm" style="width:190px">Journal</th>
+            <th class="cv-stacked cv-hide-sm" style="width:230px">Lead &amp; journal</th>
+            <th style="width:270px">Status</th>
+            <th class="x" style="width:120px">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((p) => (
-            <tr>
-              <td class="pl-t__title" data-th="Submission title">
-                <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a>
-                <span class="pl-t__ref">
-                  {p.ref}{p.journals_tried >= 2 ? ` · ${p.journals_tried} journals tried` : ''}
-                </span>
-              </td>
-              <td class="pl-t__venue" data-th="Journal">{p.current_journal ?? '-'}</td>
-              <td class="pl-t__date" data-th="Submitted">{fmt(p.created_at)}</td>
-              <td class="pl-t__date" data-th="Published">{fmt(p.stage_changed_at)}</td>
-              <td data-th="Status"><span class="pl-status">Published</span></td>
-              <td class="pl-t__actions" data-th="Actions">
-                <a href={`/pipeline/projects/${p.id}`}>Check progress &nearr;</a>
-                <a href={`/pipeline/projects/${p.id}/email?from=/pipeline/published`}>Email &nearr;</a>
-              </td>
-            </tr>
-          ))}
+          {list.map((p: any) => {
+            const journal = journalHref(p);
+            return (
+              <tr data-cv-row data-cv-f={p.stage} data-cv-text={`${p.full_title ?? ''} ${p.title ?? ''} ${p.ref ?? ''}`}>
+                <td class="t">
+                  <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.full_title || p.title}</a>
+                  <div class="cv-sub">
+                    {p.full_title && p.title ? `${p.title} · ` : ''}Published {fmtDate(p.stage_changed_at)}
+                    {p.journals_tried >= 2 ? ` · ${p.journals_tried} journals tried` : ''}
+                  </div>
+                </td>
+                <td class="cv-classic cv-hide-sm nw">{p.lead_name ?? '-'}</td>
+                <td class="cv-classic cv-hide-sm sm">{p.current_journal ?? '-'}</td>
+                <td class="cv-stacked cv-hide-sm">
+                  <div class="cv-ln">{p.lead_name ?? '-'}</div>
+                  <div class="cv-jn">{p.current_journal ?? '-'}</div>
+                </td>
+                <td>
+                  <CalmStatus color={stageColor(p.phase, p.stage)}>
+                    <PipelineStatusCell project={p} isAdmin={true} />
+                  </CalmStatus>
+                </td>
+                <td class="x">
+                  <CalmActions actions={[
+                    ...(journal ? [{ icon: 'journal', label: 'Open journal site', href: journal, external: true }] : []),
+                    { icon: 'email', label: 'Email', href: `/pipeline/projects/${p.id}/email?from=/pipeline/published` },
+                    { icon: 'progress', label: 'Check progress', href: `/pipeline/projects/${p.id}` },
+                  ]} />
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
-    </div>
-  )}
-
+    )}
+  </div>
+  <CalmDock />
 </PipelineLayout>

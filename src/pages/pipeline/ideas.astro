@@ -10,7 +10,7 @@
  */
 import PipelineLayout from '../../layouts/PipelineLayout.astro';
 import IdeaForm from '../../components/IdeaForm.astro';
-import { listIdeas } from '../../lib/ideas';
+import { listIdeas, OUTCOME_LABEL } from '../../lib/ideas';
 import { CONFERENCE_LABELS } from '../../lib/idea-schema';
 
 export const prerender = false;
@@ -63,14 +63,14 @@ const fmt = (t: number | null) => {
               <tr>
                 <td class="pl-t__title" data-th="Idea">
                   {i.title}
-                  {i.decisionNote && <span class="pl-t__ref">Reviewer: “{i.decisionNote}”</span>}
+                  {i.decisionNote && <span class="pl-t__ref">Explanation: “{i.decisionNote}”</span>}
                 </td>
                 <td data-th="Type">{i.researchType}</td>
                 <td class="pl-t__venue" data-th="Target">{CONFERENCE_LABELS[i.conference]}</td>
                 <td class="pl-t__date" data-th="Submitted">{fmt(i.submittedAt)}</td>
                 <td data-th="Status">
                   <span class:list={['pl-status', i.status === 'pending' && 'pl-status--warn']}>
-                    {STATUS_LABEL[i.status] ?? i.status}
+                    {i.decisionOutcome ? OUTCOME_LABEL[i.decisionOutcome] : (STATUS_LABEL[i.status] ?? i.status)}
                   </span>
                 </td>
               </tr>

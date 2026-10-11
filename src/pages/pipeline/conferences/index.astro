@@ -172,7 +172,7 @@ if (isAdmin) {
                 <tr>
                   <td class="pl-t__title" data-th="Submission title">
                     <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a>
-                    <span class="pl-t__ref">{p.ref}{p.analyst_name ? ` · analyst ${p.analyst_name}` : ''}</span>
+                    {p.analyst_name && <span class="pl-t__ref">Analyst {p.analyst_name}</span>}
                   </td>
                   <td class="pl-t__venue" data-th="Conference">{p.current_conference ?? 'no conference yet'}</td>
                   <td class="pl-t__date" data-th="Opened">{fmtDate(p.created_at)}</td>

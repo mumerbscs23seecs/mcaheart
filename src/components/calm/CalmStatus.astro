@@ -1,0 +1,7 @@
+---
+// Coloured dot + colour for whatever status control sits inside.
+interface Props { color: string }
+const { color } = Astro.props;
+---
+
+<div class="cv-st" style={`--c:${color}`}><slot /></div>

@@ -1,0 +1,19 @@
+---
+// "All N" plus one chip per status (only statuses that have rows). Rows opt
+// in with data-cv-row and data-cv-f="<key>"; CalmDock's script does the filtering.
+interface Props {
+  /** `title` shows on hover, e.g. the full name behind a shortened label. */
+  items: { key: string; label: string; count: number; title?: string }[];
+  total: number;
+  /** Keep every chip on one line (scrolls sideways if the screen is narrow). */
+  oneLine?: boolean;
+}
+const { items, total, oneLine = false } = Astro.props;
+---
+
+<div class:list={['cv-filters', oneLine && 'cv-filters--line']} data-cv-filters>
+  <button type="button" class="on" data-cv-f="all">All<b>{total}</b></button>
+  {items.filter((i) => i.count > 0).map((i) => (
+    <button type="button" data-cv-f={i.key} title={i.title}>{i.label}<b>{i.count}</b></button>
+  ))}
+</div>

@@ -1,0 +1,183 @@
+---
+// The pixel research pet for the calm list pages (concept C7), plus the
+// pages' live title search and status chips. Left-click the pet for a sound
+// and a quip; right-click to choose a different pet. The choice and where
+// the pet was dragged to are remembered per browser.
+---
+
+<div class="cv">
+  <div class="cv-pet" id="cv-pet" hidden><div class="cv-bubble" id="cv-bubble"></div><div id="cv-petart"></div></div>
+  <div class="cv-petmenu" id="cv-petmenu" role="menu" aria-label="Choose a pet" hidden></div>
+</div>
+
+<script is:inline>
+(() => {
+const $ = (s) => document.querySelector(s);
+
+/* ---------- live search + status chips ---------- */
+let filterKey = 'all';
+const rows = () => document.querySelectorAll('[data-cv-row]');
+function applyFilter() {
+  const q = ($('[data-cv-q]')?.value || '').trim().toLowerCase();
+  rows().forEach((tr) => {
+    const okF = filterKey === 'all' || tr.dataset.cvF === filterKey;
+    const okQ = !q || (tr.dataset.cvText || tr.textContent || '').toLowerCase().includes(q);
+    tr.hidden = !(okF && okQ);
+  });
+}
+$('[data-cv-q]')?.addEventListener('input', applyFilter);
+$('[data-cv-filters]')?.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-cv-f]');
+  if (!b) return;
+  filterKey = b.dataset.cvF;
+  b.parentElement.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
+  applyFilter();
+});
+
+/* ---------- pixel pets: drawn on a grid, animated frame by frame ---------- */
+const put=(g,x,y,ch)=>{if(g[y]&&x>=0&&x<g[y].length)g[y][x]=ch};
+const TAIL_TAN=[
+ [[10,8,'B'],[11,8,'B'],[10,9,'B'],[11,9,'D'],[10,10,'D'],[11,10,'B'],[10,11,'D'],[11,11,'B'],[10,12,'B']],
+ [[10,6,'B'],[11,6,'B'],[9,7,'B'],[10,7,'A'],[11,7,'B'],[9,8,'B'],[10,8,'D'],[11,8,'B'],[9,9,'B'],[10,9,'D'],[11,9,'B'],[10,10,'D'],[11,10,'B'],[10,11,'D'],[11,11,'B'],[10,12,'B']]];
+const TAIL_GRAY=[
+ [[1,13,'B'],[0,14,'B'],[1,14,'A'],[2,14,'B'],[0,15,'B'],[1,15,'A'],[2,15,'A'],[3,15,'B'],[1,16,'B'],[2,16,'A'],[3,16,'A'],[2,17,'B'],[3,17,'A'],[3,18,'B']],
+ [[0,14,'B'],[1,14,'B'],[0,15,'B'],[1,15,'A'],[2,15,'A'],[3,15,'B'],[1,16,'B'],[2,16,'A'],[3,16,'A'],[2,17,'B'],[3,17,'A'],[3,18,'B']]];
+const MOUTH_OPEN=[[20,9,'K'],[21,9,'K'],[22,9,'K'],[19,10,'K'],[20,10,'K'],[21,10,'K'],[22,10,'K'],[23,10,'K'],
+ [19,11,'K'],[20,11,'R'],[21,11,'R'],[22,11,'R'],[23,11,'K'],[19,12,'K'],[20,12,'R'],[21,12,'R'],[22,12,'R'],[23,12,'K'],
+ [19,13,'K'],[20,13,'O'],[21,13,'O'],[22,13,'O'],[23,13,'K'],[20,14,'K'],[21,14,'K'],[22,14,'K']];
+const MOUTH_SHUT=[[19,12,'K'],[23,12,'K'],[20,13,'K'],[21,13,'K'],[22,13,'K']];
+const BOLT=[[37,11],[38,11],[36,12],[37,12],[35,13],[36,13],[37,13],[38,13],[37,14],[36,15]];
+const PIKAPAL={Y:'#ffec2e',K:'#2b2b2e',R:'#fc3a43',O:'#faaa2e',S:'#ffb300',N:'#b5762f'};
+const BOLT_L=BOLT.map(([x,y])=>[42-x,y]);
+const TAILS=[[[30,22,5,3],[33,17,4,6],[34,14,5,5]],[[30,22,5,3],[33,17,4,6],[34,12,5,5]]];
+const pikaDraw=(tails,bolt)=>(g,st)=>{
+  (st.t?MOUTH_OPEN:MOUTH_SHUT).forEach(([x,y,c])=>put(g,x,y,c));
+  if(st.e){
+    for(let x=3;x<=9;x++){put(g,x,8,'.');put(g,x,7,'K')}for(let x=4;x<=7;x++)put(g,x,6,'K');
+    for(let x=33;x<=39;x++){put(g,x,8,'.');put(g,x,7,'K')}for(let x=35;x<=38;x++)put(g,x,6,'K');
+  }
+  if(tails){const T=tails[st.t];
+    T.forEach(([x,y,w,h])=>{for(let j=y-1;j<=y+h;j++)for(let i=x-1;i<=x+w;i++)put(g,i,j,'K')});
+    T.forEach(([x,y,w,h],n)=>{for(let j=y;j<y+h;j++)for(let i=x;i<x+w;i++)put(g,i,j,n?'Y':'N')});
+  }
+  if(st.s)bolt.forEach(([x,y])=>put(g,x,y,'S'));
+};
+const PIKAHEAD=["..................KKKKKKK...............", "...............KKKYYYYYYYKKK............", "...........KKKKYYYYYYYYYYYYYKKKK........", ".........KKYYYYYYYYYYYYYYYYYYYYYKK......", ".......KKYYYYYYYYYYYYYYYYYYYYYYYYYKK....", "......KYYYYYKYYYYYYYYYYYYYYYYYKYYYYYK...", ".....KKYYYYYKYYYKKYYYYYYYKKYYYKYYYYYKK..", "....KKKKYYKKYYKKYYYYYKYYYYYKKYYKKYYKKKK.", "...KKKKKKK.KYYYYYYYYYYYYYYYYYYYK.KKKKKKK", "...........KYYYYYYYYYYYYYYYYYYYK........", "..........KYYRRYYYYYYYYYYYYYRRYYK.......", "..........KYRRRRYYYYYYYYYYYRRRRYK.......", "..........KYRRRRYYYYYYYYYYYRRRRYK.......", "..........KYYRRYYYYYYYYYYYYYRRYYK.......", "..........KYYYYYYYYYYYYYYYYYYYYYK.......", "...........KYYYYYYYYYYYYYYYYYYYK........", "............KYYYYYYYYYYYYYYYYYK.........", ".............KKKKKKKKKKKKKKKKK.........."];
+const PETS={
+ pika:{w:40,x0:3,h:18,sc:3,hi:'Pika pika! Dr. Pika reporting for duty.',pal:PIKAPAL,rows:PIKAHEAD,draw:pikaDraw(null,BOLT)},
+ pikafull:{w:40,x0:3,h:26,sc:3,hi:'Pika pika! Dr. Pika reporting for duty.',pal:PIKAPAL,rows:PIKAHEAD.concat(["...............KYYYYYYYYYYYYK...........", "..............KYYYYYYYYYYYYYYK..........", "..............KYKYYYYYYYYYYKYK..........", "..............KYKYYYYYYYYYYKYK..........", "..............KKKYYYYYYYYYYKKK..........", "...............KYYYYYYYYYYYYK...........", "..............KYYYYYKKKKYYYYYK..........", "..............KKKKKK....KKKKKK.........."]),draw:pikaDraw(TAILS,BOLT_L)},
+ tan:{w:12,h:14,sc:7,hi:'Meow. Dr. Mochi reporting for duty.',
+  pal:{A:'#e3ac64',B:'#382a21',E:'#ee8a4a',F:'#1a1815',C:'#f7dda6',G:'#ed5516',D:'#d39455'},
+  rows:['.BB.....BB.','.BAB...BAB.','.BEABBBAEB.','.BAAAAAAAB.','BAAAAAAAAAB','BAAFAAAFAAB','BAAACGCAAAB','.BAACCCAAB.','..BBAAABB..','.BAAAAAAB..','.BAAAAAAAB.','.BAABDBAAB.','.BACBDBCAB.','.BBBBBBBBB.'],
+  draw(g,st){TAIL_TAN[st.t].forEach(([x,y,c])=>put(g,x,y,c));if(st.b){put(g,3,5,'A');put(g,7,5,'A');put(g,3,6,'B');put(g,7,6,'B')}}},
+ gray:{w:19,h:21,sc:5,hi:'Meow. Dr. Smokey reporting for duty.',
+  pal:{A:'#666565',B:'#010102',C:'#06fcfc',D:'#f39498'},
+  rows:['...........BBBB....','........BBBAAAAB...','......BBAAAAAABB...','.....BAAAAAAAAAB...','...BBAAAAAAAAAAAB..','..BAAAAAAAAAAAAAB..','.BAAAAAAAAAABBAAABB','.BAABAAAAAAABBDDAB.','..BBAABBAAAAAADDBBB','..BAAABBAABAAAAAAB.','.BBBADDAAAAAAAAAB..','..BAADDAAAAAAABB...','...BAAAAAAACCCCCB..','....BBBCCCCCCCCAB..','.....BCCCCCACAAAAB.','.....BAAAACACAAAAB.','....BAAAAAAAAAAAAB.','....BAAAAAAAAAAAB..','....BAAAAAAAAAAAB..','....BBAAABAABAAB...','......BBBBBB.BB....'],
+  draw(g,st){TAIL_GRAY[st.t].forEach(([x,y,c])=>put(g,x,y,c));if(st.b){put(g,12,6,'A');put(g,13,6,'A');put(g,6,8,'A');put(g,7,8,'A')}}}
+};
+function paint(kind,st){
+  const cv=document.getElementById('cv-canvas'),P=PETS[kind];if(!cv||!P)return;
+  const g=P.rows.map(r=>r.padEnd(P.w,'.').split(''));P.draw(g,st);
+  const c=cv.getContext('2d'),X=P.x0||0;c.clearRect(0,0,P.w,P.h);
+  g.forEach((r,y)=>r.forEach((ch,x)=>{if(ch!='.'){c.fillStyle=P.pal[ch];c.fillRect(x-X,y,1,1)}}));
+}
+let petTimer=null;
+function startPet(){
+  clearInterval(petTimer);if(!PETS[U.pet])return;
+  const kind=U.pet,P=PETS[kind],cv=document.getElementById('cv-canvas');
+  const cw=P.w-(P.x0||0);cv.width=cw;cv.height=P.h;cv.style.width=cw*P.sc+'px';cv.style.height=P.h*P.sc+'px';
+  let k=0;
+  const tick=()=>{paint(kind,{t:Math.floor(k/3)%2,b:k%34==0?1:0,e:k%50<3?1:0,s:k%70<4?1:0});k++};
+  tick();petTimer=setInterval(tick,140);
+}
+const QUIPS={
+ pika:['Pika pika! Peer review passed?','Pikachu used Thunderbolt on Reviewer 2!','Pika… pi… p < 0.05!','Charging up for the next submission…','Pika! A statistically significant spark.','It is super effective: a clean revision!'],
+ tan:['Peer review pending… purr-haps.','Have you checked the confidence intervals?','p < 0.05 and a nap. That is the dream.','Reviewer 2 is lurking.','Another meta-analysis? Meow-velous.','Submitted. Now we wait. And nap.'],
+ gray:['Scarf on, manuscript ready.','Reviewer 2 is lurking. I can smell it.','Has anyone adjusted for multiple comparisons?','Rejected with comments? Free feedback. Purr.','Revise, resubmit, nap. Repeat.','Hazard ratios are my favourite toy.']
+};
+QUIPS.pikafull=QUIPS.pika;
+// What the pet says after a status change (keyed by stage code).
+const REACT={awaited:'Waiting is part of the process.',submitted:'Submitted. Fingers crossed!',under_review:'Under review. Deep breaths.',revision_req:'Revision requested. You can do this.',revision_review:'Second round. Almost there.',rejected_comments:'Rejected with comments is free feedback. Next journal!',rejected_no_comments:'On to the next journal!',accepted:'Accepted! Time to celebrate.',published:'Published! Well done.',halted:'A pause, not a stop.',rejected:'Next conference!',not_sent:'There is always the next deadline.',ready:'Ready to go!',analysis_done:'Analysis done. Nice work.',ms_5_review:'Off to RG Operations for review.',ms_6_comments:'Nearly there: just the comments left.'};
+const pet=$('#cv-pet');
+function say(t){if(pet.hidden||!t)return;const b=$('#cv-bubble');b.textContent=t;b.classList.add('on');clearTimeout(say.t);say.t=setTimeout(()=>b.classList.remove('on'),3400)}
+function side(){pet.classList.toggle('r',pet.getBoundingClientRect().left>innerWidth/2)}
+/* ---------- sounds: tiny synthesized voices, no audio files ---------- */
+let actx=null;
+function tone(start,f0,f1,dur,type,vol){
+  const o=actx.createOscillator(),g=actx.createGain();
+  o.type=type;o.frequency.setValueAtTime(f0,start);o.frequency.exponentialRampToValueAtTime(f1,start+dur);
+  g.gain.setValueAtTime(0.0001,start);g.gain.exponentialRampToValueAtTime(vol,start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,start+dur);
+  o.connect(g).connect(actx.destination);o.start(start);o.stop(start+dur+0.02);
+}
+function meow(t,base){ // a rising-then-falling sweep through a soft filter
+  const o=actx.createOscillator(),f=actx.createBiquadFilter(),g=actx.createGain();
+  o.type='sawtooth';f.type='lowpass';f.frequency.value=1800;
+  o.frequency.setValueAtTime(base,t);o.frequency.linearRampToValueAtTime(base*1.6,t+0.18);o.frequency.linearRampToValueAtTime(base*0.9,t+0.5);
+  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.18,t+0.05);g.gain.exponentialRampToValueAtTime(0.0001,t+0.55);
+  o.connect(f).connect(g).connect(actx.destination);o.start(t);o.stop(t+0.6);
+}
+function sound(kind){
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume();
+    const t=actx.currentTime+0.01;
+    if(kind==='tan')meow(t,520);
+    else if(kind==='gray')meow(t,400);
+    else{tone(t,700,1300,0.12,'square',0.08);tone(t+0.15,900,1700,0.16,'square',0.08)} // "pi-ka!"
+  }catch(e){}
+}
+
+/* ---------- drag, left-click to talk ---------- */
+(function(){let d=null;
+  pet.onpointerdown=e=>{if(e.button!==0)return;pet.setPointerCapture(e.pointerId);const r=pet.getBoundingClientRect();d={x:e.clientX,y:e.clientY,l:r.left,t:r.top,m:false}};
+  pet.onpointermove=e=>{if(!d)return;const dx=e.clientX-d.x,dy=e.clientY-d.y;
+    if(!d.m&&Math.hypot(dx,dy)>4){d.m=true;pet.classList.add('drag')}
+    if(d.m){const x=Math.max(0,Math.min(innerWidth-pet.offsetWidth,d.l+dx)),y=Math.max(0,Math.min(innerHeight-pet.offsetHeight,d.t+dy));
+      Object.assign(pet.style,{left:x+'px',top:y+'px',bottom:'auto'});U.pos=[x,y]}};
+  pet.onpointerup=()=>{if(!d)return;pet.classList.remove('drag');
+    if(!d.m){sound(U.pet);const q=QUIPS[U.pet]||QUIPS.pika;say(q[Math.floor(Math.random()*q.length)]);pet.classList.remove('hop');void pet.offsetWidth;pet.classList.add('hop')}
+    else save();side();d=null};
+})();
+
+/* ---------- right-click: choose a pet ---------- */
+const CHOICES=[['pika','Pikachu face'],['pikafull','Pikachu + body'],['tan','Tan cat'],['gray','Gray cat']];
+const menu=$('#cv-petmenu');
+function closeMenu(){menu.hidden=true}
+pet.addEventListener('contextmenu',e=>{
+  e.preventDefault();
+  menu.innerHTML='<p class="cv-petmenu__title">Choose a pet</p>'+CHOICES.map(([k,n])=>`<button type="button" role="menuitemradio" aria-checked="${U.pet==k}" class="cv-petmenu__opt ${U.pet==k?'on':''}" data-pet="${k}">${n}</button>`).join('');
+  menu.hidden=false;
+  const r=pet.getBoundingClientRect(),w=menu.offsetWidth,h=menu.offsetHeight;
+  menu.style.left=Math.max(8,Math.min(innerWidth-w-8,r.left))+'px';
+  menu.style.top=Math.max(8,r.top-h-8)+'px';
+  menu.querySelector('.on,button')?.focus();
+});
+menu.addEventListener('click',e=>{
+  const b=e.target.closest('[data-pet]');if(!b)return;
+  U.pet=b.dataset.pet;closeMenu();showPet();sound(U.pet);say(PETS[U.pet].hi);
+});
+document.addEventListener('pointerdown',e=>{if(!menu.hidden&&!menu.contains(e.target))closeMenu()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeMenu()});
+
+/* ---------- the chosen pet and where it sits, remembered per browser ---------- */
+let U={pet:'pika',pos:null};
+try{const saved=JSON.parse(localStorage.getItem('mca-calm-ui')||'{}');if(PETS[saved.pet])U.pet=saved.pet;if(saved.pos)U.pos=saved.pos}catch(e){}
+function save(){try{localStorage.setItem('mca-calm-ui',JSON.stringify(U))}catch(e){}}
+function showPet(){
+  pet.hidden=false;$('#cv-petart').innerHTML='<canvas id="cv-canvas" width="32" height="32"></canvas>';startPet();
+  if(U.pos)Object.assign(pet.style,{left:Math.min(U.pos[0],innerWidth-140)+'px',top:Math.min(U.pos[1],innerHeight-120)+'px',bottom:'auto'});
+  side();save();
+}
+addEventListener('resize',side);
+showPet();
+
+// A status change reloads the page, so leave the pet's reaction for the next load.
+document.addEventListener('change',e=>{
+  const s=e.target.closest&&e.target.closest('select[data-status-select]');
+  if(s&&REACT[s.value])try{sessionStorage.setItem('cv-say',REACT[s.value])}catch(err){}
+},true);
+// "No" on a confirm box cancels the change, and with it the reaction.
+document.addEventListener('click',e=>{if(e.target.closest&&e.target.closest('[data-status-cancel]'))try{sessionStorage.removeItem('cv-say')}catch(err){}});
+try{const t=sessionStorage.getItem('cv-say');if(t){sessionStorage.removeItem('cv-say');setTimeout(()=>say(t),400)}}catch(e){}
+})();
+</script>

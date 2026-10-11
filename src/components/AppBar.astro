@@ -149,29 +149,17 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
           <span class="acct__avatar">{initials}</span>
         </button>
         <div class="acct__panel" data-acct-panel hidden>
-          <div class="acct__head">
-            <span class="acct__avatar acct__avatar--lg">{initials}</span>
-            <span class="acct__id">
-              <b>{name}</b>
-              <em>{role}</em>
-            </span>
+          <div class="acct__strip">
+            <LogoMark size="26px" background="dark" />
+            <span>MCA Heart Research Lab</span>
           </div>
-          <hr class="acct__rule" />
-          <a class="acct__signout" href="/account/password">
-            <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
-              <rect x="4" y="9" width="12" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.6" />
-              <path fill="none" stroke="currentColor" stroke-width="1.6" d="M7 9V6.5a3 3 0 0 1 6 0V9" />
-            </svg>
-            Change password
-          </a>
+          <div class="acct__id">
+            <p class="acct__name">{name}</p>
+            {email && <p class="acct__email">{email}</p>}
+          </div>
+          <a class="acct__row" href="/account/password">Change password</a>
           <form method="post" action="/logout">
-            <button class="acct__signout" type="submit">
-              <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
-                <path fill="none" stroke="currentColor" stroke-width="1.6" d="M8 3.5H4.5a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1H8" />
-                <path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 10h7.5m0 0-3-3m3 3-3 3" />
-              </svg>
-              Sign out
-            </button>
+            <button class="acct__row acct__row--out" type="submit">Sign out</button>
           </form>
         </div>
       </span>
@@ -380,29 +368,38 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
     font-size: 0.74rem; font-weight: 800; letter-spacing: 0.01em;
     flex-shrink: 0;
   }
-  .acct__avatar--lg { width: 42px; height: 42px; font-size: 0.9rem; }
 
+  /* The open menu reads like a lab ID badge: a red strip with the MCA mark,
+     then who you are and which email you're signed in with. Square corners
+     and a hard offset shadow, to match the rest of the workflow. */
   .acct__panel {
     position: absolute; top: calc(100% + 10px); right: 0; z-index: 130;
-    width: 240px; padding: 0.9rem;
-    background: var(--surface); border: 1px solid var(--border-soft); border-radius: 14px;
-    box-shadow: 0 10px 30px rgba(20, 20, 18, 0.14);
+    width: 280px;
+    background: var(--surface); border: 1px solid var(--border);
+    box-shadow: 4px 4px 0 rgba(20, 20, 18, 0.08);
   }
   .acct__panel[hidden] { display: none; }
-  .acct__head { display: flex; align-items: center; gap: 0.7rem; }
-  .acct__id { display: grid; min-width: 0; }
-  .acct__id b { font-size: 1rem; font-weight: 700; color: var(--text-strong); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .acct__id em { font-style: normal; font-size: 0.82rem; color: var(--text-muted); }
-
-  .acct__rule { border: 0; border-top: 1px solid var(--border-soft); margin: 0.8rem 0; }
-
-  .acct__signout {
-    width: 100%; display: flex; align-items: center; gap: 0.6rem;
-    padding: 0.55rem 0.4rem; border-radius: 9px;
-    background: none; border: 0; cursor: pointer;
-    font-size: 0.9rem; font-weight: 600; color: var(--text-strong);
+  .acct__strip {
+    display: flex; align-items: center; gap: 10px;
+    height: 46px; padding: 0 16px;
+    background: #7a1322; color: rgba(255, 255, 255, 0.92);
+    font-size: 0.8rem; font-weight: 600; letter-spacing: 0.02em;
   }
-  .acct__signout:hover { background: var(--bg-tint); }
+  .acct__id { padding: 16px 18px 14px; border-bottom: 1px solid var(--border-soft); }
+  .acct__id p { margin: 0; }
+  .acct__name { font-size: 1.05rem; font-weight: 700; line-height: 1.25; color: var(--text-strong); overflow-wrap: anywhere; }
+  .acct__email { margin-top: 3px !important; font-size: 0.8rem; color: var(--text-muted); overflow-wrap: anywhere; }
+  .acct__panel form { margin: 0; }
+  .acct__row {
+    display: block; width: 100%; padding: 12px 18px;
+    background: none; border: 0; border-radius: 0; text-align: left; cursor: pointer;
+    font: inherit; font-size: 0.9rem; color: var(--text-strong); text-decoration: none;
+  }
+  .acct__panel form .acct__row { border-top: 1px solid var(--border-soft); }
+  .acct__row:hover { background: var(--bg-tint); }
+  .acct__row:focus-visible { outline: 2px solid #7a1322; outline-offset: -2px; }
+  .acct__row--out { color: #7a1322; font-weight: 600; }
+  :root[data-theme='dark'] .acct__row--out { color: #f08a7e; }
 
   @media (max-width: 720px) {
     /* Centering the nav only makes sense once there's slack room either

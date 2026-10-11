@@ -1,0 +1,229 @@
+/* The "calm" list design (concept C7) for Submissions, Ongoing and
+   Conferences. Everything is scoped to .cv so the app bar and the black
+   section tabs stay exactly as they are. Palette, font, icon style and table
+   layout come from the Customize panel (CalmDock.astro) via attributes on
+   <html>; text is jet black in light mode. */
+
+.cv {
+  --cv-a: #1f4e79;
+  --cv-accent: var(--cv-a);
+  --cv-ink: #000;
+  --cv-bg: #fff;
+  --cv-soft: #f5f7fa;
+  --cv-tint: #e6eef7;
+  --cv-line: #dfe5ec;
+  color: var(--cv-ink);
+  font: 400 0.9375rem/1.5 var(--cv-font, 'Merriweather Sans', system-ui, sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+html[data-cv-p='forest'] .cv { --cv-soft: #f4f8f6; --cv-a: #1f5c47; --cv-tint: #e4f0ea; --cv-line: #dde7e2; }
+html[data-cv-p='maroon'] .cv { --cv-soft: #faf6f6; --cv-a: #7a2535; --cv-tint: #f5e8ea; --cv-line: #eadfe0; }
+html[data-cv-p='teal'] .cv { --cv-soft: #f2f8f9; --cv-a: #0f6b73; --cv-tint: #dff0f2; --cv-line: #d9e6e8; }
+html[data-cv-p='indigo'] .cv { --cv-soft: #f6f6fc; --cv-a: #3b3fa3; --cv-tint: #e8e9f8; --cv-line: #e0e1ef; }
+html[data-cv-p='plum'] .cv { --cv-soft: #f9f6fa; --cv-a: #6b3a7d; --cv-tint: #f0e6f4; --cv-line: #e8dfec; }
+html[data-cv-p='graphite'] .cv { --cv-soft: #f6f6f6; --cv-a: #111; --cv-tint: #ebebeb; --cv-line: #e0e0e0; }
+html[data-cv-p='ochre'] .cv { --cv-soft: #fbf8f1; --cv-a: #8a5a00; --cv-tint: #f6ecd6; --cv-line: #ebe3d1; }
+html[data-cv-p='paper'] .cv { --cv-bg: #fbf8f2; --cv-soft: #f3eee4; --cv-a: #9a3b26; --cv-tint: #f1e2d8; --cv-line: #e6dfd0; }
+html[data-cv-p='mist'] .cv { --cv-bg: #f4f8fc; --cv-soft: #e9f0f8; --cv-a: #0b5cad; --cv-tint: #d8e7f6; --cv-line: #d5e0ec; }
+/* White page behind the content, as in the concept; Paper and Mist tint it. */
+html:not([data-theme='dark']) body.pl-body:has(.cv) { background: #fff; }
+html[data-cv-p='paper']:not([data-theme='dark']) body.pl-body:has(.cv) { background: #fbf8f2; }
+html[data-cv-p='mist']:not([data-theme='dark']) body.pl-body:has(.cv) { background: #f4f8fc; }
+
+/* Dark mode: keep the site's dark surfaces, lift the accent so it reads. */
+:root[data-theme='dark'] .cv {
+  --cv-accent: color-mix(in srgb, var(--cv-a) 55%, #fff);
+  --cv-ink: var(--text-strong);
+  --cv-bg: var(--bg);
+  --cv-soft: color-mix(in srgb, var(--cv-a) 10%, transparent);
+  --cv-tint: color-mix(in srgb, var(--cv-a) 28%, transparent);
+  --cv-line: var(--border-soft);
+}
+
+.cv a { color: inherit; text-decoration: none; }
+.cv button, .cv input, .cv select { font-family: inherit; color: var(--cv-ink); }
+.cv ::placeholder { color: var(--cv-ink); opacity: 1; }
+
+/* Wider page than the other workflow screens, as in the concept. */
+.pl-main:has(> .cv) { max-width: 1560px; padding-left: 40px; padding-right: 40px; padding-top: 34px; }
+@media (max-width: 1100px) { .pl-main:has(> .cv) { padding-left: 20px; padding-right: 20px; } }
+
+/* ---- icons */
+.cv-ic { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+html[data-cv-icons='bold'] .cv-ic { stroke-width: 2.5; }
+html[data-cv-icons='duo'] .cv-ic .f { fill: color-mix(in srgb, var(--cv-accent) 22%, transparent); }
+
+/* ---- title bar: heading, extras, search */
+.cv-bar { display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap; margin-bottom: 20px; }
+.cv-h1 { margin: 0; font-family: inherit; font-size: 2rem; font-weight: 700; letter-spacing: -0.015em; line-height: 1.1; color: var(--cv-ink); }
+.cv-h1 span { font-weight: 400; }
+.cv-sbox { position: relative; margin-left: auto; }
+.cv-sbox .cv-ic { position: absolute; left: 11px; top: 50%; margin-top: -9px; }
+.cv-sbox input {
+  width: 300px; padding: 9px 12px 9px 38px; border: 1px solid var(--cv-line); border-radius: 8px;
+  font-size: 0.875rem; outline: none; background: var(--cv-bg);
+}
+.cv-sbox input:focus { border-color: var(--cv-accent); box-shadow: 0 0 0 3px var(--cv-tint); }
+.cv-check { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8125rem; cursor: pointer; }
+.cv-btn {
+  display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--cv-line); background: var(--cv-bg);
+  padding: 9px 14px; border-radius: 8px; font-size: 0.8125rem; font-weight: 600; cursor: pointer; color: var(--cv-ink);
+}
+.cv-btn:hover { border-color: var(--cv-accent); color: var(--cv-accent); }
+
+/* ---- filter chips */
+.cv-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.cv-filters button { border: 0; background: none; padding: 6px 12px; border-radius: 999px; font-size: 0.8125rem; font-weight: 500; cursor: pointer; }
+.cv-filters button b { font-weight: 700; margin-left: 5px; }
+.cv-filters button:hover { background: var(--cv-soft); }
+.cv-filters button.on { background: var(--cv-tint); font-weight: 700; }
+
+/* ---- table: the title column gets every pixel the others don't need */
+.cv-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.cv-table thead th {
+  position: sticky; top: 112px; z-index: 2; background: var(--cv-bg); text-align: left;
+  font-size: 0.9375rem; font-weight: 700; padding: 12px 16px; border-bottom: 2px solid var(--cv-ink); color: var(--cv-ink);
+}
+@media (max-width: 720px) { .cv-table thead th { top: 0; } }
+.cv-table tbody td { padding: 20px 16px; border-bottom: 1px solid var(--cv-line); vertical-align: top; overflow-wrap: anywhere; }
+.cv-table tbody tr:hover { background: var(--cv-soft); }
+.cv-table tr[hidden] { display: none; }
+.cv-table td.t { padding-right: 32px; }
+.cv-table td.x, .cv-table th.x { padding-left: 8px; padding-right: 8px; }
+.cv-table td.t > a { font-size: 1.0625rem; font-weight: 500; line-height: 1.4; letter-spacing: -0.003em; }
+.cv-table td.t > a:hover { color: var(--cv-accent); text-decoration: underline; text-underline-offset: 3px; }
+.cv-sub { font-size: 0.8125rem; margin-top: 6px; letter-spacing: 0.01em; }
+.cv-table td.nw { white-space: nowrap; }
+.cv-table td.sm { font-size: 0.9rem; }
+.cv-table td.num { font-variant-numeric: tabular-nums; }
+.cv-ln { font-weight: 500; }
+.cv-jn { font-size: 0.875rem; margin-top: 3px; }
+.cv-empty { margin-top: 20px; }
+
+/* Classic vs stacked table layout (Customize > Table layout). */
+.cv-table .cv-stacked { display: none; }
+html[data-cv-layout='stacked'] .cv-table .cv-classic { display: none; }
+html[data-cv-layout='stacked'] .cv-table .cv-stacked { display: table-cell; }
+
+/* ---- status: coloured dot, borderless select that shows a border on hover */
+.cv-st { position: relative; color: var(--c); --c-show: var(--c); }
+:root[data-theme='dark'] .cv-st { --c-show: color-mix(in srgb, var(--c) 55%, #fff); color: var(--c-show); }
+.cv-st::before {
+  content: ''; position: absolute; left: 11px; top: 14px; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--c-show); pointer-events: none; z-index: 1;
+}
+.cv-st select.pl-status,
+.cv-st span.pl-status,
+.cv-type select {
+  appearance: none; -webkit-appearance: none; display: inline-block; width: auto; max-width: 100%; min-width: 0;
+  field-sizing: content; /* as wide as the chosen label, so the chevron follows it */
+  border: 1px solid transparent; box-shadow: none;
+  font-family: inherit; font-size: 0.875rem; font-weight: 600; line-height: 1.4; color: var(--c-show);
+  padding: 6px 26px 6px 28px; border-radius: 8px; cursor: pointer; outline: none; text-transform: none; letter-spacing: 0;
+  height: auto;
+}
+.cv-st span.pl-status { cursor: default; padding-right: 8px; background: none; }
+.cv-st select.pl-status:hover, .cv-type select:hover { border-color: var(--cv-line); }
+.cv-st select.pl-status:focus, .cv-type select:focus { border-color: var(--cv-accent); box-shadow: 0 0 0 3px var(--cv-tint); }
+.cv-st select.pl-status option, .cv-type select option { color: var(--text-strong); font-weight: 500; }
+/* Chevron, only where there's a dropdown. */
+.cv-st .pl-status-form { width: 100% !important; grid-template-columns: minmax(0, 1fr); justify-items: start; }
+.cv-st .pl-status-extra { width: 100%; }
+/* The chevron is drawn inside the select so it always follows the text. */
+.cv-st select.pl-status, .cv-type select {
+  background: transparent url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23000' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 10px center / 9px 6px;
+}
+:root[data-theme='dark'] .cv-st select.pl-status, :root[data-theme='dark'] .cv-type select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23fff' stroke-width='1.5'/%3E%3C/svg%3E");
+}
+.cv-st select.pl-status:hover, .cv-type select:hover,
+.cv-st select.pl-status:focus, .cv-type select:focus { background-color: var(--cv-bg); }
+.cv-type select { padding-left: 10px; color: var(--cv-ink); font-weight: 500; }
+.cv-type form { margin: 0; }
+/* The extra boxes under a status (journal name, Yes/No confirm). */
+.cv-st .pl-status-extra { margin-top: 8px; color: var(--cv-ink); }
+.cv-st .pl-status-extra input { padding: 6px 8px; border: 1px solid var(--cv-line); border-radius: 6px; font-size: 0.8125rem; background: var(--cv-bg); }
+.cv-st .pl-status-extra__go { border: 0; background: var(--cv-accent); color: #fff; border-radius: 6px; padding: 6px 12px; font-size: 0.75rem; font-weight: 700; }
+.cv-st .pl-status-extra__go--no { background: transparent; color: var(--cv-ink); border: 1px solid var(--cv-line); }
+.cv-st .pl-status__note { display: block; margin: 4px 0 0 28px; font-size: 0.75rem; font-weight: 400; color: var(--cv-ink); opacity: 0.7; }
+
+/* ---- action icons */
+.cv-acts { display: flex; gap: 2px; }
+.cv-ib {
+  position: relative; width: 32px; height: 32px; display: grid; place-items: center; border: 0; background: none;
+  border-radius: 8px; cursor: pointer; color: var(--cv-ink);
+}
+.cv-ib .cv-ic { width: 17px; height: 17px; stroke-width: 1.9; }
+html[data-cv-icons='bold'] .cv-ib .cv-ic { stroke-width: 2.6; }
+.cv-ib:hover, .cv-ib:focus-visible { background: var(--cv-tint); color: var(--cv-accent); outline: none; }
+.cv-ib[data-tip]:hover::after, .cv-ib[data-tip]:focus-visible::after {
+  content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+  background: var(--cv-ink); color: var(--cv-bg); font-size: 0.75rem; font-weight: 500; white-space: nowrap;
+  padding: 4px 9px; border-radius: 6px; pointer-events: none; z-index: 5;
+}
+
+/* ---- pixel research pet */
+.cv-pet { position: fixed; left: 20px; bottom: 20px; z-index: 59; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.cv-pet[hidden] { display: none; }
+.cv-pet.drag { cursor: grabbing; }
+.cv-pet canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; animation: cv-bob 2.4s steps(1) infinite; }
+.cv-pet.hop canvas { animation: cv-hop 0.55s steps(1); }
+@keyframes cv-bob { 0% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes cv-hop { 0% { transform: translateY(0); } 20% { transform: translateY(-12px); } 40% { transform: translateY(-24px); } 60% { transform: translateY(-12px); } 80% { transform: translateY(-3px); } }
+.cv-bubble {
+  position: absolute; bottom: calc(100% + 8px); left: 0; width: max-content; max-width: 230px; background: #fff; color: #000;
+  border: 2px solid #000; border-radius: 4px; box-shadow: 3px 3px 0 #000; padding: 7px 11px; font-size: 0.8125rem;
+  font-weight: 500; line-height: 1.35; opacity: 0; transform: translateY(6px); transition: 0.2s; pointer-events: none;
+}
+.cv-bubble::after {
+  content: ''; position: absolute; left: 34px; bottom: -8px; width: 10px; height: 10px; background: #fff;
+  border: solid #000; border-width: 0 2px 2px 0; transform: rotate(45deg);
+}
+.cv-bubble.on { opacity: 1; transform: none; }
+.cv-pet.r .cv-bubble { left: auto; right: 0; }
+.cv-pet.r .cv-bubble::after { left: auto; right: 34px; }
+@media print { .cv-pet, .cv-petmenu { display: none; } }
+
+/* Right-click menu for choosing the pet. */
+.cv-petmenu {
+  position: fixed; z-index: 70; min-width: 180px; padding: 6px 0;
+  background: var(--cv-bg); color: var(--cv-ink); border: 2px solid var(--cv-ink); box-shadow: 3px 3px 0 var(--cv-ink);
+}
+.cv-petmenu[hidden] { display: none; }
+.cv-petmenu__title { margin: 0; padding: 4px 12px 6px; font-size: 0.75rem; font-weight: 700; }
+.cv-petmenu__opt {
+  display: block; width: 100%; padding: 7px 12px; border: 0; background: none; text-align: left;
+  font-family: inherit; font-size: 0.85rem; color: var(--cv-ink); cursor: pointer;
+}
+.cv-petmenu__opt:hover, .cv-petmenu__opt:focus-visible { background: var(--cv-tint); outline: none; }
+.cv-petmenu__opt.on { font-weight: 700; }
+.cv-petmenu__opt.on::after { content: ' ✓'; color: var(--cv-accent); }
+
+@media (max-width: 820px) {
+  .cv-table .cv-hide-sm { display: none !important; }
+  .cv-sbox { width: 100%; }
+  .cv-sbox input { width: 100%; }
+  .cv-pet { transform: scale(0.75); transform-origin: left bottom; }
+}
+
+/* A number with a status dot (accepted / rejected counts). */
+.cv-dotnum { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--c); }
+.cv-dotnum::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+:root[data-theme='dark'] .cv-dotnum { color: color-mix(in srgb, var(--c) 55%, #fff); }
+
+/* Phones: each row becomes a card (title, then status and actions). */
+@media (max-width: 820px) {
+  .cv-table, .cv-table tbody, .cv-table tr, .cv-table td { display: block; width: auto !important; }
+  .cv-table thead { display: none; }
+  .cv-table tr[hidden] { display: none !important; }
+  .cv-table tbody tr { padding: 14px 0; border-bottom: 1px solid var(--cv-line); }
+  .cv-table tbody td { padding: 4px 0; border: 0; }
+  .cv-table td.t { padding-right: 0; }
+  .cv-table td.x { padding: 4px 0 0; }
+  .cv-table td.x .cv-acts { margin-left: -6px; }
+}
+
+/* One-line chip row (Ongoing): no wrapping, sideways scroll on small screens. */
+.cv-filters--line { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.cv-filters--line::-webkit-scrollbar { display: none; }
+.cv-filters--line button { white-space: nowrap; flex: none; }

@@ -2,7 +2,13 @@
 import PipelineLayout from '../../../layouts/PipelineLayout.astro';
 import PeoplePicker from '../../../components/PeoplePicker.astro';
 import PipelineStatusCell from '../../../components/PipelineStatusCell.astro';
-import { STUDY_TYPES } from '../../../lib/lifecycle.mjs';
+import { STUDY_TYPES, stagesFor } from '../../../lib/lifecycle.mjs';
+import CalmBar from '../../../components/calm/CalmBar.astro';
+import CalmFilters from '../../../components/calm/CalmFilters.astro';
+import CalmActions from '../../../components/calm/CalmActions.astro';
+import CalmStatus from '../../../components/calm/CalmStatus.astro';
+import CalmDock from '../../../components/calm/CalmDock.astro';
+import { stageColor, outcomeColor } from '../../../lib/calm';
 
 export const prerender = false;
 const { supabase, person } = Astro.locals;
@@ -68,7 +74,7 @@ const projectIds = [...new Set((attempts ?? []).map((a: any) => a.project_id))];
 const { data: projectRows } = projectIds.length
   ? await supabase
       .from('project_list')
-      .select('id,ref,title,phase,stage,stage_label,study_type,lead_name,analyst_name,days_in_stage,archived_at,hidden_at')
+      .select('id,ref,title,full_title,phase,stage,stage_label,study_type,lead_name,analyst_name,days_in_stage,archived_at,hidden_at')
       .in('id', projectIds)
   : { data: [] };
 const projectById = new Map((projectRows ?? []).map((r: any) => [r.id, r]));
@@ -94,13 +100,30 @@ const fmtDate = (d: string | null) => {
 const s = score ?? { submitted: 0, accepted: 0, rejected: 0, accept_pct: null };
 const pending = Math.max(0, (s.submitted ?? 0) - (s.accepted ?? 0) - (s.rejected ?? 0));
 const cap = (x: string | null) => (x ? x[0].toUpperCase() + x.slice(1) : 'Pending');
+
+// Only a paper still sitting in this conference with its abstract undecided
+// gets the live dropdown; anything decided, or that has since moved on to
+// Ongoing/Submissions, shows this attempt's outcome. The chip key follows suit.
+const isLive = (a: any, p: any) => !a.outcome && p.phase === 'conference';
+const keyFor = (a: any, p: any) => (isLive(a, p) ? p.stage : a.outcome ?? 'pending');
+const KEY_LABEL: Record<string, string> = {
+  ...Object.fromEntries(stagesFor('conference').map((st: any) => [st.code, st.label])),
+  withdrawn: 'Withdrawn',
+  pending: 'Pending',
+};
+const chips = Object.entries(KEY_LABEL).map(([key, label]) => ({
+  key,
+  label,
+  count: rows.filter((r: any) => keyFor(r.attempt, r.p) === key).length,
+}));
 ---
 
 <PipelineLayout title={conf.name} active="conferences">
+  <div class="cv">
   <p class="pl-crumb"><a class="pl-link" href="/pipeline/conferences">← Conferences</a></p>
   <div class="cf-head">
     <div class="cf-head__main">
-      <h1 class="pl-h1">{conf.name}</h1>
+      <h1 class="cv-h1">{conf.name}</h1>
       <p class="pl-sub cf-deadline">Deadline: {fmtDate(conf.abstract_deadline)}</p>
     </div>
 
@@ -127,7 +150,9 @@ const cap = (x: string | null) => (x ? x[0].toUpperCase() + x.slice(1) : 'Pendin
     </div>
   </div>
 
-  <details class="pl-inline-details" style="margin:14px 0 0">
+
+  <CalmBar>
+  <details class="pl-inline-details" style="margin:0">
     <summary>+ Add a paper manually</summary>
     <p class="pl-muted" style="padding:10px 0 0; font-size:.85rem">
       Skips idea submission entirely - creates the project straight into this conference, "Abstract being written".
@@ -150,89 +175,75 @@ const cap = (x: string | null) => (x ? x[0].toUpperCase() + x.slice(1) : 'Pendin
       <button class="pl-btn" type="submit">Add paper</button>
     </form>
   </details>
+  </CalmBar>
+  <CalmFilters items={chips} total={rows.length} />
 
-  {rows.length === 0 && (
-    <p class="pl-muted" style="margin-top:20px">No papers in this conference yet.</p>
-  )}
-
-  {rows.length > 0 && (
-    <div class="pl-tablewrap" style="margin-top:16px">
-      <table class="pl-table pl-conf-table">
-        <colgroup>
-          <col class="c-title" /><col class="c-type" /><col class="c-person" /><col class="c-person" /><col class="c-status" /><col class="c-actions" />
-        </colgroup>
-        <thead>
-          <tr>
-            <th>Submission title</th>
-            <th>Type</th>
-            <th>Lead</th>
-            <th>Analyst</th>
-            <th>Status</th>
-            <th>Actions</th>
+  {rows.length === 0 ? (
+    <p class="pl-muted cv-empty">No papers in this conference yet.</p>
+  ) : (
+    <table class="cv-table">
+      <thead>
+        <tr>
+          <th>Submission title</th>
+          <th class="cv-hide-sm" style="width:140px">Type</th>
+          <th class="cv-classic cv-hide-sm" style="width:170px">Lead</th>
+          <th class="cv-classic cv-hide-sm" style="width:170px">Analyst</th>
+          <th class="cv-stacked cv-hide-sm" style="width:220px">Lead &amp; analyst</th>
+          <th style="width:270px">Status</th>
+          <th class="x" style="width:88px">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(({ attempt: a, p }: any) => (
+          <tr data-cv-row data-cv-f={keyFor(a, p)} data-cv-text={`${p.full_title ?? ''} ${p.title ?? ''} ${p.ref ?? ''}`}>
+            <td class="t">
+              <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.full_title || p.title}</a>
+              {p.full_title && p.title && <div class="cv-sub">{p.title}</div>}
+            </td>
+            <td class="cv-hide-sm">
+              <div class="cv-type">
+                <form method="post" data-type-form>
+                  <input type="hidden" name="action" value="set-type" />
+                  <input type="hidden" name="project_id" value={p.id} />
+                  <select name="study_type" aria-label={`Type of research for ${p.title}`}>
+                    {STUDY_TYPES.map((t: string) => <option value={t} selected={t === p.study_type}>{t}</option>)}
+                  </select>
+                </form>
+              </div>
+            </td>
+            <td class="cv-classic cv-hide-sm">{p.lead_name ?? '-'}</td>
+            <td class="cv-classic cv-hide-sm">{p.analyst_name ?? '-'}</td>
+            <td class="cv-stacked cv-hide-sm">
+              <div class="cv-ln">{p.lead_name ?? '-'}</div>
+              <div class="cv-jn">{p.analyst_name ? `Analyst: ${p.analyst_name}` : 'No analyst'}</div>
+            </td>
+            <td>
+              {isLive(a, p) ? (
+                <CalmStatus color={stageColor('conference', p.stage)}>
+                  <PipelineStatusCell project={{ ...p, open_conference_attempt_id: a.id }} isAdmin={true} />
+                </CalmStatus>
+              ) : (
+                <CalmStatus color={outcomeColor(a.outcome)}>
+                  <span class="pl-status">{cap(a.outcome)}</span>
+                </CalmStatus>
+              )}
+            </td>
+            <td class="x">
+              <CalmActions actions={[
+                { icon: 'email', label: 'Email', href: `/pipeline/projects/${p.id}/email?from=/pipeline/conferences/${id}` },
+                { icon: 'progress', label: 'Check progress', href: `/pipeline/projects/${p.id}` },
+              ]} />
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {rows.map(({ attempt: a, p }: any) => {
-            // Only a paper still sitting in this conference with its abstract
-            // undecided gets the live dropdown; anything decided, or that has
-            // since moved on to Ongoing/Submissions, shows this attempt's outcome.
-            const live = !a.outcome && p.phase === 'conference';
-            return (
-              <tr>
-                <td class="pl-t__title" data-th="Submission title">
-                  <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a>
-                  <span class="pl-t__ref">{p.ref}</span>
-                </td>
-                <td data-th="Type">
-                  <form method="post" class="pl-conf-type" data-type-form>
-                    <input type="hidden" name="action" value="set-type" />
-                    <input type="hidden" name="project_id" value={p.id} />
-                    <select class="pl-status" name="study_type" aria-label={`Type of research for ${p.title}`}>
-                      {STUDY_TYPES.map((t: string) => <option value={t} selected={t === p.study_type}>{t}</option>)}
-                    </select>
-                  </form>
-                </td>
-                <td class="pl-conf-person" data-th="Lead">{p.lead_name ?? <span class="pl-muted">-</span>}</td>
-                <td class="pl-conf-person" data-th="Analyst">{p.analyst_name ?? <span class="pl-muted">-</span>}</td>
-                <td data-th="Status">
-                  {live ? (
-                    <PipelineStatusCell project={{ ...p, open_conference_attempt_id: a.id }} isAdmin={true} />
-                  ) : (
-                    <span class:list={['pl-status', a.outcome === 'rejected' && 'pl-status--warn']}>{cap(a.outcome)}</span>
-                  )}
-                </td>
-                <td class="pl-t__actions" data-th="Actions">
-                  <a href={`/pipeline/projects/${p.id}`}>Check progress &nearr;</a>
-                  <a href={`/pipeline/projects/${p.id}/email?from=/pipeline/conferences/${id}`}>Email &nearr;</a>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </table>
   )}
+  </div>
+  <CalmDock />
 </PipelineLayout>
 
 <style is:global>
-  /* Fixed layout so the columns hold these proportions no matter what a cell
-     holds: Type / Lead / Analyst share one equal width, Status gets a bit more
-     for its longest label, and the title takes what's left. */
-  .pl-conf-table { table-layout: fixed; min-width: 1040px; }
-  .pl-conf-table .c-title { width: 28%; }
-  .pl-conf-table .c-type,
-  .pl-conf-table .c-person { width: 13%; }
-  .pl-conf-table .c-status { width: 17%; }
-  .pl-conf-table .c-actions { width: 16%; }
-  .pl-conf-table td { overflow-wrap: anywhere; }
-  .pl-conf-person { color: var(--text-strong); font-weight: 500; }
-  .pl-conf-type { margin: 0; }
-  /* Both dropdowns fill their column instead of PipelineStatusCell's fixed
-     250px, so the Type and Status selects line up edge to edge. */
-  .pl-conf-table select.pl-status,
-  .pl-conf-table .pl-status { min-width: 0; max-width: none; width: 100%; }
-  .pl-conf-table .pl-status-form { width: 100%; }
-
   /* Header: name on the left, the scorecard and a split bar on the right. */
   .cf-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 20px 40px; margin-bottom: 18px; }
   .cf-head__main { min-width: 0; }

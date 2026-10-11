@@ -40,7 +40,7 @@ function digestHtml(items: Submission[]): string {
   const rows = items
     .map(
       (s) => `<tr>
-        <td style="padding:10px 12px 10px 0;border-bottom:1px solid #eeeeee;font-size:15px;line-height:1.5;color:#333333">
+        <td style="padding:10px 12px 10px 0;border-bottom:1px solid #eeeeee;font-size:14px;line-height:1.5;color:#333333">
           ${esc(s.title)}<br>
           <span style="color:#777777;font-size:13px">${esc(s.lead)} &middot; ${esc(s.target)} &middot; ${esc(s.status)}</span>
         </td>

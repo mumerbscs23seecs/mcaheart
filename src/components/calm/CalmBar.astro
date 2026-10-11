@@ -1,0 +1,25 @@
+---
+// Page heading + live title search for the calm list pages. Also loads
+// the pages' font, Merriweather Sans.
+import '../../styles/calm.css';
+import { icon } from '../../lib/calm';
+
+interface Props {
+  /** Omit to show only the search box (e.g. under a page's own header). */
+  title?: string;
+  count?: number;
+  placeholder?: string;
+}
+const { title, count, placeholder = 'Filter by title' } = Astro.props;
+---
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather+Sans:wght@400;500;600;700&display=swap" />
+
+<div class="cv-bar">
+  {title && <h1 class="cv-h1">{title} {typeof count === 'number' && <span>({count})</span>}</h1>}
+  <slot />
+  <label class="cv-sbox">
+    <Fragment set:html={icon('search')} />
+    <input type="search" placeholder={placeholder} aria-label={placeholder} data-cv-q autocomplete="off" />
+  </label>
+</div>
