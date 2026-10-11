@@ -1,5 +1,8 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
+import EmailChips from '../../components/EmailChips.astro';
+import { COPY_SUGGESTIONS, emailsFrom } from '../../lib/copy-suggestions';
+import { supabaseAdmin } from '../../lib/supabase';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
 import { getPipelineSession } from '../../lib/pipeline-auth';
@@ -55,6 +58,8 @@ type Preview = {
   subject: string;
   html: string;
   expertiseTags: string[];
+  cc: string[];
+  bcc: string[];
 };
 let flash: Flash | null = null;
 let preview: Preview | null = null;
@@ -128,7 +133,7 @@ if (Astro.request.method === 'POST') {
       });
       const submittedTags = form.getAll('expertise').map(String);
       const expertiseTags = submittedTags.length ? submittedTags : guessExpertiseTags(app.expertise);
-      preview = { appId, decision, note, to: app.email, subject, html, expertiseTags };
+      preview = { appId, decision, note, to: app.email, subject, html, expertiseTags, cc: emailsFrom(form, 'cc'), bcc: emailsFrom(form, 'bcc') };
     }
   }
 
@@ -140,7 +145,10 @@ if (Astro.request.method === 'POST') {
       const app = result.application;
       let emailed = true;
       try {
-        await deliverApplicationDecision({ to: app.email, name: app.name, decision, note: app.decisionNote });
+        await deliverApplicationDecision({
+          to: app.email, name: app.name, decision, note: app.decisionNote,
+          cc: emailsFrom(form, 'cc'), bcc: emailsFrom(form, 'bcc'),
+        });
       } catch (err) {
         emailed = false;
         console.error('[applications] decision email failed:', err);
@@ -202,6 +210,10 @@ const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
   ['Internal reference / prior collaboration', a.internalRef || '-'],
   ['How they heard about MCA', a.referralSource],
 ];
+
+// CC / BCC suggestions for the decision email: everyone active with a real email.
+const { data: rosterRows } = await supabaseAdmin().from('people').select('full_name,email').eq('active', true).order('full_name');
+const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.endsWith('@import.invalid'));
 ---
 
 <AppLayout title="Applicants" heading="Lab applicants" user={me} active="applicants">
@@ -237,6 +249,13 @@ const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
         <form method="post" class="mailprev__form">
           <input type="hidden" name="appId" value={preview.appId} />
           <input type="hidden" name="decision" value={preview.decision} />
+          <div class="mailprev__copy">
+            <EmailChips name="cc" label="CC" initial={preview.cc} listId="copy-roster" recommended={COPY_SUGGESTIONS} />
+            <EmailChips name="bcc" label="BCC" initial={preview.bcc} listId="copy-roster" recommended={COPY_SUGGESTIONS} />
+            <datalist id="copy-roster">
+              {copyRoster.map((r: any) => <option value={r.email}>{r.full_name}</option>)}
+            </datalist>
+          </div>
           <label class="idea__notelabel" for="prev-note">Comments to the applicant</label>
           <textarea class="idea__note" id="prev-note" name="note" rows="3"
             placeholder="Add or edit comments, then refresh the preview.">{preview.note}</textarea>
@@ -495,6 +514,7 @@ const detailRows = (a: (typeof apps)[number]): Array<[string, string]> => [
   .vote__form { display: grid; gap: 0.5rem; }
   .vote__btn--dim { opacity: 0.55; }
 
+  .mailprev__copy { display: grid; gap: 0.2rem; margin-bottom: 0.4rem; }
   .mentee-tags { border: 1px solid var(--border-soft); border-radius: var(--radius); padding: 0.7rem 0.9rem; margin: 0; }
   .mentee-tags__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.5rem; margin-top: 0.5rem; }
   .mentee-tags__item { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text); }

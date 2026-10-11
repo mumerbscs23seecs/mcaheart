@@ -48,14 +48,14 @@ const { name, label, initial, listId, recommended = [] } = Astro.props;
     border: 1px solid var(--border-soft);
     background: var(--bg, #fff);
   }
-  .echips__box:focus-within { border-color: var(--pl-accent); }
+  .echips__box:focus-within { border-color: var(--pl-accent, var(--blue)); }
   .echips__list { display: contents; }
   .echips__chip {
     display: inline-flex; align-items: center; gap: 7px;
     padding: 4px 6px 4px 11px;
     font-size: 0.82rem; font-weight: 600; color: var(--text-strong);
     background: var(--bg-tint, #f4f2ee);
-    border: 1px solid var(--pl-border, #d8dce6);
+    border: 1px solid var(--pl-border, var(--border-soft));
     border-radius: 999px;
   }
   .echips__x {
@@ -76,8 +76,8 @@ const { name, label, initial, listId, recommended = [] } = Astro.props;
   .echips__recbtn {
     cursor: pointer; padding: 3px 9px;
     font: inherit; font-size: 0.78rem; font-weight: 600;
-    color: var(--pl-accent); background: transparent;
-    border: 1px dashed var(--pl-accent); border-radius: 999px;
+    color: var(--pl-accent, var(--blue)); background: transparent;
+    border: 1px dashed var(--pl-accent, var(--blue)); border-radius: 999px;
   }
   .echips__recbtn:hover { background: var(--accent-wash); }
   .echips__recbtn[disabled] { opacity: 0.4; cursor: default; }

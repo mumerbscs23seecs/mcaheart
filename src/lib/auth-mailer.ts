@@ -1,14 +1,10 @@
 import { sendEmail } from './email';
+import { esc, p, heading, button, link, emailShell } from './email-layout';
 
 /**
- * Account-access emails (invite a new member / resend a set-password link).
- * Sent from info@ through src/lib/email.ts.
+ * Account-access emails (invite a new member / resend a set-password link),
+ * sent from researchlab@ through src/lib/email.ts.
  */
-
-function esc(v: string): string {
-  return v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
-
 export async function deliverAccessLink(opts: {
   to: string;
   name: string;
@@ -16,31 +12,22 @@ export async function deliverAccessLink(opts: {
   kind: 'invite' | 'reset';
 }): Promise<{ ok: boolean; error?: string }> {
   const isInvite = opts.kind === 'invite';
-  const subject = isInvite
-    ? '[MCA Heart] You’ve been added - set your password'
-    : '[MCA Heart] Reset your password';
+  const subject = isInvite ? 'Welcome to MCA Heart: set your password' : 'Reset your MCA Heart password';
   const lead = isInvite
-    ? 'An admin has added you to the MCA Heart members area. Set a password to get started.'
-    : 'Here’s a fresh link to set a new password for the MCA Heart members area.';
+    ? 'You have been added to the MCA Heart members area. Please set a password to get started.'
+    : 'Here is a link to set a new password for the MCA Heart members area.';
 
-  const html = `<div style="background:#f8fafc;padding:28px">
-  <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid rgba(43,57,144,.14);border-radius:12px;padding:28px">
-    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart</p>
-    <h1 style="margin:0 0 12px;color:#1e293b;font:600 20px/1.3 'Open Sans','Segoe UI',Helvetica,'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">${isInvite ? 'Welcome to MCA Heart' : 'Reset your password'}</h1>
-    <p style="margin:0 0 8px;color:#1e293b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">Hi ${esc(opts.name)},</p>
-    <p style="margin:0 0 18px;color:#1e293b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">${lead}</p>
-    <p style="margin:0 0 18px">
-      <a href="${opts.link}" style="display:inline-block;padding:12px 22px;background:#a51c30;color:#fff;
-         font:600 14px/1 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;text-decoration:none;border-radius:999px">
-        ${isInvite ? 'Set your password' : 'Reset password'}
-      </a>
-    </p>
-    <p style="margin:0;color:#64748b;font:12px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">
-      This link expires in 1 hour. If the button doesn’t work, paste this into your browser:<br>
-      <a href="${opts.link}" style="color:#a51c30">${opts.link}</a>
-    </p>
-  </div>
-</div>`;
+  const inner =
+    heading(isInvite ? 'Welcome to MCA Heart' : 'Reset your password') +
+    p(`Dear ${esc(opts.name)},`) +
+    p(lead) +
+    button(opts.link, isInvite ? 'Set your password' : 'Reset password') +
+    p(`This link expires in 1 hour. If the button does not work, paste this into your browser:<br>${link(opts.link)}`, 'font-size:13px;color:#777777;word-break:break-all') +
+    p('Kind regards,<br>MCA Heart Research Lab', 'margin-bottom:0');
 
-  return sendEmail({ to: opts.to, subject, html });
+  return sendEmail({
+    to: opts.to,
+    subject,
+    html: emailShell(inner, 'If you did not expect this email, you can ignore it.'),
+  });
 }

@@ -24,6 +24,7 @@ import {
 } from './submissions';
 import { audit } from './auth';
 import { sendEmail } from './email';
+import { esc, p, heading, link, emailShell } from './email-layout';
 
 /** Comma-separated list in COORDINATOR_EMAILS, else a sensible default. */
 function coordinators(): string[] {
@@ -38,34 +39,24 @@ function daysSince(t: number): number {
 function digestHtml(items: Submission[]): string {
   const rows = items
     .map(
-      (s) => `
-      <tr>
-        <td style="padding:8px 12px 8px 0;font:14px/1.5 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;color:#1e293b">
-          ${s.title}<br>
-          <span style="color:#64748b;font-size:12px">${s.lead} &middot; ${s.target} &middot; ${s.status}</span>
+      (s) => `<tr>
+        <td style="padding:10px 12px 10px 0;border-bottom:1px solid #eeeeee;font-size:15px;line-height:1.5;color:#333333">
+          ${esc(s.title)}<br>
+          <span style="color:#777777;font-size:13px">${esc(s.lead)} &middot; ${esc(s.target)} &middot; ${esc(s.status)}</span>
         </td>
-        <td style="padding:8px 0;font:600 13px/1.5 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;color:#a51c30;white-space:nowrap;vertical-align:top">
+        <td style="padding:10px 0;border-bottom:1px solid #eeeeee;font-size:14px;font-weight:600;color:#7a1322;white-space:nowrap;vertical-align:top">
           ${daysSince(s.updatedAt)} days idle
         </td>
       </tr>`,
     )
     .join('');
 
-  return `<div style="background:#f8fafc;padding:28px">
-  <div style="max-width:640px;margin:0 auto;background:#fff;border:1px solid rgba(43,57,144,.12);border-radius:12px;padding:28px">
-    <p style="margin:0 0 4px;color:#a51c30;font:700 11px/1 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif;text-transform:uppercase;letter-spacing:.22em">MCA Heart · Workflow</p>
-    <h1 style="margin:0 0 6px;color:#1e293b;font:600 20px/1.3 'Open Sans','Segoe UI',Helvetica,'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">${items.length} submission${items.length === 1 ? '' : 's'} need a nudge</h1>
-    <p style="margin:0 0 18px;color:#64748b;font:14px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">
-      No recorded activity in over a week and still open. Review in the
-      <a href="https://www.mcaheart.com/admin" style="color:#a51c30">admin dashboard</a>.
-    </p>
-    <table style="border-collapse:collapse;width:100%">${rows}</table>
-    <hr style="border:0;border-top:1px solid rgba(43,57,144,.12);margin:20px 0">
-    <p style="margin:0;color:#94a3b8;font:12px/1.6 'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">
-      Weekly digest. You will not get another reminder for these items for 7 days.
-    </p>
-  </div>
-</div>`;
+  const inner =
+    heading(`${items.length} submission${items.length === 1 ? '' : 's'} need${items.length === 1 ? 's' : ''} a nudge`) +
+    p(`These have had no recorded activity in over a week and are still open. Please review them in the ${link('https://www.mcaheart.com/admin', 'admin dashboard')}.`) +
+    `<table role="presentation" style="border-collapse:collapse;width:100%;margin:0 0 4px;font-family:'Open Sans','Segoe UI',Helvetica,Arial,sans-serif">${rows}</table>`;
+
+  return emailShell(inner, 'Weekly digest. You will not get another reminder for these items for 7 days.');
 }
 
 export interface SweepResult {
@@ -103,7 +94,7 @@ export async function runReminderSweep(
 
   const sent = await sendEmail({
     to,
-    subject: `[MCA Heart] ${due.length} submission${due.length === 1 ? '' : 's'} idle 7+ days`,
+    subject: `${due.length} submission${due.length === 1 ? '' : 's'} idle for 7+ days`,
     html: digestHtml(due),
   });
 

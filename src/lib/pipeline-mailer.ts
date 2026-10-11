@@ -1,47 +1,11 @@
 import { sendEmail } from './email';
+import { esc, p, button, noteBlock, emailShell, RED, FOOTER_AUTO } from './email-layout';
 
-const esc = (v: string) =>
-  v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-const FONT = "'Open Sans', 'Segoe UI', Helvetica, Arial, sans-serif";
-const RED = '#7a1322';
-const TEXT = '#333333';
-const MUTED = '#777777';
-
-const p = (html: string, extra = '') =>
-  `<p style="margin:0 0 20px;color:${TEXT};font-family:${FONT};font-size:16px;line-height:1.6;${extra}">${html}</p>`;
-
-const button = (href: string, label: string) =>
-  `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:8px auto 28px">
-    <tr><td style="background:${RED};border-radius:4px">
-      <a href="${href}" style="display:inline-block;padding:15px 44px;color:#ffffff;font-family:${FONT};font-size:16px;font-weight:600;text-decoration:none">${label}</a>
-    </td></tr>
-  </table>`;
-
-const noteBlock = (note?: string, label = 'Note from the coordinator') =>
-  note
-    ? `<div style="margin:0 0 24px;padding:16px 18px;background:#f6f6f6;border-left:3px solid ${RED};color:${TEXT};font-family:${FONT};font-size:15px;line-height:1.6;white-space:pre-wrap"><strong>${label}:</strong><br>${esc(note)}</div>`
-    : '';
-
-/** Wiley-style frame: grey page, centered wordmark, white card, small footer. */
-function shell(inner: string, footer: string, signoff = true) {
-  return `<style>@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&display=swap');</style>
-<div style="background:#f3f3f3;padding:40px 16px;font-family:${FONT}">
-  <div style="max-width:640px;margin:0 auto">
-    <p style="margin:0 0 32px;text-align:center;font-family:${FONT};font-size:26px;font-weight:700;letter-spacing:0.04em;color:#1a1a1a">
-      <span style="color:${RED}">MCA</span> HEART
-    </p>
-    <div style="background:#ffffff;padding:44px 48px 36px">
-      ${inner}
-      ${signoff ? p('Kind regards,<br>MCA Heart Research Lab', 'margin-bottom:0') : ''}
-    </div>
-    <p style="margin:20px 0 0;text-align:center;color:${MUTED};font-family:${FONT};font-size:12px;line-height:1.6">${footer}</p>
-  </div>
-</div>`;
-}
-
-const FOOTER =
-  'This is an automated message from the MCA Heart Research Workflow. Please reply to this email rather than on WhatsApp so that the conversation stays on record.';
+// Workflow emails sign off for the lab; the composed ones (Email page) carry
+// their own sign-off inside the typed body, so they pass signoff = false.
+const shell = (inner: string, footer: string, signoff = true) =>
+  emailShell(inner + (signoff ? p('Kind regards,<br>MCA Heart Research Lab', 'margin-bottom:0') : ''), footer);
+const FOOTER = FOOTER_AUTO;
 
 export type TransitionTemplate =
   | 'conference_assigned'

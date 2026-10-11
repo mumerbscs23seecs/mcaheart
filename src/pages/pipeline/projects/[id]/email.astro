@@ -8,6 +8,7 @@ import { EMAIL_TEMPLATES } from '../../../../lib/email-templates';
 import { renderComposedEmail, stageUpdateText } from '../../../../lib/pipeline-mailer';
 import { sendEmail } from '../../../../lib/email';
 import { supabaseAdmin } from '../../../../lib/supabase';
+import { COPY_SUGGESTIONS } from '../../../../lib/copy-suggestions';
 
 export const prerender = false;
 
@@ -24,10 +25,9 @@ if (!p) return Astro.redirect('/pipeline/submissions');
 
 const REAL = (e: string | null | undefined) => !!e && !e.endsWith('@import.invalid');
 const EMAIL_RE = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
-const RECOMMENDED = [
-  { email: 'jawad.basit@mcaheart.com', label: 'Jawad Basit' },
-  { email: 'muhammad.burhan@mcaheart.com', label: 'Muhammad Burhan' },
-];
+// Default CC on paper emails: Jawad and Burhan. Other suggestions (e.g. Dr. Alraies) are one click away.
+const RECOMMENDED = COPY_SUGGESTIONS;
+const DEFAULT_CC = ['jawad.basit@mcaheart.com', 'muhammad.burhan@mcaheart.com'];
 
 let flashErr = '';
 let posted: null | { to: string[]; cc: string[]; bcc: string[]; subject: string; body: string; template: string } = null;
@@ -146,7 +146,7 @@ const templates = [
         <h2 class="em__draft" data-em-draft-title></h2>
 
         <EmailChips name="to" label="To" initial={posted?.to ?? defaultTo} listId="em-roster" />
-        <EmailChips name="cc" label="CC" initial={posted?.cc ?? RECOMMENDED.map((r) => r.email)} listId="em-roster" recommended={RECOMMENDED} />
+        <EmailChips name="cc" label="CC" initial={posted?.cc ?? DEFAULT_CC} listId="em-roster" recommended={RECOMMENDED} />
         <EmailChips name="bcc" label="BCC" initial={posted?.bcc ?? []} listId="em-roster" recommended={RECOMMENDED} />
         <datalist id="em-roster">
           {roster.map((r: any) => <option value={r.email}>{r.full_name}</option>)}

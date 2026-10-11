@@ -1,5 +1,8 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
+import EmailChips from '../../components/EmailChips.astro';
+import { COPY_SUGGESTIONS, emailsFrom } from '../../lib/copy-suggestions';
+import { supabaseAdmin } from '../../lib/supabase';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
 import { getPipelineSession } from '../../lib/pipeline-auth';
@@ -59,6 +62,8 @@ type Preview = {
   html: string;
   /** Only meaningful when decision === 'approved'. */
   conference: string;
+  cc: string[];
+  bcc: string[];
 };
 let flash: Flash | null = null;
 let preview: Preview | null = null;
@@ -95,7 +100,7 @@ if (Astro.request.method === 'POST') {
         decision,
         note: note.trim() || null,
       });
-      preview = { ideaId, decision, note, to: idea.leadEmail, subject, html, conference };
+      preview = { ideaId, decision, note, to: idea.leadEmail, subject, html, conference, cc: emailsFrom(form, 'cc'), bcc: emailsFrom(form, 'bcc') };
     }
   }
 
@@ -177,6 +182,8 @@ if (Astro.request.method === 'POST') {
           title: idea.title,
           decision,
           note: idea.decisionNote,
+          cc: emailsFrom(form, 'cc'),
+          bcc: emailsFrom(form, 'bcc'),
         });
       } catch (err) {
         emailed = false;
@@ -246,6 +253,10 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
   ['Manuscript commitment', COMMITMENT_LABELS[i.researchType][i.commitment]],
   ['Supporting document', i.attachmentName ?? '- none -'],
 ];
+
+// CC / BCC suggestions for the decision email: everyone active with a real email.
+const { data: rosterRows } = await supabaseAdmin().from('people').select('full_name,email').eq('active', true).order('full_name');
+const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.endsWith('@import.invalid'));
 ---
 
 <AppLayout title="Ideas" heading="Research ideas" user={me} active="ideas">
@@ -285,6 +296,13 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
             <p class="mailprev__target">Sending to pipeline, targeting <strong>{preview.conference}</strong>.</p>
           )}
           <input type="hidden" name="conference" value={preview.conference} />
+          <div class="mailprev__copy">
+            <EmailChips name="cc" label="CC" initial={preview.cc} listId="copy-roster" recommended={COPY_SUGGESTIONS} />
+            <EmailChips name="bcc" label="BCC" initial={preview.bcc} listId="copy-roster" recommended={COPY_SUGGESTIONS} />
+            <datalist id="copy-roster">
+              {copyRoster.map((r: any) => <option value={r.email}>{r.full_name}</option>)}
+            </datalist>
+          </div>
           <label class="idea__notelabel" for="prev-note">Comments to the submitter</label>
           <textarea class="idea__note" id="prev-note" name="note" rows="3"
             placeholder="Add or edit comments, then refresh the preview.">{preview.note}</textarea>
@@ -366,6 +384,7 @@ const detailRows = (i: (typeof ideas)[number]): Array<[string, string]> => [
 </AppLayout>
 
 <style>
+  .mailprev__copy { display: grid; gap: 0.2rem; margin-bottom: 0.4rem; }
   .ideas__count { font-size: 0.86rem; color: var(--text-muted); }
   .ideas__count strong { color: var(--text-strong); }
   .ideas__list { display: grid; gap: 0.6rem; }
