@@ -2,7 +2,6 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
 import IdeaForm from '../components/IdeaForm.astro';
-import { director } from '../data/site';
 ---
 
 <BaseLayout
@@ -12,46 +11,34 @@ import { director } from '../data/site';
 >
   <PageHero
     title="Submit a research idea"
-    subtitle={`Propose a database or meta-analysis project to ${director.name.replace(/ /g, ' ')}, ${director.credentials} and the MCA Heart Research Lab team. Every submission is reviewed for clinical relevance, novelty, feasibility, appropriate data source, and publication potential before a project lead is assigned.`}
+    align="center"
+    subtitle={`Submit a database study or meta-analysis for review by M.\u00a0Chadi Alraies, and the MCA Heart Research Lab team. Before submitting, conduct an up-to-date literature review, identify a clear research gap, and frame your question using PICO (Population, Intervention, Comparison, Outcome). Each idea is evaluated for clinical relevance, novelty, feasibility, and publication potential.`}
     image="/assets/brand/get-involved-bg.webp"
   />
 
-  <section class="section section--tight">
-    <div class="shell shell--narrow idea-intro">
-      <p>
-        <strong>Before you submit:</strong> please complete a thorough and up-to-date literature
-        review. Understanding what has already been published is essential for identifying
-        meaningful research gaps and assessing publication potential. Frame your research question
-        using <strong>PICO</strong> - Population, Intervention/Exposure, Comparison, Outcomes - and
-        have your most recent and relevant citation, DOI, or PubMed link ready to support the
-        rationale for your proposed study.
-      </p>
-    </div>
-  </section>
-
-  <section class="section section--tight" id="form">
-    <div class="shell shell--narrow">
+  <section class="section section--tight idea-page" id="form">
+    <div class="shell shell--wide">
       <IdeaForm />
     </div>
   </section>
 </BaseLayout>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather+Sans:wght@400;500;600;700&display=swap" />
 
 <style>
   /* Match the Contact page's hero scale - the other two Get Involved
      pages share its background now, so the heading should read at the
      same size instead of PageHero's larger default (--step-5). */
   :global(.phero h1.phero__title) { font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem); }
-  /* The shared .lede 42ch cap broke the director's name across two lines.
-     Same wider measure Join the Lab already uses for its longer subtitle. */
-  :global(.phero p.phero__sub) { max-width: 62ch; }
-
-  .idea-intro { display: grid; gap: var(--space-s); color: var(--text); line-height: 1.75; }
-  .idea-intro strong { color: var(--text-strong); }
-  .idea-intro__note {
-    padding: 0.9rem 1.1rem;
-    background: var(--accent-wash);
-    border-left: 2px solid var(--blue);
-    border-radius: 0 var(--radius) var(--radius) 0;
-    font-size: 0.9rem;
+  /* The hero text reads as one justified paragraph on the form's centre line. */
+  :global(.phero.phero--center p.phero__sub) {
+    max-width: 880px; margin-inline: auto;
+    font-family: 'Merriweather Sans', system-ui, sans-serif; font-size: 1.0625rem; line-height: 1.8;
+    text-align: justify; text-align-last: left; text-justify: inter-word; hyphens: manual; text-wrap: pretty;
   }
+  :global(.phero.phero--center h1.phero__title) { font-family: 'Merriweather Sans', system-ui, sans-serif; font-weight: 700; letter-spacing: -0.02em; }
+  @media (max-width: 520px) { :global(.phero.phero--center p.phero__sub) { text-align: left; } }
+  /* Pure white behind the form. */
+  :global(body:has(.idea-page)) { background-color: #fff; }
+  :global(:root[data-theme='dark'] body:has(.idea-page)) { background-color: var(--bg); }
 </style>

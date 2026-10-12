@@ -5,6 +5,8 @@ import TeamPicker from '../../../components/TeamPicker.astro';
 import { stagesFor } from '../../../lib/lifecycle.mjs';
 import { personOnProject } from '../../../lib/pipeline-scope';
 import { docLinkLabel, DOC_LINK_HINT } from '../../../lib/doc-links';
+import { stageColor } from '../../../lib/calm';
+import '../../../styles/calm.css';
 
 export const prerender = false;
 const { supabase, person } = Astro.locals;
@@ -105,19 +107,57 @@ const backHref = `/pipeline/${phaseTab}`;
 const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
 
 const lastHistory = (history ?? [])[0];
+
+// Step tracker: the usual path through this phase. Off-path stages
+// (rejected, halted, not sent) aren't steps; the paper then shows its status
+// without a position on the path.
+const OFF_PATH: Record<string, string[]> = {
+  conference: ['rejected', 'not_sent'],
+  journal: ['halted', 'rejected_comments', 'rejected_no_comments'],
+};
+const steps = stagesFor(p.phase).filter((s: any) => !(OFF_PATH[p.phase] ?? []).includes(s.code));
+const stepIdx = steps.findIndex((s: any) => s.code === p.stage);
+const stepLabel = (label: string) => label.replace(/^\s*\d+\s*\/\s*\d+\s*/, '');
+const nowColor = stageColor(p.phase, p.stage);
+const initials = (n: string | null | undefined) =>
+  (n ?? '').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+const peopleRows2: { label: string; name: string | null }[] = [
+  { label: 'Lead', name: who.get(p.lead_id)?.full_name ?? null },
+  ...(p.colead_id ? [{ label: 'Co-lead', name: who.get(p.colead_id)?.full_name ?? null }] : []),
+  { label: 'Analyst', name: who.get(p.analyst_id)?.full_name ?? null },
+  ...(p.presenter_id ? [{ label: 'Presenter', name: who.get(p.presenter_id)?.full_name ?? null }] : []),
+  { label: 'Corresponding author', name: who.get(p.corresponding_id)?.full_name ?? null },
+];
 ---
 
 <PipelineLayout title={p.title} active={activeTab}>
-  <div class="pl-page">
-  <p class="pl-crumb"><a class="pl-link" href={backHref}>← {backLabel}</a></p>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather+Sans:wght@400;500;600;700&display=swap" />
+  <div class="cv pd">
+  <a class="pd-back" href={backHref}>{backLabel}</a>
 
-  <div class="pl-split">
-  <div class="pl-split__main">
-    <section class="pl-submit-card">
-      <div class="pl-submit-card__top">
-        <p class="pl-submit-kind">{p.study_type} · Research Article</p>
-
-        {isAdmin && (
+  <header class="pd-head">
+    <div class="pd-head__text">
+      <p class="pd-tags">
+        <span>{p.ref}</span>
+        <span>{p.study_type}</span>
+        <span>Research article</span>
+        {p.current_conference && <span>{p.current_conference}</span>}
+        {p.current_journal && <span>{p.current_journal}</span>}
+        {p.parked && <span>Parked</span>}
+        {overdue && <span class="is-bad">Overdue {p.days_overdue}d</span>}
+        {stale && !overdue && <span class="is-bad">No change for {p.days_in_stage}d</span>}
+        {p.needs_reassignment && <span class="is-bad">Needs reassignment</span>}
+        {p.archived_at && <span class="is-bad">Archived{p.archive_reason ? `: ${p.archive_reason}` : ''}</span>}
+        {p.hidden_at && <span class="is-bad">Hidden{p.hidden_reason ? `: ${p.hidden_reason}` : ''}</span>}
+        {p.deleted_at && <span class="is-bad">Deleted{p.deleted_reason ? `: ${p.deleted_reason}` : ''}</span>}
+      </p>
+      <h1>{p.full_title || p.title}</h1>
+      {p.full_title && <p class="pd-abbr">{p.title}</p>}
+      {p.review_url && (
+        <a class="pd-btn pd-btn--ghost pd-letter" href={p.review_url} target="_blank" rel="noopener">Review decision letter</a>
+      )}
+    </div>
+    {isAdmin && (
           <div class="pl-head-actions">
             <a class="pl-icobtn" href={`/pipeline/projects/${id}/email`} title="Email" aria-label="Email"><svg viewBox="0 0 20 20" width="19" height="19" aria-hidden="true"><rect x="2.5" y="4.5" width="15" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6" /><path d="M3 5.5l7 5.5 7-5.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" /></svg></a>
             <details class="pl-inline-details pl-inline-details--compact">
@@ -147,63 +187,51 @@ const lastHistory = (history ?? [])[0];
             )}
           </div>
         )}
-      </div>
+  </header>
 
-      <h1 class="pl-h1">{p.full_title || p.title}</h1>
-      {p.full_title && <p class="pl-phead__short">{p.title}</p>}
-
-      <dl class="pl-submit-meta">
-        <div class="pl-submit-meta__row">
-          <dt>Submission Status</dt>
-          <dd>{p.stage_label}{p.days_in_stage != null && <span class="pl-muted"> · {p.days_in_stage}d in stage</span>}</dd>
-        </div>
-        {lastHistory && (
-          <div class="pl-submit-meta__row">
-            <dt>Last Modified</dt>
-            <dd>{fmtDate(lastHistory.at)}{lastHistory.actor && ` by ${lastHistory.actor}`} <span class="pl-muted">· {lastHistory.label}</span></dd>
-          </div>
-        )}
-        {p.next_target && (
-          <div class="pl-submit-meta__row">
-            <dt>
-              <svg class="pl-icon" viewBox="0 0 20 20" width="13" height="13" aria-hidden="true">
-                <circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.6" />
-                <path d="M10 6v4l3 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-              </svg>
-              Due by
-            </dt>
-            <dd>{fmtDate(p.next_target)}</dd>
-          </div>
-        )}
-      </dl>
-
-      {p.review_url && (
-        <a class="pl-btn pl-btn--ghost pl-btn--icon" href={p.review_url} target="_blank" rel="noopener">
-          <svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">
-            <rect x="2.5" y="4.5" width="15" height="11" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.5" />
-            <path d="M3 5.5l7 5.5 7-5.5" fill="none" stroke="currentColor" stroke-width="1.5" />
-          </svg>
-          Review decision letter
-        </a>
+  <section class="pd-card pd-pipe">
+    <div class="pd-bar">
+      <p class="pd-now" style={`--c:${nowColor}`}>
+        <b>{STAGE_LABEL(p.phase, p.stage)}</b>
+        {p.days_in_stage != null && <span>{p.days_in_stage}d in stage</span>}
+      </p>
+      {isAdmin && !p.archived_at && ['idea', 'manuscript', 'journal'].includes(p.phase) && (
+        <form method="post" action={`/pipeline/projects/${id}/gate`} class="pd-move" data-stage-form>
+          <input type="hidden" name="gate" value="stage" />
+          <label for="pd-stage">Stage</label>
+          <select id="pd-stage" name="stage" data-stage-select>
+            {stagesFor(p.phase).map((s: any) => (
+              <option value={s.code} selected={s.code === p.stage}>{s.label}</option>
+            ))}
+          </select>
+          {p.phase === 'journal' && (
+            <input name="journal" placeholder="Enter journal name" value={p.current_journal ?? ''} data-journal-input hidden={p.stage !== 'submitted'} />
+          )}
+          <button class="pd-btn" type="submit">Update</button>
+        </form>
       )}
+    </div>
+    {steps.length > 1 && (
+      <ol class="pd-steps" aria-label="Progress">
+        {steps.map((s: any, i: number) => (
+          <li class:list={[stepIdx >= 0 && i < stepIdx && 'done', i === stepIdx && 'cur']} aria-current={i === stepIdx ? 'step' : undefined}>
+            {stepLabel(s.label)}
+          </li>
+        ))}
+      </ol>
+    )}
+    <dl class="pd-facts">
+      <div><dt>Opened</dt><dd>{fmtDate(p.created_at)}</dd></div>
+      <div><dt>Due by</dt><dd>{p.next_target ? fmtDate(p.next_target) : 'No target'}</dd></div>
+      <div><dt>In current stage</dt><dd>{p.days_in_stage ?? 0} days</dd></div>
+      <div><dt>Last modified</dt><dd>{lastHistory ? fmtDate(lastHistory.at) : '-'}{lastHistory && <small>{lastHistory.actor ? `by ${lastHistory.actor}: ` : ''}{lastHistory.label}</small>}</dd></div>
+    </dl>
+  </section>
 
-      <div class="pl-chips">
-        <span>{p.ref}</span>
-        <span>{p.study_type}</span>
-        {p.current_conference && <span>{p.current_conference}</span>}
-        {p.current_journal && <span class="pl-chip-journal">Journal: {p.current_journal}</span>}
-        {p.parked && <span>parked</span>}
-        {p.archived_at && <span class="pl-warn">archived - {p.archive_reason}</span>}
-        {overdue && <span class="pl-warn">overdue {p.days_overdue}d</span>}
-        {stale && !overdue && <span class="pl-warn">stale</span>}
-        {p.needs_reassignment && <span class="pl-warn">needs reassignment</span>}
-        {p.hidden_at && <span class="pl-warn">hidden{p.hidden_reason ? ` - ${p.hidden_reason}` : ''}</span>}
-        {p.deleted_at && <span class="pl-warn">deleted{p.deleted_reason ? ` - ${p.deleted_reason}` : ''}</span>}
-      </div>
-    </section>
-
+  <div class="pd-cols">
+  <div class="pd-main">
   {(projectMentees ?? []).length > 0 && (
-    <section class="pl-actions">
+    <section class="pd-card pl-actions">
       <h2>Mentees</h2>
       <div class="pl-mentees">
         {(projectMentees ?? []).map((pm: any) => (
@@ -269,7 +297,7 @@ const lastHistory = (history ?? [])[0];
   )}
 
   {isAdmin && !p.archived_at && (
-    <section class="pl-actions" id="pl-actions">
+    <section class="pd-card pl-actions" id="pl-actions">
       <h2>Actions</h2>
 
       {pendingReqs.length > 0 && (
@@ -297,29 +325,6 @@ const lastHistory = (history ?? [])[0];
             ))}
           </div>
         </div>
-      )}
-
-      {/* Stage - within the current phase */}
-      {['idea', 'manuscript', 'journal'].includes(p.phase) && (
-        <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-actrow" data-stage-form>
-          <input type="hidden" name="gate" value="stage" />
-          <label class="pl-actlbl">Stage</label>
-          <select name="stage" data-stage-select>
-            {stagesFor(p.phase).map((s: any) => (
-              <option value={s.code} selected={s.code === p.stage}>{s.label}</option>
-            ))}
-          </select>
-          {p.phase === 'journal' && (
-            <input
-              name="journal"
-              placeholder="Enter journal name"
-              value={p.current_journal ?? ''}
-              data-journal-input
-              hidden={p.stage !== 'submitted'}
-            />
-          )}
-          <button class="pl-btn" type="submit">Update</button>
-        </form>
       )}
 
       {/* Abstract outcome */}
@@ -418,7 +423,7 @@ const lastHistory = (history ?? [])[0];
     </section>
   )}
   {!isAdmin && !p.archived_at && (
-    <section class="pl-actions" id="pl-actions">
+    <section class="pd-card pl-actions" id="pl-actions">
       <h2>Your status update</h2>
 
       {p.phase === 'idea' && (
@@ -465,7 +470,7 @@ const lastHistory = (history ?? [])[0];
     <p class="pl-muted pl-small" style="margin:14px 0">This project is archived - no further status changes.</p>
   )}
 
-  <section class="pl-actions pl-actions--plain">
+  <section class="pd-card pl-actions">
     <h2>Manuscript link</h2>
     {canLink && (
       <form method="post" action={`/pipeline/projects/${id}/link`} class="pl-actrow">
@@ -505,8 +510,8 @@ const lastHistory = (history ?? [])[0];
     </div>
   </section>
 
-    <div>
-      <h2 class="pl-sech">History</h2>
+    <section class="pd-card">
+      <h2>History</h2>
       {(!history || history.length === 0) && (
         <p class="pl-muted pl-small">No recorded events yet - they accumulate as the project moves.</p>
       )}
@@ -518,28 +523,29 @@ const lastHistory = (history ?? [])[0];
           </li>
         ))}
       </ul>
-    </div>
+    </section>
   </div>
 
-  <div class="pl-split__side">
-    <aside class="pl-rail">
-      <h3>People</h3>
-      <dl class="pl-rail__inline">
-        <dt>Lead</dt><dd>{who.get(p.lead_id)?.full_name ?? '-'}</dd>
-        {p.colead_id && <><dt>Co-lead</dt><dd>{who.get(p.colead_id)?.full_name}</dd></>}
-        <dt>Analyst</dt><dd>{who.get(p.analyst_id)?.full_name ?? '-'}</dd>
-        {p.presenter_id && <><dt>Presenter</dt><dd>{who.get(p.presenter_id)?.full_name}</dd></>}
-        <dt>Corresponding author</dt><dd>{who.get(p.corresponding_id)?.full_name ?? <span class="pl-muted">not set</span>}</dd>
+  <aside class="pd-side">
+    <section class="pd-card">
+      <h2>People</h2>
+      <dl class="pd-kv">
+        {peopleRows2.map((r) => (
+          <>
+            <dt>{r.label}</dt>
+            <dd><span class:list={['pd-av', !r.name && 'is-empty']}>{r.name ? initials(r.name) : ''}</span>{r.name ?? <span class="pd-muted">Not set</span>}</dd>
+          </>
+        ))}
         {teamMembers.length > 0 && (
           <>
             <dt>Team members</dt>
-            <dd>{teamMembers.map((m) => m.full_name).join(', ')}</dd>
+            <dd class="pd-team">{teamMembers.map((m) => m.full_name).join(', ')}</dd>
           </>
         )}
       </dl>
 
       {isAdmin && (
-        <details class="pl-inline-details" style="margin-top:10px">
+        <details class="pl-inline-details pd-edit" style="margin-top:14px">
           <summary>Edit people</summary>
           <form method="post" action={`/pipeline/projects/${id}/assign`} class="pl-mini pl-mini--col" style="margin-top:10px">
             <PeoplePicker name="lead_id" label="Lead" roster={roster ?? []} selectedId={p.lead_id} selectedName={who.get(p.lead_id)?.full_name} />
@@ -553,17 +559,12 @@ const lastHistory = (history ?? [])[0];
         </details>
       )}
 
-      <h3>Dates</h3>
-      <dl class="pl-rail__inline">
-        <dt>Opened</dt><dd>{fmtDate(p.created_at)}</dd>
-        <dt>In current stage</dt><dd>{p.days_in_stage ?? 0} days</dd>
-        <dt>Next target</dt><dd>{p.next_target ? fmtDate(p.next_target) : <span class="pl-muted">none</span>}</dd>
-      </dl>
+    </section>
 
       {confAttempts && confAttempts.length > 0 && (
-        <>
-          <h3>Conference submission history ({confAttempts.length})</h3>
-          <dl>
+        <section class="pd-card">
+          <h2>Conference submission history ({confAttempts.length})</h2>
+          <dl class="pd-hist">
             {confAttempts.map((a: any) => {
               const recycledFromName = a.recycled_from
                 ? confAttempts.find((x: any) => x.id === a.recycled_from)?.conference?.name
@@ -581,13 +582,13 @@ const lastHistory = (history ?? [])[0];
               );
             })}
           </dl>
-        </>
+        </section>
       )}
 
       {journalAttempts && journalAttempts.length > 0 && (
-        <>
-          <h3>Journal submission history ({journalAttempts.length})</h3>
-          <dl>
+        <section class="pd-card">
+          <h2>Journal submission history ({journalAttempts.length})</h2>
+          <dl class="pd-hist">
             {journalAttempts.map((a: any) => (
               <>
                 <dt>{a.journal}</dt>
@@ -598,11 +599,9 @@ const lastHistory = (history ?? [])[0];
               </>
             ))}
           </dl>
-        </>
+        </section>
       )}
-
-    </aside>
-  </div>
+  </aside>
   </div>
   </div>
 </PipelineLayout>
@@ -626,103 +625,164 @@ const lastHistory = (history ?? [])[0];
 </script>
 
 <style>
+  /* Paper detail page, in the same "calm" look as the list pages and the
+     side drawer (tokens come from .cv in src/styles/calm.css): back link,
+     a plain tag line, the title, a status card with the step tracker and
+     key dates, then cards in two columns. Every form and action is the
+     same as before - only the layout and styling changed. */
+  .pd { display: grid; gap: 24px; padding-top: 4px; }
+  .pd > *, .pd-cols > * { min-width: 0; }
 
-  /* Submission-portal layout (Hindawi's "Your Progress" tracker is the
-     reference) - one grid for the whole page, not just the header: title
-     card/Actions/Manuscript link/History on the left, Your Progress/People
-     rail on the right. Sharing a single grid (instead of two separate ones
-     stacked on top of each other) is what keeps the rail's left edge lined
-     up with the Your Progress card above it. Stacks on narrow screens. */
-  .pl-split { display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 20px; align-items: start; margin: 18px 0 26px; }
-  @media (max-width: 860px) { .pl-split { grid-template-columns: 1fr; } }
-  .pl-split__main { min-width: 0; }
-  .pl-split__side { display: grid; gap: 20px; }
+  .pd-back { justify-self: start; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--cv-ink); text-decoration: none; }
+  .pd-back::before { content: '\2190'; font-size: 1.1rem; }
+  .pd-back:hover { color: var(--cv-accent); text-decoration: underline; text-underline-offset: 3px; }
 
-  /* No border here on purpose - it's just the page's own text now, not a
-     boxed-off card. */
-  .pl-submit-card { padding: 4px 0 22px; }
-  .pl-submit-card__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
-  .pl-submit-kind { margin: 0; color: var(--text-muted, #64748b); font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
-  .pl-submit-card .pl-h1 { margin-top: 10px; }
+  .pd-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .pd-head__text { min-width: 0; }
+  .pd-tags { display: flex; flex-wrap: wrap; margin: 0 0 12px; font-size: 0.875rem; font-weight: 600; }
+  .pd-tags span + span::before { content: '\00b7'; margin: 0 10px; font-weight: 700; color: var(--cv-ink); }
+  .pd-tags .is-bad { color: #a12a2a; }
+  :root[data-theme='dark'] .pd-tags .is-bad { color: #f08a7e; }
+  .pd-head h1 { margin: 0; font-family: inherit; font-size: clamp(1.75rem, 2.6vw, 2.5rem); font-weight: 700; line-height: 1.2; letter-spacing: -0.02em; color: var(--cv-ink); text-wrap: pretty; }
+  .pd-abbr { margin: 8px 0 0; font-size: 1.0625rem; font-weight: 700; color: var(--cv-accent); }
+  .pd-letter { margin-top: 16px; }
 
-  .pl-head-actions { display: flex; flex-wrap: wrap; gap: 8px; flex: 0 0 auto; }
+  .pd-card { margin: 0; padding: 22px 24px; background: var(--cv-bg); border: 1px solid var(--cv-line); border-radius: 14px; }
+  .pd-card > h2 { margin: 0 0 16px; font-family: inherit; font-size: 1rem; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--cv-ink); }
+  .pd-pipe { padding: 26px 30px; }
+
+  .pd-bar { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  .pd-now { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin: 0; }
+  .pd-now b { display: inline-flex; align-items: center; gap: 10px; font-size: 1.375rem; font-weight: 700; color: var(--cv-ink); }
+  .pd-now b::before { content: ''; width: 11px; height: 11px; flex: none; border-radius: 50%; background: var(--c); }
+  .pd-now span { font-size: 0.9375rem; }
+  .pd-now span::before { content: '\00b7'; margin-right: 10px; }
+  .pd-move { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0; }
+  .pd-move label { font-size: 0.9375rem; font-weight: 600; }
+  .pd-move select { width: 300px; max-width: 100%; }
+  .pd-move input { width: 200px; }
+
+  /* Step tracker: circles joined by a line; done steps ticked, the current one ringed. */
+  /* The top/side padding leaves room for the current step's halo, which the
+     sideways-scroll box would otherwise clip. */
+  .pd-steps { list-style: none; display: flex; margin: 18px 0 4px; padding: 8px 6px 2px; overflow-x: auto; }
+  .pd-steps li { flex: 1; min-width: 76px; position: relative; padding: 44px 6px 0; text-align: center; font-size: 0.875rem; font-weight: 500; line-height: 1.35; color: var(--cv-ink); }
+  .pd-steps li::before {
+    content: ''; position: absolute; top: 0; left: 50%; z-index: 1; width: 28px; height: 28px; margin-left: -14px;
+    display: grid; place-items: center; border-radius: 50%; border: 3px solid var(--cv-line); background: var(--cv-bg);
+    font-size: 14px; font-weight: 700; color: #fff; line-height: 1; box-sizing: border-box;
+  }
+  .pd-steps li::after { content: ''; position: absolute; top: 12px; left: calc(-50% + 14px); right: calc(50% + 14px); height: 5px; border-radius: 3px; background: var(--cv-line); }
+  .pd-steps li:first-child::after { display: none; }
+  .pd-steps li.done::before { content: '\2713'; background: var(--cv-accent); border-color: var(--cv-accent); }
+  .pd-steps li.done::after, .pd-steps li.cur::after { background: var(--cv-accent); }
+  .pd-steps li.cur { font-weight: 700; }
+  /* Solid halo (not see-through, so the line doesn't show through it), and
+     the line into the next step starts just past it. */
+  .pd-steps li.cur::before { background: var(--cv-accent); border-color: var(--cv-accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--cv-accent) 22%, var(--cv-bg)); }
+  .pd-steps li.cur + li::after { left: calc(-50% + 20px); }
+  .pd-steps li.cur::after { right: calc(50% + 20px); }
+
+  .pd-facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; margin: 28px 0 0; padding-top: 22px; border-top: 1px solid var(--cv-line); }
+  .pd-facts dt { margin-bottom: 5px; font-size: 0.8125rem; font-weight: 700; color: var(--cv-ink); }
+  .pd-facts dd { margin: 0; font-weight: 600; line-height: 1.35; }
+  .pd-facts small { display: block; margin-top: 2px; font-size: 0.8125rem; font-weight: 400; }
+
+  .pd-cols { display: grid; grid-template-columns: minmax(0, 1fr) 370px; gap: 20px 36px; align-items: start; }
+  .pd-main, .pd-side { display: grid; gap: 20px; }
+
+  /* People */
+  .pd-kv { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; margin: 0; font-size: 0.9375rem; align-items: center; }
+  .pd-kv dt { font-weight: 400; }
+  .pd-kv dd { margin: 0; display: flex; align-items: center; font-weight: 600; }
+  .pd-kv dd.pd-team { display: block; font-weight: 500; }
+  .pd-av { width: 28px; height: 28px; flex: none; margin-right: 10px; display: inline-grid; place-items: center; border-radius: 50%; background: var(--cv-tint); font-size: 0.6875rem; font-weight: 700; }
+  .pd-av.is-empty { background: var(--cv-bg); border: 2px dashed var(--cv-line); box-sizing: border-box; }
+  .pd-muted { font-weight: 400; opacity: 0.7; }
+  .pd-edit > summary { font-size: 0.875rem; font-weight: 600; color: var(--cv-accent); }
+  .pd-hist { margin: 0; display: grid; gap: 4px; font-size: 0.9rem; }
+  .pd-hist dt { font-weight: 700; margin-top: 8px; }
+  .pd-hist dt:first-child { margin-top: 0; }
+  .pd-hist dd { margin: 0; }
+
+  /* Buttons and fields inside the page, in the calm style. */
+  .pd :is(.pl-btn, .pd-btn) {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px 20px; border: 1px solid var(--cv-accent); border-radius: 8px;
+    background: var(--cv-accent); color: #fff; font-family: inherit; font-size: 0.9375rem; font-weight: 600;
+    letter-spacing: 0; text-transform: none; text-decoration: none; cursor: pointer;
+  }
+  .pd :is(.pl-btn, .pd-btn):hover { opacity: 0.9; }
+  .pd :is(.pl-btn--ghost, .pd-btn--ghost) { background: var(--cv-bg); border-color: var(--cv-line); color: var(--cv-ink); }
+  .pd :is(.pl-btn--ghost, .pd-btn--ghost):hover { border-color: var(--cv-accent); color: var(--cv-accent); opacity: 1; }
+  .pd .pl-btn--danger { background: var(--cv-bg); border-color: #a12a2a; color: #a12a2a; }
+  .pd :is(input:not([type=hidden], [type=checkbox], [type=radio]), select, textarea) {
+    padding: 10px 12px; border: 1px solid var(--cv-line); border-radius: 8px;
+    background-color: var(--cv-bg); color: var(--cv-ink); font-family: inherit; font-size: 0.9375rem;
+  }
+  .pd :is(input, textarea)::placeholder { color: var(--cv-ink); opacity: 0.5; }
+  .pd :is(input, select, textarea):focus { outline: none; border-color: var(--cv-accent); box-shadow: 0 0 0 3px var(--cv-tint); }
+  .pd .pl-actions { border: 1px solid var(--cv-line); }
+  .pd .pl-actions > h2 { font-family: inherit; font-size: 1rem; font-weight: 700; text-transform: none; letter-spacing: 0; color: var(--cv-ink); margin: 0 0 12px; }
+  .pd .pl-actlbl { font-family: inherit; text-transform: none; letter-spacing: 0; font-size: 0.9375rem; font-weight: 600; color: var(--cv-ink); }
+
+  @media (max-width: 1000px) {
+    .pd-cols { grid-template-columns: 1fr; }
+    .pd-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .pd-move select { flex: 1; width: auto; }
+  }
+  @media (max-width: 640px) {
+    .pd-head { flex-direction: column; }
+    .pd-card, .pd-pipe { padding: 20px; }
+    .pd-now b { font-size: 1.125rem; }
+    .pd-now { flex-direction: column; }
+    .pd-now span::before { display: none; }
+    .pd-move { display: grid; grid-template-columns: 1fr; width: 100%; }
+    .pd-move :is(select, input, button) { width: 100%; }
+    .pd-tags span + span::before { display: none; }
+    .pd-tags { gap: 4px 16px; }
+    /* The tracker turns vertical: circle on the left, label beside it. */
+    .pd-steps { flex-direction: column; margin-top: 22px; padding: 8px 0 0 6px; overflow: visible; }
+    .pd-steps li { flex: none; min-width: 0; min-height: 28px; padding: 3px 0 24px 46px; text-align: left; }
+    .pd-steps li:last-child { padding-bottom: 0; }
+    .pd-steps li::before { left: 0; margin-left: 0; }
+    .pd-steps li::after, .pd-steps li:first-child::after { display: block; top: 28px; bottom: 0; left: 11.5px; right: auto; width: 5px; height: auto; background: var(--cv-line); }
+    .pd-steps li:last-child::after { display: none; }
+    .pd-steps li.done::after { background: var(--cv-accent); }
+    .pd-steps li.cur::after { top: 34px; }
+    .pd-steps li.cur + li::after { left: 11.5px; }
+    .pd-facts > div:last-child { grid-column: 1 / -1; }
+    .pd-kv { grid-template-columns: minmax(0, 1fr); gap: 2px 0; }
+    .pd-kv dd { margin-bottom: 12px; }
+  }
+
+  /* Email / Hide / Delete as bare icons - no box around them. */
+  .pl-head-actions { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; flex: 0 0 auto; }
+  .pl-head-actions .pl-mini { margin-top: 0; }
   .pl-inline-details--compact { position: relative; }
   .pl-inline-details--compact > summary { list-style: none; }
   .pl-inline-details--compact > summary::-webkit-details-marker { display: none; }
   .pl-inline-details--compact .pl-mini {
-    position: absolute;
-    z-index: 10;
-    top: 100%;
-    right: 0;
-    margin-top: 6px;
-    padding: 10px;
-    flex-wrap: nowrap;
-    background: var(--surface, #fff);
-    border: 1px solid var(--pl-border, #d8dce6);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    position: absolute; z-index: 10; top: 100%; right: 0; margin-top: 6px; padding: 10px; flex-wrap: nowrap;
+    background: var(--surface, #fff); border: 1px solid var(--cv-line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   }
-  .pl-btn--sm { padding: 6px 14px; font-size: 0.7rem; }
-
-  .pl-phead__short { margin: 4px 0 0; color: var(--pl-accent); font-size: 1.05rem; font-weight: 700; }
-
-  .pl-submit-meta { margin: 16px 0 0; display: grid; gap: 8px; }
-  .pl-submit-meta__row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; font-size: 0.88rem; }
-  .pl-submit-meta__row dt { flex: 0 0 150px; display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted, #64748b); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; }
-  .pl-submit-meta__row dd { margin: 0; color: var(--text-strong, #1e293b); }
-  .pl-submit-meta__row .pl-icon { color: var(--text-muted); flex-shrink: 0; }
-
-  .pl-btn--icon { display: inline-flex; align-items: center; gap: 7px; margin-top: 14px; }
-
-  .pl-submit-card .pl-chips { margin: 18px 0 0; }
-
-  /* Journal name - the one piece of the chips row worth reading at a
-     glance, so it gets real weight/size instead of the uniform small-caps
-     treatment the rest of the chips share. */
-  .pl-chip-journal {
-    font-size: 0.85rem !important;
-    font-weight: 800 !important;
-    text-transform: none !important;
-    letter-spacing: 0 !important;
-    color: var(--pl-accent) !important;
-    border-color: var(--pl-accent) !important;
+  .pl-icobtn {
+    display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; padding: 0;
+    border: 0; border-radius: 8px; background: transparent; color: var(--cv-ink); cursor: pointer; list-style: none;
   }
+  .pl-icobtn::-webkit-details-marker { display: none; }
+  .pl-icobtn:hover, details[open] > .pl-icobtn { background: var(--cv-tint); color: var(--cv-accent); }
+  .pl-icobtn--danger:hover, details[open] > .pl-icobtn--danger { color: #a12a2a; }
 
-  /* Links as borderless tiles; one with nothing set yet is greyed out and
-     not clickable. */
-  .pl-linktiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px 0 4px; }
+  /* Links as borderless tiles; one with nothing set yet is greyed out and not clickable. */
+  .pl-linktiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 14px 0 0; }
   @media (max-width: 640px) { .pl-linktiles { grid-template-columns: 1fr; } }
-  .pl-linktile {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding: 14px 16px;
-    background: color-mix(in srgb, var(--text-strong) 5%, transparent);
-    color: var(--text-strong);
-    text-decoration: none;
-    transition: background 0.15s ease;
-  }
-  a.pl-linktile:hover { background: color-mix(in srgb, var(--pl-accent) 12%, transparent); }
-  .pl-linktile__label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+  .pl-linktile { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 8px; background: var(--cv-soft); color: var(--cv-ink); text-decoration: none; transition: background 0.15s ease; }
+  a.pl-linktile:hover { background: var(--cv-tint); }
+  .pl-linktile__label { font-size: 0.8125rem; font-weight: 700; color: var(--cv-ink); }
   .pl-linktile__value { font-size: 0.92rem; font-weight: 700; }
-  a.pl-linktile .pl-linktile__value { color: var(--pl-accent); }
+  a.pl-linktile .pl-linktile__value { color: var(--cv-accent); }
   .pl-linktile.is-static .pl-linktile__value { font-weight: 600; }
   .pl-linktile.is-disabled { opacity: 0.5; cursor: not-allowed; }
   .pl-linktile.is-disabled .pl-linktile__value { font-weight: 500; }
-  .pl-actions--plain { border: 0; padding-left: 0; padding-right: 0; background: transparent; }
-  /* People and Dates read "Lead: Name" on one line, not label over value. */
-  .pl-rail .pl-rail__inline dt { float: left; clear: left; margin: 0 6px 0 0; font-size: 0.85rem; line-height: 1.6; color: var(--text-muted); }
-  .pl-rail .pl-rail__inline dt::after { content: ':'; }
-  .pl-rail .pl-rail__inline dd { margin: 0 0 8px; line-height: 1.6; }
-  /* Email / Hide / Delete as bare icons - no box around them. */
-  .pl-head-actions { gap: 4px; align-items: center; }
-  .pl-head-actions .pl-mini { margin-top: 0; }
-  .pl-icobtn {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 34px; height: 34px; padding: 0;
-    border: 0; background: transparent;
-    color: var(--text-muted); cursor: pointer; list-style: none;
-  }
-  .pl-icobtn::-webkit-details-marker { display: none; }
-  .pl-icobtn:hover, details[open] > .pl-icobtn { color: var(--pl-accent); }
-  .pl-icobtn--danger:hover, details[open] > .pl-icobtn--danger { color: var(--red, #b42318); }
 </style>

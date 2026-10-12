@@ -8,7 +8,7 @@ import CalmStatus from '../../components/calm/CalmStatus.astro';
 import CalmDock from '../../components/calm/CalmDock.astro';
 import { scopeProjects } from '../../lib/pipeline-scope';
 import { stagesFor } from '../../lib/lifecycle.mjs';
-import { stageColor, fmtDate } from '../../lib/calm';
+import { drawerInfo, stageColor, fmtDate } from '../../lib/calm';
 
 export const prerender = false;
 const { supabase, person } = Astro.locals;
@@ -18,7 +18,7 @@ const showParked = Astro.url.searchParams.get('parked') === '1';
 
 let query = supabase
   .from('project_list')
-  .select('id,ref,title,full_title,phase,stage,stage_label,lead_name,analyst_name,current_conference,days_in_stage,days_overdue,parked,ms_version,created_at,stage_changed_at,archived_at,submission_order')
+  .select('id,ref,title,full_title,phase,stage,stage_label,lead_name,analyst_name,current_conference,days_in_stage,days_overdue,parked,ms_version,created_at,stage_changed_at,archived_at,submission_order,study_type,current_journal')
   .eq('phase', 'manuscript')
   .is('archived_at', null)
   .is('hidden_at', null)
@@ -77,7 +77,7 @@ const chips = stagesFor('manuscript').map((s: any) => ({
         </thead>
         <tbody>
           {list.map((p: any) => (
-            <tr data-cv-row data-cv-f={p.stage} data-cv-text={`${p.full_title ?? ''} ${p.title ?? ''} ${p.ref ?? ''}`}>
+            <tr data-cv-row data-cv-info={drawerInfo(p)} data-cv-f={p.stage} data-cv-text={`${p.full_title ?? ''} ${p.title ?? ''} ${p.ref ?? ''}`}>
               <td class="t">
                 <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.full_title || p.title}</a>
                 <div class="cv-sub">

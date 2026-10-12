@@ -80,7 +80,13 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
     </a>
 
     {navItems.length > 0 && (
-      <nav class="appbar__nav" aria-label="Members">
+      <button type="button" class="appbar__burger" data-nav-toggle aria-controls="appbar-nav" aria-expanded="false" aria-label="Menu">
+        <span></span><span></span><span></span>
+      </button>
+    )}
+
+    {navItems.length > 0 && (
+      <nav class="appbar__nav" id="appbar-nav" aria-label="Members">
         {navItems.map((item) =>
           item.type === 'link' ? (
             <a
@@ -401,34 +407,42 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
   .acct__row--out { color: #7a1322; font-weight: 600; }
   :root[data-theme='dark'] .acct__row--out { color: #f08a7e; }
 
+  /* The menu button only exists on phones (below). */
+  .appbar__burger { display: none; }
+
   @media (max-width: 720px) {
-    /* Centering the nav only makes sense once there's slack room either
-       side of it - below this width it goes back to stacked flex rows
-       (brand, then nav, then account), same as before today's change. */
-    .appbar__inner { display: flex; flex-wrap: wrap; height: auto; gap: 0.5rem; padding-block: 0.5rem; }
-    .appbar__account { width: 100%; }
-    /* flex-wrap: wrap (not the base row's nowrap+scroll) - needed so a
-       dropdown trigger can actually get its own full-width line to expand
-       its panel into below, instead of staying pinned to a narrow column
-       inside what's otherwise still a single scrollable row. */
-    .appbar__nav { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
-    /* The account cluster sits left-aligned on its own row at this width,
-       not flush against the viewport edge - anchoring a panel's right edge
-       (correct on desktop, where the cluster IS flush right) pushes it off
-       the left side of the screen instead. Open both panels from the
-       trigger's left edge here. (nbell__panel had this bug before today -
-       same root cause, same fix, so it's included here too.) */
-    .acct__panel, .nbell__panel { left: 0; right: auto; }
-    /* Review/Manage sit mid-row in the wrapped nav, not pinned to an edge
-       like the account/bell triggers - left:0 (their fix) isn't enough,
-       since it's relative to wherever the trigger itself landed, which
-       still overflows when that's already near the right edge. Expand the
-       panel inline instead of floating it, so it can never go off-screen. */
-    .appbar__menu { flex-direction: column; width: 100%; }
-    .appbar__menu-panel {
-      position: static; translate: none; margin-top: 4px;
-      width: 100%; box-shadow: none;
+    /* Phones: one compact row - logo, then bell / theme / account, then a
+       menu button that opens the nav as a full-width list under the bar. */
+    .appbar__inner { display: flex; flex-wrap: wrap; align-items: center; height: auto; min-height: 56px; gap: 0.25rem; padding-block: 0.5rem; }
+    .appbar__brand { order: 1; margin-right: auto; }
+    .appbar__account { order: 2; width: auto; gap: 0.35rem; }
+    .appbar .acct { margin-left: 0.25rem; }
+    .appbar__burger {
+      order: 3; display: grid; align-content: center; gap: 4px;
+      width: 40px; height: 40px; margin-left: 0.35rem; padding: 0 10px;
+      background: none; border: 0; cursor: pointer;
     }
+    .appbar__burger span { display: block; height: 2px; background: #fff; transition: transform 0.2s, opacity 0.2s; }
+    .appbar.is-nav-open .appbar__burger span:nth-child(1) { transform: translateY(6px) rotate(45deg); }
+    .appbar.is-nav-open .appbar__burger span:nth-child(2) { opacity: 0; }
+    .appbar.is-nav-open .appbar__burger span:nth-child(3) { transform: translateY(-6px) rotate(-45deg); }
+    .appbar__burger:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+    .appbar__nav {
+      order: 4; width: 100%; display: none; flex-direction: column; align-items: stretch; gap: 0;
+      margin-top: 0.4rem; padding: 0.25rem 0 0.5rem; border-top: 1px solid rgba(255, 255, 255, 0.22);
+    }
+    .appbar.is-nav-open .appbar__nav { display: flex; }
+    .appbar__nav > .appbar__link,
+    .appbar__menu-trigger { display: flex; width: 100%; padding: 0.7rem 0.25rem; border-bottom: 0; }
+    .appbar__nav > .appbar__link.is-active,
+    .appbar__menu-trigger.is-active { box-shadow: inset 3px 0 0 #fff; padding-left: 0.75rem; }
+    /* Review / Manage open inline, so their panel can never go off-screen. */
+    .appbar__menu { display: flex; flex-direction: column; width: 100%; }
+    .appbar__menu-panel { position: static; translate: none; margin: 0 0 0.4rem; width: 100%; box-shadow: none; }
+
+    /* Bell and account panels span the screen width just under the bar. */
+    .acct__panel, .nbell__panel { position: fixed; top: 60px; left: 12px; right: 12px; width: auto; }
   }
   /* ---------- red bar ----------
      The bar itself is solid crimson in both themes, so everything sitting
@@ -475,6 +489,15 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && open) setOpen(false);
       });
+    }
+
+    // Phone menu button: shows / hides the nav list under the bar.
+    const burger = document.querySelector('[data-nav-toggle]');
+    if (burger) {
+      const bar = burger.closest('.appbar');
+      const setNav = (open) => { bar.classList.toggle('is-nav-open', open); burger.setAttribute('aria-expanded', String(open)); };
+      burger.addEventListener('click', () => setNav(!bar.classList.contains('is-nav-open')));
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setNav(false); });
     }
 
     const bell = document.querySelector('[data-nbell]');

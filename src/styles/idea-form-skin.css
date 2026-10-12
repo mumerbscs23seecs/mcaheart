@@ -1,0 +1,138 @@
+/* New Idea form, MCA form pack look: one 720px column on the page's centre
+   line, plain numbered section headings, sentence-case bold labels, soft
+   rounded fields, native radio/checkbox rows that tint when chosen, and a
+   sticky section guide in the left margin when there's room. Scoped to
+   .iskin, so nothing else on the site changes. Accent is the site maroon. */
+.iskin {
+  --ink: #000;
+  --soft: #faf6f6;
+  --line: #eadfe0;
+  --accent: #7b1424;
+  --tint: #f6e9ec;
+  --r: 8px;
+  container-type: inline-size;
+  font-family: 'Merriweather Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--ink);
+}
+:root[data-theme='dark'] .iskin {
+  --ink: var(--text-strong);
+  --soft: rgba(255, 255, 255, 0.04);
+  --line: var(--border-soft);
+  --accent: #e2685a;
+  --tint: rgba(226, 104, 90, 0.16);
+}
+.iskin *, .iskin .iform em, .iskin .iform i { font-style: normal; }
+.iskin :is(input, textarea, select, button) { font-family: inherit; }
+
+/* One column, centred; the guide sits in the left margin on wide screens. */
+.iskin .iform { display: block; max-width: 720px; margin: 0 auto; font-size: 0.9375rem; }
+@container (min-width: 1040px) {
+  .iskin .iform {
+    max-width: none;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 720px) minmax(0, 1fr);
+  }
+  .iskin .iform > * { grid-column: 2; min-width: 0; }
+  .iskin .iform > .iskin-rail { display: block; }
+}
+
+/* Sections: no boxes, a hairline between them. */
+.iskin .iform__group {
+  display: grid; gap: 24px;
+  margin: 0; padding: 48px 0; scroll-margin-top: 90px;
+  border: 0; border-top: 1px solid var(--line); border-radius: 0; background: none; box-shadow: none; min-width: 0;
+}
+.iskin .iform__group:first-of-type { border-top: 0; padding-top: 24px; }
+.iskin .iform__legend {
+  float: left; width: 100%; display: flex; align-items: baseline; gap: 16px;
+  margin: 0; padding: 0; background: none;
+  font-family: inherit; font-size: 1.5rem; font-weight: 700; line-height: 1.25; letter-spacing: -0.01em;
+  text-transform: none; color: var(--ink);
+}
+.iskin .iform__legend + * { clear: both; }
+.iskin .iform__legend span {
+  display: inline; width: auto; height: auto; min-width: 1.1ch; padding: 0;
+  border: 0; border-radius: 0; background: none; color: var(--accent);
+  font-size: inherit; font-weight: 700; line-height: inherit;
+}
+
+/* Labels, help text, fields. */
+.iskin .ifield { display: grid; gap: 0; }
+.iskin .ifield__label {
+  display: block; margin: 0 0 8px;
+  font-size: 0.9375rem; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--ink);
+}
+.iskin .ifield__label b, .iskin .iform__small b { color: var(--accent); }
+.iskin .ifield__help, .iskin .iform__small {
+  margin: 0 0 12px; font-size: 0.875rem; line-height: 1.6; color: var(--ink);
+  text-align: justify; text-align-last: left; text-justify: inter-word; hyphens: manual;
+}
+.iskin .ifield__input {
+  width: 100%; box-sizing: border-box; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: var(--r); background: var(--surface, #fff); color: var(--ink);
+  font-size: 0.9375rem; font-weight: 500; line-height: 1.5; outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.iskin .ifield__input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--tint); }
+.iskin textarea.ifield__input { min-height: 112px; resize: vertical; }
+.iskin .ifield__input::placeholder { color: var(--ink); opacity: 0.55; font-weight: 400; }
+.iskin .ifield--half, .iskin .ifield__input.ifield--half { max-width: 360px; }
+.iskin .ifrow { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+/* Option rows: the browser's own radio / checkbox, the row tints when chosen. */
+.iskin .ichoices { display: grid; gap: 2px; }
+.iskin .ichoice {
+  display: flex; align-items: center; gap: 12px; margin: 0; padding: 12px 14px;
+  border: 0; border-radius: var(--r); background: none; box-shadow: none;
+  font-size: 0.9375rem; font-weight: 500; line-height: 1.5; color: var(--ink); cursor: pointer;
+  transition: background-color 0.15s;
+}
+.iskin .ichoice--block { align-items: flex-start; }
+.iskin .ichoice--block input { margin-top: 3px; }
+.iskin .ichoice:hover { background: var(--soft); }
+.iskin .ichoice:has(input:checked) { background: var(--tint); font-weight: 700; }
+.iskin .ichoice input {
+  position: static; opacity: 1; width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--accent);
+}
+.iskin .ichoice__mark { display: none; }
+.iskin .ichoice__tag { font-size: 0.875rem; font-weight: 400; }
+
+.iskin .ifield__file { width: 100%; font-size: 0.9375rem; color: var(--ink); }
+.iskin .ifield__file::file-selector-button {
+  margin-right: 14px; padding: 10px 16px; border: 1px solid var(--line); border-radius: var(--r);
+  background: var(--surface, #fff); color: var(--ink); font-family: inherit; font-size: 0.9375rem; font-weight: 600; cursor: pointer;
+}
+.iskin .ifield__file::file-selector-button:hover { border-color: var(--accent); color: var(--accent); }
+
+.iskin .iform__foot { padding-top: 24px; border-top: 1px solid var(--line); display: grid; gap: 12px; justify-items: start; }
+.iskin .iform__submit {
+  margin: 0; padding: 14px 28px; border: 1px solid var(--accent); border-radius: var(--r);
+  background: var(--accent); color: #fff; font-size: 1rem; font-weight: 700; letter-spacing: 0; text-transform: none;
+}
+.iskin .iform__submit:hover { opacity: 0.9; }
+.iskin :focus-visible { outline: 3px solid var(--tint); outline-offset: 2px; }
+.iskin [hidden] { display: none !important; }
+
+/* Section guide in the left margin (built by IdeaForm's script). */
+.iskin-rail {
+  display: none; grid-column: 1 !important; grid-row: 1 / span 40;
+  position: sticky; top: 96px; align-self: start; justify-self: end;
+  width: min(100%, 208px); margin-right: 48px; padding-top: 24px;
+}
+.iskin-rail ol { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--line); }
+.iskin-rail a {
+  display: flex; gap: 12px; align-items: baseline; margin-left: -2px; padding: 9px 0 9px 18px;
+  border-left: 2px solid transparent; color: var(--ink); font-size: 0.9375rem; font-weight: 500; line-height: 1.35;
+  text-decoration: none; transition: border-color 0.15s;
+}
+.iskin-rail a:hover { color: var(--accent); }
+.iskin-rail .n { flex: none; min-width: 1.1ch; color: var(--accent); font-size: 0.8125rem; font-weight: 700; }
+.iskin-rail .on a { border-left-color: var(--accent); font-weight: 700; }
+.iskin-rail .done a { border-left-color: var(--tint); }
+
+@media (max-width: 640px) {
+  .iskin .ifrow { grid-template-columns: 1fr; }
+  .iskin .iform__group { padding: 36px 0; }
+  .iskin .ifield__help { text-align: left; }
+}
+@media (prefers-reduced-motion: reduce) { .iskin *, .iskin-rail * { transition: none !important; } }

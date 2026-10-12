@@ -1,5 +1,6 @@
 ---
 import '../styles/form.css';
+import '../styles/idea-form-skin.css';
 import {
   RESEARCH_TYPES,
   DATABASES,
@@ -17,6 +18,8 @@ interface Props {
 const { prefill } = Astro.props;
 ---
 
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather+Sans:wght@400;500;600;700&display=swap" />
+<div class="iskin">
 <form class="iform" action="/api/idea-submission" method="post" enctype="multipart/form-data" novalidate data-idea-form>
   {/* ---------------------------------------------------------- Investigator */}
   <fieldset class="iform__group">
@@ -33,7 +36,7 @@ const { prefill } = Astro.props;
       <div class="ifrow">
         <div class="ifield">
           <label class="ifield__label" for="leadName">Full name <b>*</b></label>
-          <input class="ifield__input" id="leadName" name="leadName" type="text" autocomplete="name" required maxlength="120" placeholder="Your full name" />
+          <input class="ifield__input" id="leadName" name="leadName" type="text" autocomplete="name" required maxlength="120" placeholder="First and last name" />
           <p class="ifield__err" data-err-for="leadName" hidden></p>
         </div>
         <div class="ifield">
@@ -46,7 +49,7 @@ const { prefill } = Astro.props;
 
     <div class="ifield ifield--half">
       <label class="ifield__label" for="contactNumber">Contact number <b>*</b></label>
-      <input class="ifield__input" id="contactNumber" name="contactNumber" type="tel" autocomplete="tel" required maxlength="40" placeholder="With country code, e.g. +1 313 555 0142" />
+      <input class="ifield__input" id="contactNumber" name="contactNumber" type="tel" autocomplete="tel" required maxlength="40" placeholder="Include country code, e.g. +1 313 555 0142" />
       <p class="ifield__err" data-err-for="contactNumber" hidden></p>
     </div>
   </fieldset>
@@ -57,7 +60,7 @@ const { prefill } = Astro.props;
 
     <div class="ifield">
       <label class="ifield__label" for="title">Title of research idea <b>*</b></label>
-      <input class="ifield__input" id="title" name="title" type="text" required maxlength="250" placeholder="A short, descriptive working title" />
+      <input class="ifield__input" id="title" name="title" type="text" required maxlength="250" placeholder="A concise working title" />
       <p class="ifield__err" data-err-for="title" hidden></p>
     </div>
 
@@ -79,8 +82,8 @@ const { prefill } = Astro.props;
     <div class="ifield" data-when="Database">
       <span class="ifield__label">Proposed database(s) <b>*</b></span>
       <p class="ifield__help">
-        If unsure, choose <em>Not sure</em> - we'll assess which database best fits the idea.
-        The <strong>DMC PCI Database</strong> is only open to people with a WSU IRB; propose it only if that applies to you.
+        Select every database that applies. If you are unsure, choose <em>Not sure</em> and we will recommend the best fit.
+        The <strong>DMC PCI Database</strong> is open only to investigators with a WSU IRB; select it only if this applies to you.
       </p>
       <div class="ichoices">
         {DATABASES.map((d) => (
@@ -100,10 +103,10 @@ const { prefill } = Astro.props;
     <legend class="iform__legend"><span>3</span> PICO &amp; rationale</legend>
 
     {[
-      ['population', 'Population (P)', 'Describe the patient population of interest. Be detailed.'],
-      ['intervention', 'Intervention / exposure (I)', 'The specific intervention, exposure, or prognostic factor being investigated.'],
-      ['comparison', 'Control / comparison (C)', 'The comparison group or control condition.'],
-      ['outcomes', 'Outcomes (O)', 'Primary and key secondary outcomes.'],
+      ['population', 'Population (P)', 'Describe the target patient population, including key inclusion criteria and setting.'],
+      ['intervention', 'Intervention / exposure (I)', 'State the intervention, exposure or prognostic factor under investigation.'],
+      ['comparison', 'Control / comparison (C)', 'Describe the comparator or control condition.'],
+      ['outcomes', 'Outcomes (O)', 'List the primary outcome and the key secondary outcomes.'],
     ].map(([name, label, help]) => (
       <div class="ifield">
         <label class="ifield__label" for={name}>{label} <b>*</b></label>
@@ -129,7 +132,7 @@ const { prefill } = Astro.props;
         rows="2"
         required
         maxlength="600"
-        placeholder="Clinical significance and the gap this addresses. Be brief - two lines is fine."
+        placeholder="Summarise the clinical significance of the question and the gap it addresses (two to three sentences)."
       ></textarea>
       <p class="ifield__err" data-err-for="rationale" hidden></p>
     </div>
@@ -148,19 +151,20 @@ const { prefill } = Astro.props;
         name="studyDesign"
         type="text"
         maxlength="600"
-        placeholder="e.g. retrospective cohort, prognostic model."
+        placeholder="e.g. retrospective cohort study; prognostic model"
       />
       <p class="ifield__err" data-err-for="studyDesign" hidden></p>
     </div>
     <div class="ifield" data-when="Database">
       <label class="ifield__label" for="priorStudies">Similar studies previously published on this exact topic? <b>*</b></label>
+      <p class="ifield__help">The publication value of this idea may depend on the existing literature, so a careful search is essential.</p>
       <textarea
         class="ifield__input ifield__area"
         id="priorStudies"
         name="priorStudies"
         rows="3"
         maxlength="3000"
-        placeholder="Key citations or titles. The publication value of the idea can hinge on this - please do a proper literature review."
+        placeholder="Citations or titles of closely related published studies"
       ></textarea>
       <p class="ifield__err" data-err-for="priorStudies" hidden></p>
     </div>
@@ -172,7 +176,7 @@ const { prefill } = Astro.props;
         name="latestStudy"
         type="text"
         maxlength="600"
-        placeholder="Include DOI, year, author, journal name."
+        placeholder="DOI, year, first author and journal"
       />
       <p class="ifield__err" data-err-for="latestStudy" hidden></p>
     </div>
@@ -186,19 +190,19 @@ const { prefill } = Astro.props;
         name="previousMetaDate"
         type="text"
         maxlength="300"
-        placeholder="Year, or &quot;none exists&quot; if this is the first."
+        placeholder="Year of the most recent meta-analysis, or &quot;None exists&quot;"
       />
       <p class="ifield__err" data-err-for="previousMetaDate" hidden></p>
     </div>
     <div class="ifield" data-when="Meta-analysis">
-      <label class="ifield__label" for="newStudies">Number of NEW studies planned for inclusion <b>*</b></label>
+      <label class="ifield__label" for="newStudies">Number of new studies planned for inclusion <b>*</b></label>
       <textarea
         class="ifield__input ifield__area"
         id="newStudies"
         name="newStudies"
         rows="3"
         maxlength="3000"
-        placeholder="RCTs and/or cohort studies, with the corresponding study links / DOIs."
+        placeholder="Number and design of new studies (RCTs and/or cohorts), with links or DOIs"
       ></textarea>
       <p class="ifield__err" data-err-for="newStudies" hidden></p>
     </div>
@@ -210,7 +214,7 @@ const { prefill } = Astro.props;
         name="sampleSizeIncrease"
         type="text"
         maxlength="120"
-        placeholder="A rough estimate is fine, e.g. &quot;≈ 40%&quot;."
+        placeholder="Approximate, e.g. ≈40%"
       />
       <p class="ifield__err" data-err-for="sampleSizeIncrease" hidden></p>
     </div>
@@ -223,7 +227,7 @@ const { prefill } = Astro.props;
     <div class="ifield">
       <span class="ifield__label">Are you targeting a conference? <b>*</b></span>
       <div class="ichoices">
-        {CONFERENCES.map((c, i) => (
+        {CONFERENCES.filter((c) => c !== 'none').map((c, i) => (
           <label class="ichoice">
             <input type="radio" name="conference" value={c} required checked={i === 0} />
             <span class="ichoice__mark ichoice__mark--radio" aria-hidden="true"></span>
@@ -236,7 +240,7 @@ const { prefill } = Astro.props;
 
     <div class="ifield">
       <label class="ifield__label" for="supportingDoc">Supporting document</label>
-      <p class="ifield__help">Optional - protocol draft, feasibility checks, etc. One file, max 10 MB ({UPLOAD.extensions.join(', ')}).</p>
+      <p class="ifield__help">Optional. Attach a protocol draft, feasibility check or similar. One file, up to 10 MB ({UPLOAD.extensions.join(', ')}).</p>
       <input class="ifield__file" id="supportingDoc" name="supportingDoc" type="file" accept={UPLOAD.extensions.join(',')} />
       <p class="ifield__err" data-err-for="supportingDoc" hidden></p>
     </div>
@@ -269,11 +273,12 @@ const { prefill } = Astro.props;
       <span data-submit-label>Submit idea</span>
       <span class="btn__arrow" aria-hidden="true">&rarr;</span>
     </button>
-    <p class="iform__small">Fields marked <b>*</b> are required.</p>
+    <p class="iform__small">Fields marked with <b>*</b> are required.</p>
   </div>
 
   <div class="iform__status" role="status" aria-live="polite" data-status hidden></div>
 </form>
+</div>
 
 
 <script>
@@ -297,6 +302,39 @@ const { prefill } = Astro.props;
     };
     form.querySelectorAll('[data-research-type]').forEach((r) => r.addEventListener('change', applyType));
     applyType();
+
+    /* --- Section guide in the left margin, built from the section headings --- */
+    const groups = [...form.querySelectorAll<HTMLElement>('.iform__group')];
+    const rail = document.createElement('nav');
+    rail.className = 'iskin-rail';
+    rail.setAttribute('aria-label', 'Form sections');
+    const list = document.createElement('ol');
+    const items = groups.map((g, i) => {
+      if (!g.id) g.id = `idea-sec-${i + 1}`;
+      const text = (g.querySelector('legend')?.textContent ?? `Section ${i + 1}`).replace(/^\s*\d+\s*/, '').trim();
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = `#${g.id}`;
+      const n = document.createElement('span');
+      n.className = 'n';
+      n.textContent = String(i + 1);
+      a.append(n, document.createTextNode(text));
+      li.append(a);
+      list.append(li);
+      return li;
+    });
+    rail.append(list);
+    form.prepend(rail);
+    let raf = 0;
+    const spy = () => {
+      raf = 0;
+      let cur = 0;
+      groups.forEach((g, i) => { if (g.getBoundingClientRect().top <= innerHeight * 0.35) cur = i; });
+      items.forEach((li, i) => { li.className = i < cur ? 'done' : i === cur ? 'on' : ''; });
+    };
+    addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(spy); }, { passive: true });
+    addEventListener('resize', spy);
+    spy();
 
     const clearErrors = () => {
       form.querySelectorAll<HTMLElement>('[data-err-for]').forEach((el) => { el.hidden = true; el.textContent = ''; });

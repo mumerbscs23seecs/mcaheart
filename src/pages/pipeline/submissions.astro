@@ -8,7 +8,8 @@ import CalmStatus from '../../components/calm/CalmStatus.astro';
 import CalmDock from '../../components/calm/CalmDock.astro';
 import { scopeProjects } from '../../lib/pipeline-scope';
 import { stagesFor } from '../../lib/lifecycle.mjs';
-import { stageColor } from '../../lib/calm';
+import { journalSiteHref } from '../../lib/journal-links';
+import { drawerInfo, stageColor } from '../../lib/calm';
 
 export const prerender = false;
 const { supabase, person } = Astro.locals;
@@ -16,7 +17,7 @@ const isAdmin = person.role === 'admin';
 
 let query = supabase
   .from('project_list')
-  .select('id,ref,title,full_title,phase,stage,stage_label,lead_name,current_journal,journals_tried,revision_round,open_journal_attempt_id,days_in_stage,created_at,stage_changed_at,archived_at,submission_order')
+  .select('id,ref,title,full_title,phase,stage,stage_label,lead_name,current_journal,journals_tried,revision_round,open_journal_attempt_id,days_in_stage,created_at,stage_changed_at,archived_at,submission_order,analyst_name,study_type,current_conference')
   .eq('phase', 'journal')
   .is('archived_at', null)
   .is('hidden_at', null)
@@ -31,16 +32,14 @@ if (!isAdmin) query = scopeProjects(query, person);
 const { data: rows, error } = await query;
 const list = rows ?? [];
 
-// "Open journal site": the attempt's own portal link when one was saved,
-// otherwise a web search for the journal's name.
+// "Open journal site": the attempt's own portal link, then the lab's list of
+// submission links (src/lib/journal-links.ts), then a web search.
 const attemptIds = list.map((p: any) => p.open_journal_attempt_id).filter(Boolean);
 const { data: attempts } = attemptIds.length
   ? await supabase.from('journal_attempts').select('id,portal_url').in('id', attemptIds)
   : { data: [] };
 const portal = new Map((attempts ?? []).map((a: any) => [a.id, a.portal_url]));
-const journalHref = (p: any) =>
-  portal.get(p.open_journal_attempt_id) ||
-  (p.current_journal ? `https://www.google.com/search?q=${encodeURIComponent(`${p.current_journal} journal`)}` : null);
+const journalHref = (p: any) => journalSiteHref(p.current_journal, portal.get(p.open_journal_attempt_id));
 
 const chips = stagesFor('journal').map((s: any) => ({
   key: s.code,
@@ -73,7 +72,7 @@ const chips = stagesFor('journal').map((s: any) => ({
           {list.map((p: any) => {
             const journal = journalHref(p);
             return (
-              <tr data-cv-row data-cv-f={p.stage} data-cv-text={`${p.full_title ?? ''} ${p.title ?? ''} ${p.ref ?? ''}`}>
+              <tr data-cv-row data-cv-info={drawerInfo(p)} data-cv-f={p.stage} data-cv-text={`${p.full_title ?? ''} ${p.title ?? ''} ${p.ref ?? ''}`}>
                 <td class="t">
                   <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.full_title || p.title}</a>
                   {p.full_title && p.title && <div class="cv-sub">{p.title}</div>}

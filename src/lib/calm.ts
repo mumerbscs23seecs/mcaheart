@@ -41,3 +41,19 @@ export const fmtDate = (d: string | null) => {
   const dt = new Date(d);
   return `${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}-${dt.getFullYear()}`;
 };
+
+/** What the side drawer shows for a paper, the same on every list page.
+ *  Rendered into the row as data-cv-info (JSON); empty values are dropped. */
+export function drawerInfo(p: any): string {
+  const info: Record<string, string> = {
+    ref: p.ref ?? '',
+    type: p.study_type ?? '',
+    lead: p.lead_name ?? '',
+    analyst: p.analyst_name ?? '',
+    conference: p.current_conference ?? '',
+    journal: p.current_journal ?? '',
+    started: p.created_at ? fmtDate(p.created_at) : '',
+    updated: p.stage_changed_at ? fmtDate(p.stage_changed_at) : '',
+  };
+  return JSON.stringify(Object.fromEntries(Object.entries(info).filter(([, v]) => v)));
+}

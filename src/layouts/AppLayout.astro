@@ -8,7 +8,8 @@ import type { User } from '../lib/auth';
 
 interface Props {
   title: string;
-  heading: string;
+  /** Omit when the page draws its own heading. */
+  heading?: string;
   user: User;
   /** Which app nav item is active. */
   active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'mentees' | 'requests' | 'testimonials' | 'hidden' | 'deleted' | 'access' | 'tasks' | 'new-idea';
@@ -36,7 +37,7 @@ const { title, heading, user, active } = Astro.props;
 
     <main class="app__main">
       <div class="app__shell">
-        <h1 class="app__heading">{heading}</h1>
+        {heading && <h1 class="app__heading">{heading}</h1>}
         <slot />
       </div>
     </main>

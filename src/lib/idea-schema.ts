@@ -25,10 +25,10 @@ export const CONFERENCES = ['TCT', 'SCAI', 'ACC', 'flexible', 'none'] as const;
 export type Conference = (typeof CONFERENCES)[number];
 
 export const CONFERENCE_LABELS: Record<Conference, string> = {
-  TCT: 'TCT - Transcatheter Cardiovascular Therapeutics',
-  SCAI: 'SCAI - Society for Cardiovascular Angiography and Interventions',
-  ACC: 'ACC - American College of Cardiology',
-  flexible: 'No specific conference - submit to whichever is nearest',
+  TCT: 'TCT: Transcatheter Cardiovascular Therapeutics',
+  SCAI: 'SCAI: Society for Cardiovascular Angiography and Interventions',
+  ACC: 'ACC: American College of Cardiology',
+  flexible: 'No specific conference: submit to the nearest suitable meeting',
   none: 'Not aiming to present at a conference',
 };
 
@@ -39,15 +39,15 @@ export type Commitment = (typeof COMMITMENTS)[number];
 export const COMMITMENT_LABELS: Record<ResearchType, Record<Commitment, string>> = {
   Database: {
     agree:
-      'I can complete the manuscript draft within one month of receiving the analysis, and accept that I may be removed and the topic reassigned if I do not.',
+      'I can complete the manuscript draft within one month of receiving the analysis, and I accept that I may be removed from the project and the topic reassigned if I do not.',
     'abstract-only':
-      'The topic may not suit a full-length paper - I intend to present the abstract only.',
+      'This topic may not suit a full-length paper; I intend to present an abstract only.',
   },
   'Meta-analysis': {
     agree:
-      'I can complete the manuscript draft within two months, and accept that the topic may be reassigned to another lead if I do not.',
+      'I can complete the manuscript draft within two months, and I accept that the topic may be reassigned to another lead if I do not.',
     'abstract-only':
-      'The idea may not be amenable to a paper - I intend to do the abstract only.',
+      'This idea may not be suited to a full paper; I intend to prepare an abstract only.',
   },
 };
 

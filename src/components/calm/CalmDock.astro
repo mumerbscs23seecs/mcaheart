@@ -3,9 +3,16 @@
 // pages' live title search and status chips. Left-click the pet for a sound
 // and a quip; right-click to choose a different pet. The choice and where
 // the pet was dragged to are remembered per browser.
+//
+// With `drawer` (the default), clicking a paper's title opens a side drawer
+// built from that row: status (a mirror of the row's own dropdown), people,
+// details and the row's actions. Pass drawer={false} to keep the original
+// slide-in panel instead.
+interface Props { drawer?: boolean }
+const { drawer = true } = Astro.props;
 ---
 
-<div class="cv">
+<div class="cv" data-cv-drawer={drawer ? '1' : undefined}>
   <div class="cv-pet" id="cv-pet" hidden><div class="cv-bubble" id="cv-bubble"></div><div id="cv-petart"></div></div>
   <div class="cv-petmenu" id="cv-petmenu" role="menu" aria-label="Choose a pet" hidden></div>
 </div>
@@ -26,6 +33,12 @@ function applyFilter() {
   });
 }
 $('[data-cv-q]')?.addEventListener('input', applyFilter);
+// A search started elsewhere (the dashboard's search box) arrives as ?q=.
+(() => {
+  const q = new URLSearchParams(location.search).get('q');
+  const box = $('[data-cv-q]');
+  if (q && box) { box.value = q; applyFilter(); }
+})();
 $('[data-cv-filters]')?.addEventListener('click', (e) => {
   const b = e.target.closest('button[data-cv-f]');
   if (!b) return;
@@ -33,6 +46,124 @@ $('[data-cv-filters]')?.addEventListener('click', (e) => {
   b.parentElement.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b));
   applyFilter();
 });
+
+/* ---------- side drawer: click a paper's title ---------- */
+(() => {
+  if (!document.querySelector('[data-cv-drawer]')) return;
+  let dim = null, dr = null, last = null;
+  const mk = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const initials = (v) => v.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  const shown = (el) => el && getComputedStyle(el).display !== 'none';
+  function close() {
+    if (!dr) return;
+    dr.classList.remove('on'); dim.classList.remove('on'); dr.setAttribute('aria-hidden', 'true');
+    if (last) last.focus();
+  }
+  function open(tr, a) {
+    if (!dr) {
+      dim = mk('div', 'cv-dim'); dr = mk('aside', 'cv-drawer');
+      dr.setAttribute('role', 'dialog'); dr.setAttribute('aria-modal', 'true'); dr.setAttribute('aria-label', 'Paper');
+      const host = document.querySelector('[data-cv-drawer]');
+      host.append(dim, dr); dim.onclick = close;
+    }
+    last = a; dr.textContent = '';
+    const table = tr.closest('table');
+    const heads = [...table.tHead.rows[0].cells];
+    const cells = [...tr.cells];
+    const head = mk('div', 'cv-dh'), tags = mk('div', 'cv-dtags'), x = mk('button', 'cv-dx'), body = mk('div', 'cv-dbody');
+    x.type = 'button'; x.setAttribute('aria-label', 'Close'); x.textContent = '\u2715'; x.onclick = close;
+    head.append(tags, x);
+
+    const title = mk('div');
+    title.append(mk('h2', 'cv-dtitle', a.textContent.trim()));
+    const sub = a.parentElement.querySelector('.cv-sub');
+    const short = sub ? sub.textContent.split('\u00b7')[0].trim() : '';
+    if (short && !/^v\d/.test(short) && !/^Published /.test(short) && short !== a.textContent.trim()) title.append(mk('p', 'cv-dabbr', short));
+    body.append(title);
+
+    // Status and actions come from the row's own controls; everything else
+    // from data-cv-info, so the drawer reads the same on every page.
+    let info = {};
+    try { info = JSON.parse(tr.dataset.cvInfo || '{}'); } catch (err) {}
+    [info.ref, info.type].filter(Boolean).forEach((t) => tags.append(mk('span', 'cv-dtag', t)));
+    const people = mk('dl', 'cv-kv'), details = mk('dl', 'cv-kv');
+    const row = (dl, label, value, person) => {
+      if (!value) return;
+      const dd = mk('dd');
+      if (person) dd.append(mk('span', 'cv-av', initials(value)));
+      dd.append(document.createTextNode(value));
+      dl.append(mk('dt', null, label), dd);
+    };
+    row(people, 'Lead', info.lead, true);
+    row(people, 'Analyst', info.analyst, true);
+    row(details, 'Conference', info.conference);
+    row(details, 'Journal', info.journal);
+    row(details, 'Started', info.started);
+    row(details, 'Last updated', info.updated);
+
+    let statusSec = null, actions = null;
+    heads.forEach((th, i) => {
+      const c = cells[i];
+      if (!i || !c || !shown(th)) return;
+      const h = th.textContent.trim();
+      if (/action/i.test(h)) { actions = c; return; }
+      if (!/status/i.test(h)) return;
+      statusSec = mk('div', 'cv-dsec');
+      statusSec.append(mk('h3', null, 'Status'));
+      const st = c.querySelector('.cv-st');
+      const sel = c.querySelector('select[data-status-select]');
+      if (sel) {
+        const m = sel.cloneNode(true);
+        m.removeAttribute('name'); m.removeAttribute('data-status-select'); m.removeAttribute('data-member-select');
+        m.className = 'cv-dsel'; m.selectedIndex = sel.selectedIndex; m.setAttribute('aria-label', 'Change status');
+        const wrap = mk('div', 'cv-dstat');
+        if (st) wrap.style.setProperty('--c', st.style.getPropertyValue('--c'));
+        wrap.append(m);
+        m.onchange = () => {
+          sel.value = m.value;
+          sel.dispatchEvent(new Event('change', { bubbles: true }));
+          // Some statuses need one more step in the row (journal name, Yes / No).
+          const extra = [...tr.querySelectorAll('[data-status-extra]')].find((b) => !b.hidden);
+          if (extra) { close(); tr.scrollIntoView({ block: 'center', behavior: 'smooth' }); extra.querySelector('input, button')?.focus(); }
+        };
+        statusSec.append(wrap);
+      } else {
+        const t = mk('div', 'cv-dstat cv-dstat--text', c.textContent.trim());
+        if (st) t.style.setProperty('--c', st.style.getPropertyValue('--c'));
+        statusSec.append(t);
+      }
+    });
+    if (statusSec) body.append(statusSec);
+    for (const [label, dl] of [['People', people], ['Details', details]]) {
+      if (!dl.children.length) continue;
+      const sec = mk('div', 'cv-dsec'); sec.append(mk('h3', null, label), dl); body.append(sec);
+    }
+    dr.append(head, body);
+
+    if (actions) {
+      const foot = mk('div', 'cv-dfoot');
+      const links = [...actions.querySelectorAll('a')];
+      links.sort((p, q) => (/progress/i.test(q.getAttribute('aria-label')) ? 1 : 0) - (/progress/i.test(p.getAttribute('aria-label')) ? 1 : 0));
+      for (const l of links) {
+        const label = l.getAttribute('aria-label') || l.textContent.trim();
+        const b = mk('a', 'cv-dbtn' + (/progress/i.test(label) ? ' is-pri' : ''), label);
+        b.href = l.href;
+        if (l.target) { b.target = l.target; b.rel = 'noopener'; }
+        foot.append(b);
+      }
+      dr.append(foot);
+    }
+    dr.classList.add('on'); dim.classList.add('on'); dr.setAttribute('aria-hidden', 'false'); x.focus();
+  }
+  // Capture phase, so the older slide-in panel never sees this click.
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('.cv-table td.t > a');
+    if (!a || e.button || e.metaKey || e.ctrlKey || e.shiftKey) return;
+    e.preventDefault(); e.stopPropagation();
+    open(a.closest('tr'), a);
+  }, true);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+})();
 
 /* ---------- pixel pets: drawn on a grid, animated frame by frame ---------- */
 const put=(g,x,y,ch)=>{if(g[y]&&x>=0&&x<g[y].length)g[y][x]=ch};
@@ -101,29 +232,63 @@ const REACT={awaited:'Waiting is part of the process.',submitted:'Submitted. Fin
 const pet=$('#cv-pet');
 function say(t){if(pet.hidden||!t)return;const b=$('#cv-bubble');b.textContent=t;b.classList.add('on');clearTimeout(say.t);say.t=setTimeout(()=>b.classList.remove('on'),3400)}
 function side(){pet.classList.toggle('r',pet.getBoundingClientRect().left>innerWidth/2)}
-/* ---------- sounds: tiny synthesized voices, no audio files ---------- */
-let actx=null;
-function tone(start,f0,f1,dur,type,vol){
-  const o=actx.createOscillator(),g=actx.createGain();
-  o.type=type;o.frequency.setValueAtTime(f0,start);o.frequency.exponentialRampToValueAtTime(f1,start+dur);
-  g.gain.setValueAtTime(0.0001,start);g.gain.exponentialRampToValueAtTime(vol,start+0.02);g.gain.exponentialRampToValueAtTime(0.0001,start+dur);
-  o.connect(g).connect(actx.destination);o.start(start);o.stop(start+dur+0.02);
+/* ---------- sounds: tiny cartoon voices, synthesized (no audio files) ----------
+   Each syllable is a buzzy tone with a quick pitch bend, shaped by two
+   "mouth" filters that glide between vowels, so it reads as a word rather
+   than a beep: Pikachu says "pi-ka-pi!", the cats go "mew mew". */
+let actx=null, noiseBuf=null;
+const k1=7; // makeup gain after the narrow vowel filters
+function noise(){
+  if(noiseBuf)return noiseBuf;
+  noiseBuf=actx.createBuffer(1,actx.sampleRate*0.05,actx.sampleRate);
+  const d=noiseBuf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  return noiseBuf;
 }
-function meow(t,base){ // a rising-then-falling sweep through a soft filter
-  const o=actx.createOscillator(),f=actx.createBiquadFilter(),g=actx.createGain();
-  o.type='sawtooth';f.type='lowpass';f.frequency.value=1800;
-  o.frequency.setValueAtTime(base,t);o.frequency.linearRampToValueAtTime(base*1.6,t+0.18);o.frequency.linearRampToValueAtTime(base*0.9,t+0.5);
-  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.18,t+0.05);g.gain.exponentialRampToValueAtTime(0.0001,t+0.55);
-  o.connect(f).connect(g).connect(actx.destination);o.start(t);o.stop(t+0.6);
+// A consonant click ("p", "k"): a few ms of filtered noise.
+function click(t,freq,vol){
+  const n=actx.createBufferSource(),f=actx.createBiquadFilter(),g=actx.createGain();
+  n.buffer=noise();f.type='bandpass';f.frequency.value=freq;f.Q.value=1.2;
+  g.gain.setValueAtTime(vol,t);g.gain.exponentialRampToValueAtTime(0.0001,t+0.025);
+  n.connect(f).connect(g).connect(actx.destination);n.start(t);n.stop(t+0.03);
 }
+// One voiced syllable. pitch = [start, peak, end] Hz; vowels = [[F1,F2] at start, [F1,F2] at end].
+function syllable(t,dur,pitch,vowels,vol,wave){
+  const o=actx.createOscillator(),out=actx.createGain(),g=actx.createGain();
+  o.type=wave||'sawtooth';
+  o.frequency.setValueAtTime(pitch[0],t);
+  o.frequency.exponentialRampToValueAtTime(pitch[1],t+dur*0.35);
+  o.frequency.exponentialRampToValueAtTime(pitch[2],t+dur);
+  // A little vibrato keeps it alive.
+  const lfo=actx.createOscillator(),lg=actx.createGain();lfo.frequency.value=18;lg.gain.value=pitch[1]*0.02;
+  lfo.connect(lg).connect(o.frequency);
+  [0,1].forEach(k=>{
+    const f=actx.createBiquadFilter();f.type='bandpass';f.Q.value=k?9:5;
+    f.frequency.setValueAtTime(vowels[0][k],t);f.frequency.linearRampToValueAtTime(vowels[1][k],t+dur);
+    o.connect(f).connect(out);
+  });
+  out.gain.value=k1;
+  g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+0.018);
+  g.gain.setValueAtTime(vol,t+dur*0.6);g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  out.connect(g).connect(actx.destination);
+  o.start(t);o.stop(t+dur+0.02);lfo.start(t);lfo.stop(t+dur+0.02);
+}
+// Vowel shapes [F1, F2] for the cartoon voices.
+const VOW={i:[300,2600],a:[850,1350],e:[500,2100],u:[350,900]};
 function sound(kind){
   try{
     actx=actx||new (window.AudioContext||window.webkitAudioContext)();
     if(actx.state==='suspended')actx.resume();
-    const t=actx.currentTime+0.01;
-    if(kind==='tan')meow(t,520);
-    else if(kind==='gray')meow(t,400);
-    else{tone(t,700,1300,0.12,'square',0.08);tone(t+0.15,900,1700,0.16,'square',0.08)} // "pi-ka!"
+    const t=actx.currentTime+0.02;
+    if(kind==='tan'||kind==='gray'){
+      // "mew mew": two short, bright, rising-then-falling meows (the gray cat is a little lower).
+      const b=kind==='tan'?820:640;
+      [0,0.3].forEach((dt,i)=>syllable(t+dt,0.24,[b*0.9,b*(i?1.25:1.35),b*0.8],[VOW.e,VOW.u],0.22,'sawtooth'));
+    }else{
+      // "pi-ka-pi!": quick, high and bouncy, with p / k clicks.
+      click(t,3500,0.12);   syllable(t+0.012,0.11,[1150,1400,1300],[VOW.i,VOW.i],0.2,'triangle');
+      click(t+0.15,2200,0.12);syllable(t+0.162,0.13,[1050,1150,900],[VOW.a,VOW.a],0.22,'triangle');
+      click(t+0.36,3500,0.12);syllable(t+0.372,0.2,[1250,1650,1500],[VOW.i,VOW.e],0.22,'triangle');
+    }
   }catch(e){}
 }
 

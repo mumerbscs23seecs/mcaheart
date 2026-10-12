@@ -8,7 +8,7 @@ import CalmFilters from '../../../components/calm/CalmFilters.astro';
 import CalmActions from '../../../components/calm/CalmActions.astro';
 import CalmStatus from '../../../components/calm/CalmStatus.astro';
 import CalmDock from '../../../components/calm/CalmDock.astro';
-import { stageColor, outcomeColor } from '../../../lib/calm';
+import { drawerInfo, stageColor, outcomeColor } from '../../../lib/calm';
 
 export const prerender = false;
 const { supabase, person } = Astro.locals;
@@ -74,7 +74,7 @@ const projectIds = [...new Set((attempts ?? []).map((a: any) => a.project_id))];
 const { data: projectRows } = projectIds.length
   ? await supabase
       .from('project_list')
-      .select('id,ref,title,full_title,phase,stage,stage_label,study_type,lead_name,analyst_name,days_in_stage,archived_at,hidden_at')
+      .select('id,ref,title,full_title,phase,stage,stage_label,study_type,lead_name,analyst_name,days_in_stage,archived_at,hidden_at,current_conference,current_journal,created_at,stage_changed_at')
       .in('id', projectIds)
   : { data: [] };
 const projectById = new Map((projectRows ?? []).map((r: any) => [r.id, r]));
@@ -195,7 +195,7 @@ const chips = Object.entries(KEY_LABEL).map(([key, label]) => ({
       </thead>
       <tbody>
         {rows.map(({ attempt: a, p }: any) => (
-          <tr data-cv-row data-cv-f={keyFor(a, p)} data-cv-text={`${p.full_title ?? ''} ${p.title ?? ''} ${p.ref ?? ''}`}>
+          <tr data-cv-row data-cv-info={drawerInfo(p)} data-cv-f={keyFor(a, p)} data-cv-text={`${p.full_title ?? ''} ${p.title ?? ''} ${p.ref ?? ''}`}>
             <td class="t">
               <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.full_title || p.title}</a>
               {p.full_title && p.title && <div class="cv-sub">{p.title}</div>}

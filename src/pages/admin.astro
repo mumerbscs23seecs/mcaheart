@@ -4,6 +4,7 @@ import { currentUser } from '../lib/auth';
 import { getPipelineSession } from '../lib/pipeline-auth';
 import { sweepPipelineReminders, type PipelineSweepResult } from '../lib/pipeline-reminders';
 import { getOverride, setOverride, clearOverride, STAT_KEYS, type StatKey } from '../lib/dashboard-overrides';
+import { stagesFor, stageOf } from '../lib/lifecycle.mjs';
 
 export const prerender = false;
 
@@ -58,11 +59,11 @@ if (Astro.request.method === 'POST') {
 }
 
 const PHASES = [
-  { key: 'idea', label: 'Idea', color: '#f4a9ae' },
-  { key: 'conference', label: 'Conference', color: '#e8767e' },
-  { key: 'manuscript', label: 'Manuscript', color: '#d44450' },
-  { key: 'journal', label: 'Journal', color: '#a51c30' },
-  { key: 'published', label: 'Published', color: '#6b0f1a' },
+  { key: 'idea', label: 'Idea', color: 'var(--d-r5)' },
+  { key: 'conference', label: 'Conference', color: 'var(--d-r4)' },
+  { key: 'manuscript', label: 'Manuscript', color: 'var(--d-r3)' },
+  { key: 'journal', label: 'Journal', color: 'var(--d-r2)' },
+  { key: 'published', label: 'Published', color: 'var(--d-ink)' },
 ] as const;
 type PhaseKey = (typeof PHASES)[number]['key'];
 
@@ -73,10 +74,13 @@ const rangeDays = rangeParam === '7' ? 7 : rangeParam === '90' ? 90 : 30;
 const q = Astro.url.searchParams.get('q') ?? '';
 
 const now = new Date();
+const DAY = 86_400_000;
 const fmtDate = (d: Date) => d.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 const weekday = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'long' });
+const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-const rangeStart = new Date(now.getTime() - (rangeDays - 1) * 86400000).toISOString().slice(0, 10);
+const rangeStart = isoDay(new Date(now.getTime() - (rangeDays - 1) * DAY));
+const eightWeeksAgo = new Date(now.getTime() - 56 * DAY).toISOString();
 
 /** Apply the header's phase scope to a projects/project_list query. "Published"
  *  is a stage within the journal phase, not a phase of its own. */
@@ -91,19 +95,29 @@ let published = 0;
 let awaiting = 0;
 let createdThisMonth = 0;
 const buckets: Record<PhaseKey, number> = { idea: 0, conference: 0, manuscript: 0, journal: 0, published: 0 };
+/** Paper count per stage code within each phase, for the stage breakdown. */
+const stageCounts: Record<string, Record<string, number>> = { idea: {}, conference: {}, manuscript: {}, journal: {} };
 let trend: { day: string; n: number }[] = [];
+let weekly: number[] = [];
+let rows: any[] = [];
+let recent: { at: string; title: string; who: string | null; text: string; to: string | null }[] = [];
+let nextConf: { id: string; name: string; deadline: string; ready: number; submitted: number; accepted: number; other: number } | null = null;
+let lastResult: { id: string; name: string; submitted: number; accepted: number; rejected: number; pct: number | null } | null = null;
 let dataError: string | null = null;
 
 if (supabase) {
-  const [totalRes, pubRes, reqRes, monthRes, stageRes, eventRes] = await Promise.all([
+  const [totalRes, pubRes, reqRes, monthRes, stageRes, eventRes, weekRes, recentRes, confRes, scoreRes] = await Promise.all([
     scoped(supabase.from('projects').select('id', { count: 'exact', head: true }).is('archived_at', null).is('hidden_at', null)),
     supabase.from('projects').select('id', { count: 'exact', head: true }).eq('phase', 'journal').eq('stage', 'published').is('archived_at', null).is('hidden_at', null),
     supabase.from('stage_change_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     scoped(supabase.from('projects').select('id', { count: 'exact', head: true }).is('archived_at', null).is('hidden_at', null).gte('created_at', firstOfMonth)),
-    scoped(supabase.from('project_list').select('phase,stage,days_in_stage,parked').is('archived_at', null).is('hidden_at', null)),
+    scoped(supabase.from('project_list').select('phase,stage,lead_name,study_type').is('archived_at', null).is('hidden_at', null)),
     supabase.from('events').select('at').gte('at', rangeStart),
+    scoped(supabase.from('projects').select('created_at').is('archived_at', null).is('hidden_at', null).gte('created_at', eightWeeksAgo)),
+    supabase.from('events').select('at,kind,detail,project_id,actor_id').order('at', { ascending: false }).limit(5),
+    supabase.from('conferences').select('id,name,abstract_deadline').order('abstract_deadline', { ascending: true }),
+    supabase.from('conference_scorecard').select('*'),
   ]);
-
   dataError =
     totalRes.error?.message ?? pubRes.error?.message ?? reqRes.error?.message ??
     stageRes.error?.message ?? eventRes.error?.message ?? null;
@@ -112,25 +126,101 @@ if (supabase) {
   published = pubRes.count ?? 0;
   awaiting = reqRes.count ?? 0;
   createdThisMonth = monthRes.count ?? 0;
+  rows = stageRes.data ?? [];
 
-  for (const r of stageRes.data ?? []) {
+  for (const r of rows) {
     if (r.phase === 'journal' && r.stage === 'published') buckets.published++;
-    else if (r.phase in buckets) buckets[r.phase as PhaseKey]++;
+    else if (r.phase in buckets) {
+      buckets[r.phase as PhaseKey]++;
+      const sc = stageCounts[r.phase];
+      if (sc) sc[r.stage] = (sc[r.stage] ?? 0) + 1;
+    }
   }
 
+  // Activity: status changes and other events per day across the range.
   const byDay = new Map<string, number>();
-  for (let i = rangeDays - 1; i >= 0; i--) {
-    byDay.set(new Date(now.getTime() - i * 86400000).toISOString().slice(0, 10), 0);
-  }
+  for (let i = rangeDays - 1; i >= 0; i--) byDay.set(isoDay(new Date(now.getTime() - i * DAY)), 0);
   for (const ev of eventRes.data ?? []) {
     const key = String(ev.at).slice(0, 10);
     if (byDay.has(key)) byDay.set(key, (byDay.get(key) ?? 0) + 1);
   }
   trend = [...byDay.entries()].map(([day, n]) => ({ day, n }));
+
+  // New projects per week, oldest week first.
+  weekly = Array.from({ length: 8 }, () => 0);
+  for (const r of weekRes.data ?? []) {
+    const weeksAgo = Math.floor((now.getTime() - new Date(r.created_at).getTime()) / (7 * DAY));
+    if (weeksAgo >= 0 && weeksAgo < 8) weekly[7 - weeksAgo]++;
+  }
+
+  // Recent activity, with each paper's title and who made the change.
+  const recentRows = recentRes.data ?? [];
+  const projIds = [...new Set(recentRows.map((e: any) => e.project_id))];
+  const actorIds = [...new Set(recentRows.map((e: any) => e.actor_id).filter(Boolean))];
+  const [{ data: projs }, { data: actors }] = await Promise.all([
+    projIds.length ? supabase.from('projects').select('id,title').in('id', projIds) : Promise.resolve({ data: [] as any[] }),
+    actorIds.length ? supabase.from('people').select('id,full_name').in('id', actorIds) : Promise.resolve({ data: [] as any[] }),
+  ]);
+  const titleOf = new Map((projs ?? []).map((p: any) => [p.id, p.title]));
+  const nameOf = new Map((actors ?? []).map((p: any) => [p.id, p.full_name]));
+  const KIND_TEXT: Record<string, string> = {
+    created: 'added it to the workflow',
+    gate1: 'sent it to a conference',
+    gate2: 'moved it to manuscript writing',
+    gate3: 'submitted it to a journal',
+    outcome: 'recorded an outcome',
+    assign: 'changed who is on it',
+    target: 'changed its target',
+    park: 'parked it',
+    archive: 'archived it',
+    note: 'added a note',
+  };
+  recent = recentRows.map((e: any) => {
+    const to = e.kind === 'stage' ? stageOf(e.detail?.to)?.label ?? null : null;
+    const text =
+      e.kind === 'stage' ? 'moved it to'
+      : e.kind === 'email' ? `sent an email${e.detail?.template ? `: ${e.detail.template}` : ''}`
+      : KIND_TEXT[e.kind] ?? 'updated it';
+    return { at: e.at, title: titleOf.get(e.project_id) ?? 'A paper', who: nameOf.get(e.actor_id) ?? null, text, to };
+  });
+
+  // Next abstract deadline (today or later), with where its papers stand.
+  const conferences = confRes.data ?? [];
+  const today = isoDay(now);
+  const upcoming = conferences.find((c: any) => c.abstract_deadline >= today);
+  if (upcoming) {
+    const { data: attempts } = await supabase.from('conference_attempts').select('outcome,project_id').eq('conference_id', upcoming.id);
+    const ids = (attempts ?? []).map((a: any) => a.project_id);
+    const { data: ps } = ids.length
+      ? await supabase.from('project_list').select('id,phase,stage,hidden_at,deleted_at').in('id', ids)
+      : { data: [] as any[] };
+    const byId = new Map((ps ?? []).filter((p: any) => !p.hidden_at && !p.deleted_at).map((p: any) => [p.id, p]));
+    const c = { id: upcoming.id, name: upcoming.name, deadline: upcoming.abstract_deadline, ready: 0, submitted: 0, accepted: 0, other: 0 };
+    for (const a of attempts ?? []) {
+      const p: any = byId.get(a.project_id);
+      if (!p) continue;
+      if (a.outcome === 'accepted') c.accepted++;
+      else if (a.outcome) continue;
+      else if (p.phase === 'conference' && p.stage === 'ready') c.ready++;
+      else if (p.phase === 'conference' && p.stage === 'submitted') c.submitted++;
+      else c.other++;
+    }
+    nextConf = c;
+  }
+
+  // Latest conference that has decisions back.
+  const score = new Map((scoreRes.data ?? []).map((s: any) => [s.name, s]));
+  const decided = [...conferences]
+    .reverse()
+    .find((c: any) => { const s: any = score.get(c.name); return s && (s.accepted ?? 0) + (s.rejected ?? 0) > 0 && (s.rejected ?? 0) > 0; })
+    ?? [...conferences].reverse().find((c: any) => { const s: any = score.get(c.name); return s && (s.accepted ?? 0) + (s.rejected ?? 0) > 0; });
+  if (decided) {
+    const s: any = score.get(decided.name);
+    lastResult = { id: decided.id, name: decided.name, submitted: s.submitted ?? 0, accepted: s.accepted ?? 0, rejected: s.rejected ?? 0, pct: s.accept_pct ?? null };
+  }
 }
 
 const active = Math.max(0, total - published);
-
 // The three headline tiles can be manually overridden for display purposes -
 // this never touches the underlying data, only what these three numbers show.
 // Everything else on the page (charts, breakdowns) stays driven by the real
@@ -142,94 +232,108 @@ const pctOfDisplayTotal = (n: number) =>
   totalDisplay ? Math.min(100, Math.max(0, Math.round((n / totalDisplay) * 100))) : 0;
 const activePct = pctOfDisplayTotal(activeDisplay);
 const publishedPct = pctOfDisplayTotal(publishedDisplay);
+const acceptedInPress = stageCounts.journal.accepted ?? 0;
 
 const bucketTotal = Object.values(buckets).reduce((a, b) => a + b, 0);
 const bucketMax = Math.max(1, ...Object.values(buckets));
+const pctOfBuckets = (n: number) => (bucketTotal ? Math.round((n / bucketTotal) * 100) : 0);
+/** Stages of a phase with papers in them, largest first. */
+const stagesIn = (phase: string) =>
+  stagesFor(phase)
+    .map((st: any) => ({ label: st.label, n: stageCounts[phase]?.[st.code] ?? 0 }))
+    .filter((st) => st.n > 0)
+    .sort((a, b) => b.n - a.n);
+const weeklyMax = Math.max(1, ...weekly);
+
+// Activity summary.
+const trendTotal = trend.reduce((a, t) => a + t.n, 0);
+const activeDays = trend.filter((t) => t.n > 0).length;
+const yesterday = trend.length >= 2 ? trend[trend.length - 2].n : 0;
 const trendMax = Math.max(1, ...trend.map((t) => t.n));
-
-const initials =
-  me.name
-    .split(/\s+/)
-    .map((s) => s[0])
-    .filter(Boolean)
-    .slice(0, 2)
-    .join('')
-    .toUpperCase() || 'A';
-
+const peakIdx = trend.findIndex((t) => t.n === trendMax && t.n > 0);
+// Peak label sits over its bar, anchored left or right so it stays inside the chart.
+const peakStyle =
+  peakIdx / Math.max(1, trend.length) > 0.5
+    ? `right:${100 - ((peakIdx + 1) / trend.length) * 100}%`
+    : `left:${(peakIdx / Math.max(1, trend.length)) * 100}%`;
 const fmtDay = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+const axisIdx = trend.length <= 1 ? [0] : Array.from({ length: 5 }, (_, i) => Math.round((i * (trend.length - 1)) / 4));
+const rangeHref = (r: number) => {
+  const u = new URLSearchParams();
+  if (phaseFilter) u.set('phase', phaseFilter);
+  if (r !== 30) u.set('range', String(r));
+  const s = u.toString();
+  return s ? `/admin?${s}` : '/admin';
+};
 
-// ---- Activity Trend: a real line chart with axis scales, not just bars.
-function niceMax(n: number): number {
-  if (n <= 5) return 5;
-  const pow = 10 ** Math.floor(Math.log10(n));
-  for (const step of [1, 2, 2.5, 5, 10]) {
-    const candidate = step * pow;
-    if (candidate >= n) return candidate;
-  }
-  return Math.ceil(n / pow) * pow;
-}
-const CHART_W = 600;
-const CHART_H = 200;
-const CHART_PAD = { top: 10, right: 14, bottom: 24, left: 30 };
-const plotW = CHART_W - CHART_PAD.left - CHART_PAD.right;
-const plotH = CHART_H - CHART_PAD.top - CHART_PAD.bottom;
-const chartMax = niceMax(trendMax);
-const yTicks = [0, 0.5, 1].map((f) => Math.round(chartMax * f));
-const xAt = (i: number) => CHART_PAD.left + (trend.length > 1 ? (i / (trend.length - 1)) * plotW : plotW / 2);
-const yAt = (n: number) => CHART_PAD.top + (1 - n / chartMax) * plotH;
-const trendPoints = trend.map((t, i) => ({ x: xAt(i), y: yAt(t.n), day: t.day, n: t.n }));
-const linePath = trendPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-const areaPath =
-  trendPoints.length > 0
-    ? `${linePath} L${trendPoints[trendPoints.length - 1].x.toFixed(1)},${(CHART_PAD.top + plotH).toFixed(1)} ` +
-      `L${trendPoints[0].x.toFixed(1)},${(CHART_PAD.top + plotH).toFixed(1)} Z`
-    : '';
-// A handful of evenly-spaced x-axis day labels - every single day would
-// crowd a 90-day range.
-const xLabelCount = Math.min(trend.length, 5);
-const xLabelIdx =
-  trend.length <= 1
-    ? [0]
-    : Array.from({ length: xLabelCount }, (_, i) => Math.round((i * (trend.length - 1)) / (xLabelCount - 1)));
+// Journal summary.
+const jc = stageCounts.journal;
+const atJournals = [
+  { label: 'Under review', n: jc.under_review ?? 0 },
+  { label: 'Revisions in progress', n: (jc.revision_req ?? 0) + (jc.revision_review ?? 0) },
+  { label: 'Rejected, need a new journal', n: (jc.rejected_comments ?? 0) + (jc.rejected_no_comments ?? 0) },
+  { label: 'With the editor', n: jc.submitted ?? 0 },
+  { label: 'Waiting to be submitted', n: jc.awaited ?? 0 },
+  { label: 'Accepted', n: jc.accepted ?? 0 },
+].filter((x) => x.n > 0);
+
+// Most active leads (papers past the idea stage) and the study-type mix.
+const leadCounts = new Map<string, number>();
+for (const r of rows) if (r.lead_name && r.phase !== 'idea') leadCounts.set(r.lead_name, (leadCounts.get(r.lead_name) ?? 0) + 1);
+const topLeads = [...leadCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+const topLeadMax = Math.max(1, ...topLeads.map((l) => l[1]));
+const typeCounts = new Map<string, number>();
+for (const r of rows) typeCounts.set(r.study_type ?? 'Other', (typeCounts.get(r.study_type ?? 'Other') ?? 0) + 1);
+// "Other" (the study type) always goes last, merged with the smaller types.
+const typeSorted = [...typeCounts.entries()].filter(([k]) => k !== 'Other').sort((a, b) => b[1] - a[1]);
+const otherTypes = (typeCounts.get('Other') ?? 0) + typeSorted.slice(4).reduce((a, [, n]) => a + n, 0);
+const TYPE_COLORS = ['var(--d-r1)', 'var(--d-r3)', 'var(--d-r4)', 'var(--d-r5)'];
+const types = [
+  ...typeSorted.slice(0, 4).map(([k, n], i) => ({ label: k, n, color: TYPE_COLORS[i] })),
+  ...(otherTypes > 0 ? [{ label: 'Other', n: otherTypes, color: 'var(--d-line)' }] : []),
+];
+
+const fmtWhen = (iso: string) => {
+  const d = new Date(iso);
+  const days = Math.floor((new Date(isoDay(now)).getTime() - new Date(isoDay(d)).getTime()) / DAY);
+  const day = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+  return { day, time: d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) };
+};
+const deadlineWhen = (iso: string) => {
+  const days = Math.round((new Date(iso + 'T00:00:00').getTime() - new Date(isoDay(now) + 'T00:00:00').getTime()) / DAY);
+  return days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : `In ${days} days`;
+};
+const STAT_EDIT = { total: totalDisplay, active: activeDisplay, published: publishedDisplay } as const;
 ---
 
-<AppLayout title="Dashboard" heading="Dashboard" user={me} active="dashboard">
-  <div class="adash">
+<AppLayout title="Dashboard" user={me} active="dashboard">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather+Sans:wght@500;700;800&display=swap" />
+  <div class="dash">
     {flash && (
-      <div class:list={['adash-flash', `adash-flash--${flash.tone}`]} role="status">
-        <p>{flash.text}</p>
-      </div>
+      <div class:list={['dash-flash', `dash-flash--${flash.tone}`]} role="status"><p>{flash.text}</p></div>
     )}
     {!supabase && (
-      <div class="adash-flash adash-flash--error" role="status">
+      <div class="dash-flash dash-flash--error" role="status">
         <p>Could not reach the live database, so every number below is 0. Refresh, or check SUPABASE_* in .env.</p>
       </div>
     )}
-    {supabase && dataError && (
-      <div class="adash-flash adash-flash--error" role="status"><p>{dataError}</p></div>
-    )}
+    {supabase && dataError && <div class="dash-flash dash-flash--error" role="status"><p>{dataError}</p></div>}
 
     {/* ---------------------------------------------------------- Header */}
-    <header class="adash-head">
-      <div class="adash-head__intro">
-        <h1 class="adash-head__title">Research Submissions Dashboard</h1>
+    <header class="dash-head">
+      <div>
+        <h1>Research submissions dashboard</h1>
+        <p>Every paper in the lab, from idea to publication.</p>
       </div>
-
-      <div class="adash-head__tools">
-        <form class="adash-search" method="get" action="/pipeline/submissions" role="search">
-          <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M13.6 12.2 17 15.6l-1.4 1.4-3.4-3.4A6 6 0 1 1 13.6 12.2ZM9 13a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" fill="currentColor"/></svg>
-          <input type="search" name="q" placeholder="Search projects…" value={q} aria-label="Search projects" />
+      <div class="dash-tools">
+        <form method="get" action="/pipeline/submissions" role="search">
+          <input type="search" name="q" placeholder="Search projects" value={q} aria-label="Search projects" />
         </form>
-
-        <div class="adash-date">
-          <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true"><path d="M6 2v2M14 2v2M3 8h14M4 4h12a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
-          <div><b>{fmtDate(now)}</b><span>{weekday(now)}</span></div>
-        </div>
-
-        <form method="get" class="adash-scope">
-          {q && <input type="hidden" name="q" value={q} />}
+        <div class="dash-date"><b>{fmtDate(now)}</b><span>{weekday(now)}</span></div>
+        <form method="get">
+          {rangeDays !== 30 && <input type="hidden" name="range" value={rangeDays} />}
           <select name="phase" aria-label="Filter by phase" onchange="this.form.submit()">
-            <option value="" selected={!phaseFilter}>All Projects</option>
+            <option value="" selected={!phaseFilter}>All projects</option>
             {PHASES.map((p) => <option value={p.key} selected={phaseFilter === p.key}>{p.label}</option>)}
           </select>
         </form>
@@ -237,179 +341,254 @@ const xLabelIdx =
     </header>
 
     {/* -------------------------------------------------------- Stat cards */}
-    <div class="adash-stats">
-      <div class="adash-stat">
-        <span class="adash-stat__icon adash-stat__icon--blue">
-          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M5 2h7l3 3v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M12 2v3h3" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
-        </span>
-        <span class="adash-stat__n">{totalDisplay}</span>
-        <span class="adash-stat__l">Total Submissions</span>
-        <span class="adash-stat__sub adash-stat__sub--up">
-          {createdThisMonth > 0 ? `↑ +${createdThisMonth} this month` : 'No new ones this month'}
-        </span>
-        <details class="adash-edit">
-          <summary class="adash-edit__toggle" aria-label="Edit this number">Edit</summary>
-          <form method="post" class="adash-edit__form">
-            <input type="hidden" name="key" value="total" />
-            <input type="number" name="value" value={totalDisplay} min="0" step="1" required />
-            <button type="submit" name="action" value="set-stat" class="adash-btn adash-btn--ghost">Save</button>
-            {getOverride('total') != null && (
-              <button type="submit" name="action" value="clear-stat" formnovalidate class="adash-btn adash-btn--ghost">Reset</button>
-            )}
-          </form>
-        </details>
-      </div>
+    <div class="dash-stats">
+      <article class="dash-card dash-stat" style="--c:var(--d-r1)">
+        <span class="dash-stat__label">Total submissions</span>
+        <span class="dash-stat__num">{totalDisplay}</span>
+        <span class="dash-stat__ctx">{createdThisMonth > 0 ? <><b>+{createdThisMonth}</b> this month</> : 'No new ones this month'}</span>
+        <div class="dash-spark" title="New projects per week, last 8 weeks">
+          {weekly.map((n, i) => <i class:list={[i === weekly.length - 1 && 'is-now']} style={`height:${Math.max(6, (n / weeklyMax) * 100)}%`} title={`${n} new`}></i>)}
+        </div>
+      </article>
 
-      <div class="adash-stat">
-        <span class="adash-stat__icon adash-stat__icon--teal">
-          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M3 14l4-4 3 3 7-7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        </span>
-        <span class="adash-stat__n">{activeDisplay}</span>
-        <span class="adash-stat__l">Active in Workflow</span>
-        <span class="adash-stat__track"><span class="adash-stat__fill adash-stat__fill--teal" style={`width:${activePct}%`}></span></span>
-        <span class="adash-stat__sub">{activePct}% of total</span>
-        <details class="adash-edit">
-          <summary class="adash-edit__toggle" aria-label="Edit this number">Edit</summary>
-          <form method="post" class="adash-edit__form">
-            <input type="hidden" name="key" value="active" />
-            <input type="number" name="value" value={activeDisplay} min="0" step="1" required />
-            <button type="submit" name="action" value="set-stat" class="adash-btn adash-btn--ghost">Save</button>
-            {getOverride('active') != null && (
-              <button type="submit" name="action" value="clear-stat" formnovalidate class="adash-btn adash-btn--ghost">Reset</button>
-            )}
-          </form>
-        </details>
-      </div>
+      <article class="dash-card dash-stat" style="--c:var(--d-r3)">
+        <span class="dash-stat__label">Active in workflow</span>
+        <span class="dash-stat__num">{activeDisplay}</span>
+        <span class="dash-stat__ctx">{activePct}% of all submissions</span>
+        <div class="dash-mix">
+          {PHASES.filter((p) => p.key !== 'published').map((p) => <i style={`flex:${buckets[p.key] || 0};background:${p.color}`} title={`${p.label}: ${buckets[p.key]}`}></i>)}
+        </div>
+        <div class="dash-key">
+          {PHASES.filter((p) => p.key !== 'published').map((p) => <span style={`--k:${p.color}`}>{p.label}</span>)}
+        </div>
+      </article>
 
-      <div class="adash-stat">
-        <span class="adash-stat__icon adash-stat__icon--amber">
-          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><circle cx="10" cy="10" r="7.3" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M10 6v4.5l3 2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
-        </span>
-        <span class="adash-stat__n">{awaiting}</span>
-        <span class="adash-stat__l">Awaiting Coordinator Review</span>
-        <span class:list={['adash-stat__sub', awaiting > 0 ? 'adash-stat__sub--warn' : 'adash-stat__sub--ok']}>
-          {awaiting > 0 ? 'Needs follow-up' : 'All clear'}
-        </span>
-      </div>
+      <article class="dash-card dash-stat" style={`--c:${awaiting > 0 ? 'var(--d-amber)' : 'var(--d-ok)'}`}>
+        <span class="dash-stat__label">Awaiting coordinator review</span>
+        <span class="dash-stat__num">{awaiting}</span>
+        <span class="dash-stat__ctx">Status requests from members</span>
+        {awaiting > 0
+          ? <a class="dash-tag dash-tag--warn" href="/admin/requests">Review {awaiting === 1 ? 'it' : 'them'}</a>
+          : <span class="dash-tag dash-tag--ok">All clear</span>}
+      </article>
 
-      <div class="adash-stat">
-        <span class="adash-stat__icon adash-stat__icon--green">
-          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M10 2 12 7l5.5.8-4 3.9.9 5.5L10 14.7 5.6 17.2l.9-5.5-4-3.9L8 7Z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
-        </span>
-        <span class="adash-stat__n">{publishedDisplay}</span>
-        <span class="adash-stat__l">Published</span>
-        <span class="adash-stat__track"><span class="adash-stat__fill adash-stat__fill--green" style={`width:${publishedPct}%`}></span></span>
-        <span class="adash-stat__sub">{publishedPct}% of total</span>
-        <details class="adash-edit">
-          <summary class="adash-edit__toggle" aria-label="Edit this number">Edit</summary>
-          <form method="post" class="adash-edit__form">
-            <input type="hidden" name="key" value="published" />
-            <input type="number" name="value" value={publishedDisplay} min="0" step="1" required />
-            <button type="submit" name="action" value="set-stat" class="adash-btn adash-btn--ghost">Save</button>
-            {getOverride('published') != null && (
-              <button type="submit" name="action" value="clear-stat" formnovalidate class="adash-btn adash-btn--ghost">Reset</button>
-            )}
-          </form>
-        </details>
-      </div>
+      <article class="dash-card dash-stat" style="--c:var(--d-ink)">
+        <span class="dash-stat__label">Published</span>
+        <span class="dash-stat__num">{publishedDisplay}</span>
+        <span class="dash-stat__ctx">{acceptedInPress > 0 ? `${acceptedInPress} more accepted, in press` : `${publishedPct}% of all submissions`}</span>
+        <div class="dash-meter"><i style={`width:${Math.max(publishedPct, publishedDisplay ? 1 : 0)}%`}></i></div>
+      </article>
     </div>
 
-    {/* --------------------------------------------------- Stage + status */}
-    <div class="adash-grid2">
-      <section class="adash-card">
-        <h2 class="adash-card__title">Submissions by Stage</h2>
+    {/* Manual overrides for the three headline numbers. */}
+    <details class="dash-overrides">
+      <summary>Edit the headline numbers</summary>
+      <div class="dash-overrides__body">
+        {(['total', 'active', 'published'] as const).map((key) => (
+          <form method="post" class="dash-overrides__row">
+            <input type="hidden" name="key" value={key} />
+            <label>
+              <span>{key === 'total' ? 'Total submissions' : key === 'active' ? 'Active in workflow' : 'Published'}</span>
+              <input type="number" name="value" value={STAT_EDIT[key]} min="0" step="1" required />
+            </label>
+            <button type="submit" name="action" value="set-stat" class="dash-btn">Save</button>
+            {getOverride(key) != null && (
+              <button type="submit" name="action" value="clear-stat" formnovalidate class="dash-btn dash-btn--ghost">Use the live count</button>
+            )}
+          </form>
+        ))}
+      </div>
+    </details>
+
+    {/* --------------------------------------------- Stages + activity trend */}
+    <div class="dash-row dash-row--2">
+      <section class="dash-card">
+        <div class="dash-card__head"><h2>Submissions by stage</h2><small>Click a stage to see its steps</small></div>
         {bucketTotal === 0 ? (
-          <p class="adash-empty">Nothing to show yet.</p>
+          <p class="dash-empty">Nothing to show yet.</p>
         ) : (
-          <ul class="adash-bars">
-            {PHASES.map((p) => (
-              <li class="adash-bar">
-                <span class="adash-bar__label">{p.label}</span>
-                <span class="adash-bar__track">
-                  <span class="adash-bar__fill" style={`width:${(buckets[p.key] / bucketMax) * 100}%;background:${p.color}`}></span>
-                </span>
-                <span class="adash-bar__n">{buckets[p.key]}</span>
-              </li>
-            ))}
-          </ul>
+          <div class="dash-stages">
+            {PHASES.map((p) => {
+              const subs = p.key === 'published' ? [] : stagesIn(p.key);
+              const rowInner = (
+                <>
+                  <span class="dash-st__name">{p.label}</span>
+                  <span class="dash-st__track"><i style={`width:${(buckets[p.key] / bucketMax) * 100}%;background:${p.color}`}></i></span>
+                  <span class="dash-st__n"><b>{buckets[p.key]}</b><span>{pctOfBuckets(buckets[p.key])}%</span></span>
+                </>
+              );
+              return subs.length > 0 ? (
+                <details class="dash-st" open={p.key === 'journal'}>
+                  <summary class="dash-st__row">{rowInner}</summary>
+                  <div class="dash-st__subs">
+                    {subs.map((st) => <span>{st.label}<b>{st.n}</b></span>)}
+                  </div>
+                </details>
+              ) : (
+                <div class="dash-st"><div class="dash-st__row">{rowInner}</div></div>
+              );
+            })}
+          </div>
         )}
       </section>
 
-      <section class="adash-card">
-        <div class="adash-trend__head">
-          <h2 class="adash-card__title">Activity Trend</h2>
-          <form method="get">
-            {phaseFilter && <input type="hidden" name="phase" value={phaseFilter} />}
-            {q && <input type="hidden" name="q" value={q} />}
-            <select name="range" aria-label="Date range" onchange="this.form.submit()">
-              <option value="7" selected={rangeDays === 7}>Last 7 Days</option>
-              <option value="30" selected={rangeDays === 30}>Last 30 Days</option>
-              <option value="90" selected={rangeDays === 90}>Last 90 Days</option>
-            </select>
-          </form>
+      <section class="dash-card">
+        <div class="dash-card__head">
+          <h2>Activity trend</h2>
+          <nav class="dash-seg" aria-label="Date range">
+            {[7, 30, 90].map((r) => <a class:list={[rangeDays === r && 'is-on']} href={rangeHref(r)}>{r} days</a>)}
+          </nav>
         </div>
-        {trend.every((t) => t.n === 0) ? (
-          <p class="adash-empty">No recorded events in this range.</p>
+        <div class="dash-trend">
+          <div class="dash-trend__sum">
+            <div><b>{trendTotal}</b><span>changes recorded</span></div>
+            <div><b>{activeDays}</b><span>active days</span></div>
+            <div><b>{yesterday}</b><span>yesterday</span></div>
+          </div>
+          {trendTotal === 0 ? (
+            <p class="dash-empty">No recorded activity in this range.</p>
+          ) : (
+            <>
+              <div class="dash-bars" role="img" aria-label={`Changes per day, last ${rangeDays} days`}>
+                {trend.map((t, i) => (
+                  <i class:list={[t.n === 0 && 'is-zero', i === peakIdx && 'is-peak']}
+                    style={`height:${t.n ? Math.max(3, (t.n / trendMax) * 100) : 1.5}%`}
+                    title={`${fmtDay(t.day)}: ${t.n} change${t.n === 1 ? '' : 's'}`}></i>
+                ))}
+                {peakIdx >= 0 && (
+                  <span class="dash-bars__peak" style={peakStyle}>
+                    {fmtDay(trend[peakIdx].day)}: {trend[peakIdx].n}
+                  </span>
+                )}
+              </div>
+              <div class="dash-axis">{axisIdx.map((i) => <span>{fmtDay(trend[i].day)}</span>)}</div>
+            </>
+          )}
+        </div>
+      </section>
+    </div>
+
+    {/* --------------------------------- Deadline, conference results, journals */}
+    <div class="dash-row dash-row--3">
+      <section class="dash-card">
+        <div class="dash-card__head"><h2>Next deadline</h2></div>
+        {nextConf ? (
+          <div class="dash-pad dash-deadline">
+            <span class:list={['dash-when', deadlineWhen(nextConf.deadline) === 'Today' && 'is-today']}>{deadlineWhen(nextConf.deadline)}</span>
+            <h3>{nextConf.name} abstracts</h3>
+            <div class="dash-split">
+              <i style={`flex:${nextConf.ready};background:var(--d-r3)`}></i>
+              <i style={`flex:${nextConf.submitted};background:var(--d-amber)`}></i>
+              <i style={`flex:${nextConf.accepted};background:var(--d-ok)`}></i>
+              <i style={`flex:${nextConf.other};background:var(--d-line)`}></i>
+            </div>
+            <div class="dash-legend">
+              <span style="--k:var(--d-r3)">{nextConf.ready} ready</span>
+              <span style="--k:var(--d-amber)">{nextConf.submitted} submitted</span>
+              {nextConf.accepted > 0 && <span style="--k:var(--d-ok)">{nextConf.accepted} accepted</span>}
+              <span style="--k:var(--d-line)">{nextConf.other} still in progress</span>
+            </div>
+            <a class="dash-link" href={`/pipeline/conferences/${nextConf.id}`}>Open {nextConf.name}</a>
+          </div>
         ) : (
-          <svg
-            class="adash-linechart"
-            viewBox={`0 0 ${CHART_W} ${CHART_H}`}
-            role="img"
-            aria-label={`Events per day, last ${rangeDays} days`}
-          >
-            {yTicks.map((v) => (
-              <g>
-                <line
-                  x1={CHART_PAD.left} x2={CHART_W - CHART_PAD.right}
-                  y1={yAt(v)} y2={yAt(v)}
-                  class="adash-linechart__grid"
-                />
-                <text x={CHART_PAD.left - 8} y={yAt(v)} class="adash-linechart__ytick">{v}</text>
-              </g>
-            ))}
-            {xLabelIdx.map((i) => (
-              <text x={xAt(i)} y={CHART_H - 6} class="adash-linechart__xtick">{fmtDay(trend[i].day)}</text>
-            ))}
-            <path d={areaPath} class="adash-linechart__area" />
-            <path d={linePath} class="adash-linechart__line" />
-            {trendPoints.map((p, i) => (
-              <circle
-                cx={p.x} cy={p.y}
-                r={i === trendPoints.length - 1 ? 3.5 : 2.2}
-                class="adash-linechart__dot"
-              >
-                <title>{`${fmtDay(p.day)}: ${p.n} event${p.n === 1 ? '' : 's'}`}</title>
-              </circle>
-            ))}
-          </svg>
+          <p class="dash-empty">No upcoming deadlines. <a class="dash-link" href="/pipeline/conferences">Add a conference</a></p>
+        )}
+      </section>
+
+      <section class="dash-card">
+        <div class="dash-card__head"><h2>Conference results</h2>{lastResult && <small>{lastResult.name}</small>}</div>
+        {lastResult ? (
+          <div class="dash-pad">
+            <p class="dash-big">{lastResult.pct != null ? `${Math.round(lastResult.pct)}%` : '-'}<small>accepted</small></p>
+            <div class="dash-split">
+              <i style={`flex:${lastResult.accepted};background:var(--d-ok)`}></i>
+              <i style={`flex:${lastResult.rejected};background:var(--d-r1)`}></i>
+            </div>
+            <div class="dash-legend">
+              <span style="--k:var(--d-ok)">{lastResult.accepted} accepted</span>
+              <span style="--k:var(--d-r1)">{lastResult.rejected} rejected</span>
+              <span>{lastResult.submitted} sent</span>
+            </div>
+            <a class="dash-link" href={`/pipeline/conferences/${lastResult.id}`}>Open {lastResult.name}</a>
+          </div>
+        ) : (
+          <p class="dash-empty">No conference results yet.</p>
+        )}
+      </section>
+
+      <section class="dash-card">
+        <div class="dash-card__head"><h2>At journals</h2><small>{buckets.journal} papers</small></div>
+        {atJournals.length ? (
+          <div class="dash-pad dash-dl">
+            {atJournals.map((x) => <div><span>{x.label}</span><b>{x.n}</b></div>)}
+          </div>
+        ) : (
+          <p class="dash-empty">No papers at journals.</p>
+        )}
+      </section>
+    </div>
+
+    {/* ------------------------------------- Recent activity + leads/types */}
+    <div class="dash-row dash-row--wide">
+      <section class="dash-card">
+        <div class="dash-card__head"><h2>Recent activity</h2></div>
+        {recent.length ? (
+          <ul class="dash-feed">
+            {recent.map((e) => {
+              const w = fmtWhen(e.at);
+              return (
+                <li>
+                  <time datetime={e.at}>{w.day}<br />{w.time}</time>
+                  <p>
+                    <b>{e.title}</b><br />
+                    <span class="dash-feed__move">{e.who ?? 'Someone'} {e.text}{e.to && <> <span class="dash-feed__to">{e.to}</span></>}</span>
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p class="dash-empty">Nothing has happened yet.</p>
+        )}
+      </section>
+
+      <section class="dash-card">
+        <div class="dash-card__head"><h2>Most active leads</h2><small>Papers past the idea stage</small></div>
+        {topLeads.length ? (
+          <ul class="dash-leads">
+            {topLeads.map(([name, n]) => <li><span>{name}</span><i style={`width:${(n / topLeadMax) * 100}%`}></i><b>{n}</b></li>)}
+          </ul>
+        ) : (
+          <p class="dash-empty">No leads assigned yet.</p>
+        )}
+        {types.length > 0 && (
+          <div class="dash-types">
+            <h3>By study type</h3>
+            <div class="dash-split">{types.map((t) => <i style={`flex:${t.n};background:${t.color}`} title={`${t.label}: ${t.n}`}></i>)}</div>
+            <div class="dash-legend">{types.map((t) => <span style={`--k:${t.color}`}>{t.label} {t.n}</span>)}</div>
+          </div>
         )}
       </section>
     </div>
 
     {/* ------------------------------------------------------- Reminders */}
-    <section class="adash-card">
-      <div class="adash-trend__head">
-        <h2 class="adash-card__title">Stagnation reminders</h2>
-        <div class="adash-reminders__actions">
-          <form method="post" class="adash-inline">
-            <button class="adash-btn adash-btn--ghost" name="action" value="sweep-dry" type="submit">Preview</button>
-          </form>
-          <form method="post" class="adash-inline">
-            <button class="adash-btn adash-btn--primary" name="action" value="sweep" type="submit">Run sweep now</button>
-          </form>
+    <section class="dash-card">
+      <div class="dash-card__head">
+        <h2>Stagnation reminders</h2>
+        <div class="dash-actions">
+          <form method="post"><button class="dash-btn dash-btn--ghost" name="action" value="sweep-dry" type="submit">Preview</button></form>
+          <form method="post"><button class="dash-btn" name="action" value="sweep" type="submit">Run sweep now</button></form>
         </div>
       </div>
+      <p class="dash-pad dash-note">Emails the lead and analyst of any manuscript that hasn't moved for a while, and flags long-stalled ones for reassignment.</p>
       {pipelineSweep && (
-        <div class="adash-sweep">
+        <div class="dash-pad dash-sweep">
           <p>
-            <strong>{pipelineSweep.checked}</strong> manuscript(s) checked ·
-            <strong> {pipelineSweep.sent.length}</strong> reminder(s) sent ·
-            <strong> {pipelineSweep.flagged.length}</strong> flagged for reassignment
+            <b>{pipelineSweep.checked}</b> manuscripts checked, <b>{pipelineSweep.sent.length}</b> reminders sent,
+            <b> {pipelineSweep.flagged.length}</b> flagged for reassignment.
           </p>
           {pipelineSweep.sent.length > 0 && (
-            <ul class="adash-sweep__list">
-              {pipelineSweep.sent.map((s) => <li>{s.ref} - level {s.level} → {s.recipients.join(', ')}</li>)}
-            </ul>
+            <ul>{pipelineSweep.sent.map((s) => <li>{s.ref}: level {s.level} to {s.recipients.join(', ')}</li>)}</ul>
           )}
         </div>
       )}
@@ -418,209 +597,184 @@ const xLabelIdx =
 </AppLayout>
 
 <style>
-  /* Open Sans for just the dashboard's big headline - plain and legible,
-     not the site's Archivo (this dashboard already runs its own distinct
-     look from the rest of the admin area). @import must be the first thing
-     in the stylesheet. */
-  @import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@700;800&display=swap');
-
-  .adash {
-    --adash-blue: #2a78d6;
-    --adash-teal: #1baf7a;
-    --adash-amber: #eda100;
-    --adash-red: #a51c30;
-    --adash-green: #166534;
-    --adash-track: #e7eaf2;
-    --adash-ink: #12213f;
-    --adash-muted: #667085;
-    --adash-bg: #eef1f6;
-    --adash-surface: #ffffff;
-    --adash-border: #e2e6ef;
-    --adash-ok-bg: #e7f6ee;
-    --adash-err-bg: #fdecec;
-    background: var(--adash-bg);
-    border-radius: 20px;
-    padding: clamp(18px, 2vw, 30px);
+  .dash {
+    --d-r1: #7a1322;
+    --d-r2: #a51c30;
+    --d-r3: #d44450;
+    --d-r4: #e8959b;
+    --d-r5: #f4d2d4;
+    --d-ink: var(--text-strong, #161615);
+    --d-muted: var(--text-muted, #6b6b66);
+    --d-line: var(--border-soft, #e6e3de);
+    --d-soft: var(--bg-tint, #f5f3ef);
+    --d-card: var(--surface, #fff);
+    --d-ok: #166534;
+    --d-ok-bg: #e8f3ec;
+    --d-amber: #a8650a;
+    --d-head: 'Merriweather Sans', 'Open Sans', system-ui, sans-serif;
     display: grid;
     gap: 20px;
-    font-family: var(--font-sans);
+    max-width: 1320px;
+    margin: 0 auto;
+    color: var(--d-ink);
   }
-  :global(.app:has(.adash) .app__heading) { display: none; }
+  /* The dashboard runs wider than the other admin pages. */
+  :global(.app__shell:has(> .dash)) { max-width: 1400px; }
+  :global(:root[data-theme='dark']) .dash { --d-r5: #5a2a2e; --d-r4: #8a3c43; --d-ok: #4ade80; --d-ok-bg: rgba(74, 222, 128, 0.13); --d-amber: #eab659; }
+  .dash h1, .dash h2, .dash h3, .dash-stat__num, .dash-big, .dash-trend__sum b { font-family: var(--d-head); }
 
-  /* Dashboard runs its own light-UI palette (rounded cards, soft dashboard
-     colours) independent of the site's crimson/dark tokens, so it needs its
-     own dark step too. */
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme='light']) .adash {
-      --adash-track: #33353c;
-      --adash-ink: #f2f3f7;
-      --adash-muted: #9aa0ae;
-      --adash-bg: #101114;
-      --adash-surface: #1a1b20;
-      --adash-border: #2b2d34;
-      --adash-ok-bg: rgba(27, 175, 122, 0.16);
-      --adash-err-bg: rgba(165, 28, 48, 0.18);
-      --adash-green: #4ade80;
-      --adash-red: #ec7a6c;
-    }
-  }
-  :root[data-theme='dark'] .adash {
-    --adash-track: #33353c;
-    --adash-ink: #f2f3f7;
-    --adash-muted: #9aa0ae;
-    --adash-bg: #101114;
-    --adash-surface: #1a1b20;
-    --adash-border: #2b2d34;
-    --adash-ok-bg: rgba(27, 175, 122, 0.16);
-    --adash-err-bg: rgba(165, 28, 48, 0.18);
-    --adash-green: #4ade80;
-    --adash-red: #ec7a6c;
-  }
+  .dash-flash { padding: 12px 16px; font-size: 0.9rem; }
+  .dash-flash p { margin: 0; }
+  .dash-flash--ok { background: var(--ok-bg, #e8f3ec); color: var(--ok, #166534); }
+  .dash-flash--error { background: var(--red-wash, #fbeaea); color: var(--red, #b42318); }
 
-  .adash-flash { margin: 0; padding: 12px 16px; border-radius: 10px; font-size: 0.88rem; }
-  .adash-flash--ok { background: var(--adash-ok-bg); color: var(--adash-green); }
-  .adash-flash--error { background: var(--adash-err-bg); color: var(--adash-red); }
-  .adash-flash p { margin: 0; }
+  /* Header */
+  .dash-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  .dash-head h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.15; }
+  .dash-head p { margin: 4px 0 0; color: var(--d-muted); }
+  .dash-tools { display: flex; gap: 10px; flex-wrap: wrap; }
+  .dash-tools form { margin: 0; }
+  .dash-tools input, .dash-tools select, .dash-date {
+    height: 42px; padding: 0 14px; border: 1px solid var(--d-line); background: var(--d-card);
+    font: inherit; font-size: 14px; color: var(--d-ink); border-radius: 0;
+  }
+  .dash-tools input { width: 280px; }
+  .dash-tools input:focus, .dash-tools select:focus { outline: none; border-color: var(--d-r1); }
+  .dash-date { display: flex; align-items: center; gap: 8px; }
+  .dash-date b { font-weight: 600; }
+  .dash-date span { color: var(--d-muted); }
+  @media (max-width: 640px) { .dash-tools input { width: 100%; } .dash-tools, .dash-tools form:first-child { width: 100%; } }
 
-  /* ------------------------------------------------------------- header */
-  .adash-head {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-    align-items: flex-start;
-    justify-content: space-between;
-  }
-  .adash-head__intro { width: 100%; text-align: center; }
-  .adash-head__title {
-    margin: 0;
-    font-family: 'Open Sans', var(--font-sans);
-    font-size: clamp(1.4rem, 1rem + 1.6vw, 2.35rem);
-    line-height: 1.08;
-    font-weight: 800;
-    letter-spacing: -0.01em;
-    color: var(--adash-ink);
-    white-space: nowrap;
-  }
+  /* Cards */
+  .dash-card { background: var(--d-card); border: 1px solid var(--d-line); }
+  .dash-card h2 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.005em; }
+  .dash-card__head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 18px 22px 0; }
+  .dash-card__head small { font-size: 13px; color: var(--d-muted); }
+  .dash-pad { padding: 14px 22px 20px; }
+  .dash-empty { margin: 0; padding: 16px 22px 22px; color: var(--d-muted); font-size: 14px; }
 
-  .adash-head__tools { width: 100%; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 14px; }
-  .adash-search {
-    display: flex; align-items: center; gap: 8px;
-    background: var(--adash-surface); border: 1px solid var(--adash-border); border-radius: 12px;
-    padding: 10px 16px; color: var(--adash-muted); width: 100%; max-width: 360px;
-  }
-  .adash-search input { border: 0; outline: 0; font: inherit; color: var(--adash-ink); background: none; width: 100%; }
-  .adash-date {
-    display: flex; align-items: center; gap: 8px; color: var(--adash-muted);
-    background: var(--adash-surface); border: 1px solid var(--adash-border); border-radius: 12px; padding: 9px 16px;
-  }
-  .adash-date b { display: block; color: var(--adash-ink); font-size: 0.85rem; line-height: 1.3; }
-  .adash-date span { display: block; font-size: 0.76rem; }
-  .adash-scope select {
-    background: var(--adash-surface); border: 1px solid var(--adash-border); border-radius: 12px; padding: 10px 16px;
-    font: inherit; color: var(--adash-ink); cursor: pointer;
-  }
+  /* Stat cards */
+  .dash-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+  @media (max-width: 1100px) { .dash-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .dash-stats { grid-template-columns: 1fr; } }
+  .dash-stat { position: relative; display: grid; gap: 4px; align-content: start; padding: 18px 20px; }
+  .dash-stat::before { content: ''; position: absolute; inset: -1px -1px auto; height: 3px; background: var(--c); }
+  .dash-stat__label { font-size: 13.5px; font-weight: 600; color: var(--d-muted); }
+  .dash-stat__num { font-size: 40px; font-weight: 800; line-height: 1.05; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .dash-stat__ctx { font-size: 13px; color: var(--d-muted); }
+  .dash-stat__ctx b { color: var(--d-ok); font-weight: 600; }
+  .dash-spark { display: flex; align-items: flex-end; gap: 3px; height: 34px; margin-top: 10px; }
+  .dash-spark i { flex: 1; background: var(--d-r5); }
+  .dash-spark i.is-now { background: var(--d-r1); }
+  .dash-mix { display: flex; gap: 2px; height: 10px; margin-top: 12px; }
+  .dash-mix i { display: block; }
+  .dash-key, .dash-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; font-size: 12.5px; color: var(--d-muted); }
+  .dash-key span::before, .dash-legend span[style]::before { content: ''; display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: var(--k); }
+  .dash-tag { justify-self: start; display: inline-flex; align-items: center; gap: 7px; margin-top: 12px; padding: 5px 10px; font-size: 13px; font-weight: 600; text-decoration: none; }
+  .dash-tag::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .dash-tag--ok { background: var(--d-ok-bg); color: var(--d-ok); }
+  .dash-tag--warn { background: rgba(168, 101, 10, 0.12); color: var(--d-amber); }
+  .dash-meter { height: 10px; margin-top: 12px; background: var(--d-soft); }
+  .dash-meter i { display: block; height: 100%; background: var(--d-ink); }
 
-  /* --------------------------------------------------------- stat cards */
-  .adash-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-  .adash-stat {
-    background: var(--adash-surface); border-radius: 16px; padding: 20px 22px;
-    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
-    display: grid; gap: 4px; align-content: start;
-  }
-  .adash-stat__icon {
-    width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 6px;
-  }
-  .adash-stat__icon--blue { background: rgba(42, 120, 214, 0.12); color: var(--adash-blue); }
-  .adash-stat__icon--teal { background: rgba(27, 175, 122, 0.12); color: var(--adash-teal); }
-  .adash-stat__icon--amber { background: rgba(237, 161, 0, 0.14); color: var(--adash-amber); }
-  .adash-stat__icon--red { background: rgba(165, 28, 48, 0.1); color: var(--adash-red); }
-  .adash-stat__icon--green { background: rgba(22, 101, 52, 0.1); color: var(--adash-green); }
-  .adash-stat__n { font-size: 2.1rem; font-weight: 800; letter-spacing: -0.02em; color: var(--adash-ink); line-height: 1; }
-  .adash-stat__l { color: var(--adash-muted); font-size: 0.88rem; }
-  .adash-stat__track { height: 6px; border-radius: 999px; background: var(--adash-track); overflow: hidden; margin-top: 6px; }
-  .adash-stat__fill { display: block; height: 100%; border-radius: 999px; }
-  /* Deliberately not var(--adash-teal)/var(--adash-green) - those also color
-     the "+17 this month" / "All clear" success text elsewhere on this page,
-     which should stay green. These two bars are pure decoration, so they get
-     their own shades of red instead, matching the stage chart below. */
-  .adash-stat__fill--teal { background: #a51c30; }
-  .adash-stat__fill--green { background: #6b0f1a; }
-  .adash-stat__sub { font-size: 0.8rem; color: var(--adash-muted); margin-top: 2px; }
-  .adash-stat__sub--up { color: var(--adash-teal); font-weight: 600; }
-  .adash-stat__sub--warn { color: var(--adash-amber); font-weight: 600; }
-  .adash-stat__sub--danger { color: var(--adash-red); font-weight: 600; }
-  .adash-stat__sub--ok { color: var(--adash-teal); font-weight: 600; }
+  /* Overrides */
+  .dash-overrides { margin-top: -8px; }
+  .dash-overrides summary { display: inline-block; font-size: 13px; color: var(--d-muted); cursor: pointer; list-style: none; }
+  .dash-overrides summary::-webkit-details-marker { display: none; }
+  .dash-overrides summary:hover { color: var(--d-r1); text-decoration: underline; }
+  .dash-overrides__body { margin-top: 10px; padding: 14px 18px; background: var(--d-card); border: 1px solid var(--d-line); display: grid; gap: 10px; }
+  .dash-overrides__row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin: 0; }
+  .dash-overrides__row label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; }
+  .dash-overrides__row input { width: 140px; height: 36px; padding: 0 10px; border: 1px solid var(--d-line); background: var(--d-card); color: var(--d-ink); font: inherit; }
 
-  .adash-edit { margin-top: 6px; }
-  .adash-edit__toggle {
-    display: inline-block; cursor: pointer; list-style: none; font-size: 0.76rem;
-    font-weight: 600; color: var(--adash-muted); text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-  .adash-edit__toggle::-webkit-details-marker { display: none; }
-  .adash-edit__toggle:hover { color: var(--adash-ink); }
-  .adash-edit__form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
-  .adash-edit__form input[type='number'] {
-    width: 100px; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--adash-border);
-    background: var(--adash-bg); color: var(--adash-ink); font: inherit; font-size: 0.86rem;
-  }
-  .adash-edit__form .adash-btn { padding: 7px 12px; font-size: 0.78rem; }
+  .dash-btn { height: 36px; padding: 0 14px; border: 1px solid var(--d-r1); background: var(--d-r1); color: #fff; font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
+  .dash-btn--ghost { background: transparent; color: var(--d-ink); border-color: var(--d-line); }
+  .dash-btn:hover { filter: brightness(1.1); }
+  .dash-actions { display: flex; gap: 8px; }
+  .dash-actions form { margin: 0; }
 
-  /* -------------------------------------------------------------- cards */
-  .adash-grid2 { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; }
-  @media (max-width: 860px) { .adash-grid2 { grid-template-columns: 1fr; } }
-  .adash-card {
-    background: var(--adash-surface); border-radius: 16px; padding: 22px 24px;
-    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
-  }
-  .adash-card__title { margin: 0 0 16px; font-size: 1.05rem; font-weight: 700; color: var(--adash-ink); }
-  .adash-empty { color: var(--adash-muted); font-size: 0.9rem; margin: 0; }
+  /* Rows */
+  .dash-row { display: grid; gap: 20px; }
+  .dash-row--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dash-row--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .dash-row--wide { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+  @media (max-width: 1000px) { .dash-row--2, .dash-row--3, .dash-row--wide { grid-template-columns: 1fr; } }
 
-  .adash-bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
-  .adash-bar { display: grid; grid-template-columns: 110px 1fr 28px; align-items: center; gap: 10px; font-size: 0.86rem; }
-  .adash-bar__label { color: var(--adash-ink); }
-  .adash-bar__track { height: 9px; border-radius: 999px; background: var(--adash-track); overflow: hidden; }
-  .adash-bar__fill { display: block; height: 100%; border-radius: 999px; }
-  .adash-bar__n { text-align: right; font-variant-numeric: tabular-nums; color: var(--adash-muted); }
+  /* Submissions by stage */
+  .dash-stages { padding: 12px 22px 18px; display: grid; gap: 2px; }
+  .dash-st__row { display: grid; grid-template-columns: 110px 1fr 76px; gap: 14px; align-items: center; padding: 8px 0; list-style: none; }
+  details.dash-st > summary { cursor: pointer; }
+  details.dash-st > summary::-webkit-details-marker { display: none; }
+  details.dash-st > summary:hover .dash-st__name { color: var(--d-r1); }
+  details.dash-st[open] { background: var(--d-soft); margin: 0 -22px; padding: 0 22px; }
+  .dash-st__name { font-weight: 600; font-size: 14.5px; }
+  details.dash-st .dash-st__name::after { content: ' +'; color: var(--d-muted); font-weight: 400; }
+  details.dash-st[open] .dash-st__name::after { content: ' \2212'; }
+  .dash-st__track { height: 12px; background: var(--d-soft); }
+  details.dash-st[open] .dash-st__track { background: var(--d-card); }
+  .dash-st__track i { display: block; height: 100%; }
+  .dash-st__n { text-align: right; font-size: 14px; }
+  .dash-st__n b { font-family: var(--d-head); font-weight: 700; }
+  .dash-st__n span { color: var(--d-muted); font-size: 12.5px; margin-left: 5px; }
+  .dash-st__subs { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0 12px 124px; }
+  .dash-st__subs span { font-size: 12.5px; padding: 3px 9px; background: var(--d-card); border: 1px solid var(--d-line); }
+  .dash-st__subs b { font-weight: 700; margin-left: 5px; }
+  @media (max-width: 560px) { .dash-st__subs { padding-left: 0; } .dash-st__row { grid-template-columns: 90px 1fr 64px; } }
 
-  .adash-trend__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
-  .adash-trend__head select {
-    background: var(--adash-surface); border: 1px solid var(--adash-border); border-radius: 10px; padding: 7px 12px;
-    font: inherit; font-size: 0.84rem; color: var(--adash-ink); cursor: pointer;
-  }
+  /* Activity trend */
+  .dash-seg { display: inline-flex; border: 1px solid var(--d-line); }
+  .dash-seg a { padding: 5px 11px; font-size: 12.5px; font-weight: 600; color: var(--d-muted); text-decoration: none; }
+  .dash-seg a.is-on { background: var(--d-ink); color: var(--d-card); }
+  .dash-trend { padding: 6px 22px 18px; }
+  .dash-trend__sum { display: flex; gap: 28px; margin: 6px 0 16px; }
+  .dash-trend__sum div { display: grid; }
+  .dash-trend__sum b { font-size: 24px; font-weight: 800; line-height: 1.1; }
+  .dash-trend__sum span { font-size: 12.5px; color: var(--d-muted); }
+  .dash-bars { position: relative; height: 150px; display: flex; align-items: flex-end; gap: 2px; border-bottom: 1px solid var(--d-ink); padding-top: 20px; }
+  .dash-bars i { flex: 1; background: var(--d-r4); }
+  .dash-bars i.is-zero { background: var(--d-line); }
+  .dash-bars i.is-peak { background: var(--d-r1); }
+  .dash-bars i:hover { filter: brightness(0.85); }
+  .dash-bars__peak { position: absolute; top: 0; font-size: 12px; font-weight: 600; color: var(--d-r1); white-space: nowrap; }
+  .dash-axis { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11.5px; color: var(--d-muted); }
 
-  .adash-linechart { width: 100%; height: 200px; overflow: visible; }
-  .adash-linechart__grid { stroke: var(--adash-track); stroke-width: 1; }
-  .adash-linechart__ytick {
-    font-size: 9px; font-variant-numeric: tabular-nums; fill: var(--adash-muted);
-    text-anchor: end; dominant-baseline: middle;
-  }
-  .adash-linechart__xtick {
-    font-size: 9px; fill: var(--adash-muted); text-anchor: middle;
-  }
-  .adash-linechart__area { fill: color-mix(in srgb, var(--adash-red) 12%, transparent); stroke: none; }
-  .adash-linechart__line { fill: none; stroke: var(--adash-red); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
-  .adash-linechart__dot { fill: var(--adash-surface); stroke: var(--adash-red); stroke-width: 1.6; }
+  /* Small panels */
+  .dash-deadline { display: grid; gap: 4px; }
+  .dash-when { justify-self: start; padding: 3px 9px; background: var(--d-soft); font-size: 12.5px; font-weight: 700; }
+  .dash-when.is-today { background: var(--d-r1); color: #fff; }
+  .dash-deadline h3 { margin: 6px 0 0; font-size: 22px; font-weight: 800; }
+  .dash-split { display: flex; gap: 2px; height: 10px; margin: 12px 0 0; }
+  .dash-split i { display: block; }
+  .dash-big { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+  .dash-big small { font-family: 'Open Sans', sans-serif; font-size: 14px; font-weight: 400; letter-spacing: 0; color: var(--d-muted); margin-left: 6px; }
+  .dash-link { display: inline-block; margin-top: 12px; font-size: 13.5px; font-weight: 600; color: var(--d-r1); text-decoration: none; }
+  :global(:root[data-theme='dark']) .dash-link,
+  :global(:root[data-theme='dark']) .dash-bars__peak { color: #f08a7e; }
+  .dash-link:hover { text-decoration: underline; }
+  .dash-dl > div { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--d-line); font-size: 14px; }
+  .dash-dl > div:first-child { border-top: 0; padding-top: 0; }
+  .dash-dl b { font-family: var(--d-head); font-weight: 700; }
 
-  .adash-reminders__actions { display: flex; gap: 8px; }
-  .adash-btn {
-    padding: 9px 16px; border-radius: 10px; font: inherit; font-size: 0.84rem; font-weight: 600;
-    cursor: pointer; border: 1px solid var(--adash-border);
-  }
-  .adash-btn--ghost { background: var(--adash-surface); color: var(--adash-ink); }
-  .adash-btn--ghost:hover { border-color: var(--adash-muted); }
-  .adash-btn--primary { background: var(--adash-ink); color: var(--adash-bg); border-color: var(--adash-ink); }
-  .adash-btn--primary:hover { opacity: 0.85; }
-  .adash-sweep { font-size: 0.88rem; color: var(--adash-ink); }
-  .adash-sweep__list { margin: 10px 0 0; padding-left: 18px; display: grid; gap: 4px; color: var(--adash-muted); }
+  /* Recent activity */
+  .dash-feed { list-style: none; margin: 0; padding: 6px 22px 14px; }
+  .dash-feed li { display: grid; grid-template-columns: 72px 1fr; gap: 14px; padding: 11px 0; border-top: 1px solid var(--d-line); }
+  .dash-feed li:first-child { border-top: 0; }
+  .dash-feed time { font-size: 12.5px; color: var(--d-muted); padding-top: 1px; }
+  .dash-feed p { margin: 0; font-size: 14px; }
+  .dash-feed b { font-weight: 600; }
+  .dash-feed__move { font-size: 13px; color: var(--d-muted); }
+  .dash-feed__to { color: var(--d-ink); font-weight: 600; }
 
-  @media (max-width: 620px) {
-    .adash-head { flex-direction: column; }
-    .adash-head__tools { width: 100%; }
-    .adash-search { flex: 1 1 100%; max-width: none; }
-    /* "One line" holds down to tablet width - below that the phrase is
-       simply too long for any readable font size, so let it wrap back to
-       two lines rather than clipping off the edge of the card. */
-    .adash-head__title { white-space: normal; }
-  }
+  /* Leads + study types */
+  .dash-leads { list-style: none; margin: 0; padding: 8px 22px 4px; }
+  .dash-leads li { display: grid; grid-template-columns: 1fr 120px 28px; gap: 12px; align-items: center; padding: 7px 0; font-size: 14px; }
+  .dash-leads i { display: block; height: 8px; background: var(--d-r3); }
+  .dash-leads b { text-align: right; font-family: var(--d-head); font-weight: 700; }
+  .dash-types { padding: 6px 22px 20px; }
+  .dash-types h3 { margin: 8px 0 0; font-size: 14px; font-weight: 700; }
+
+  .dash-note { margin: 0; padding-top: 8px; font-size: 13.5px; color: var(--d-muted); }
+  .dash-sweep { padding-top: 0; font-size: 14px; }
+  .dash-sweep p { margin: 0; }
+  .dash-sweep ul { margin: 8px 0 0; padding-left: 18px; color: var(--d-muted); }
 </style>
