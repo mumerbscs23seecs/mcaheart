@@ -1,8 +1,9 @@
-/* New Idea form, MCA form pack look: one 720px column on the page's centre
-   line, plain numbered section headings, sentence-case bold labels, soft
-   rounded fields, native radio/checkbox rows that tint when chosen, and a
-   sticky section guide in the left margin when there's room. Scoped to
-   .iskin, so nothing else on the site changes. Accent is the site maroon. */
+/* The public forms' look (Submit an Idea, Join the Lab, Contact), from the
+   MCA form pack: one 720px column on the page's centre line, plain numbered
+   section headings, sentence-case bold labels, soft rounded fields, native
+   radio/checkbox rows that tint when chosen, and a sticky section guide in
+   the left margin when there's room (FormGuide.astro). Scoped to .iskin,
+   plus the shared centred hero at the bottom. Accent is the site maroon. */
 .iskin {
   --ink: #000;
   --soft: #faf6f6;
@@ -136,3 +137,67 @@
   .iskin .ifield__help { text-align: left; }
 }
 @media (prefers-reduced-motion: reduce) { .iskin *, .iskin-rail * { transition: none !important; } }
+
+/* ---------- Contact form (.cform): same look, its own class names ---------- */
+.iskin form.cform {
+  display: grid; gap: 24px; max-width: 720px; margin: 0 auto; padding: 0;
+  background: none; border: 0; border-radius: 0; font-size: 0.9375rem;
+}
+.iskin form.cform .cform__row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.iskin form.cform .field { display: grid; gap: 0; }
+.iskin form.cform .field__label {
+  margin: 0 0 8px; padding: 0; font-size: 0.9375rem; font-weight: 700;
+  letter-spacing: 0; text-transform: none; color: var(--ink);
+}
+.iskin form.cform .field__label span { color: var(--accent); }
+.iskin form.cform .field__help { margin: 0 0 12px; font-size: 0.875rem; line-height: 1.6; color: var(--ink); }
+.iskin form.cform .field__input {
+  width: 100%; box-sizing: border-box; padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: var(--r); background: var(--surface, #fff); color: var(--ink);
+  font-size: 0.9375rem; font-weight: 500; line-height: 1.5; outline: none; box-shadow: none;
+}
+.iskin form.cform .field__input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--tint); }
+.iskin form.cform textarea.field__input { min-height: 112px; resize: vertical; }
+.iskin form.cform .field__input::placeholder { color: var(--ink); opacity: 0.55; font-weight: 400; }
+.iskin form.cform .choices { display: grid; gap: 2px; }
+.iskin form.cform .choice {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  border: 0; border-radius: var(--r); background: none; font-size: 0.9375rem; font-weight: 500; color: var(--ink);
+}
+.iskin form.cform .choice:hover { background: var(--soft); }
+.iskin form.cform .choice:has(input:checked) { background: var(--tint); font-weight: 700; }
+.iskin form.cform .choice input {
+  position: static; opacity: 1; width: 18px; height: 18px; margin: 0; flex: none; clip: auto; overflow: visible; accent-color: var(--accent);
+}
+.iskin form.cform .choice__mark { display: none; }
+.iskin form.cform .choice__text { font-size: 0.9375rem; color: var(--ink); }
+.iskin form.cform .cform__foot { padding-top: 24px; border-top: 1px solid var(--line); }
+.iskin form.cform .cform__submit {
+  padding: 14px 28px; border: 1px solid var(--accent); border-radius: var(--r);
+  background: var(--accent); color: #fff; font-size: 1rem; font-weight: 700; letter-spacing: 0; text-transform: none;
+}
+.iskin form.cform .cform__small { color: var(--ink); }
+@media (max-width: 640px) { .iskin form.cform .cform__row { grid-template-columns: 1fr; } }
+
+/* ---------- a short paragraph above a form, on the same column ---------- */
+.iskin-intro {
+  max-width: 720px; margin: 0 auto; padding-top: 8px;
+  font-family: 'Merriweather Sans', system-ui, sans-serif; font-size: 1.0625rem; line-height: 1.75; color: var(--text-strong);
+  display: grid; gap: 12px;
+}
+.iskin-intro p { margin: 0; }
+.iskin-intro a { color: #7b1424; overflow-wrap: anywhere; }
+:root[data-theme='dark'] .iskin-intro a { color: #e2685a; }
+
+/* ---------- the shared centred hero on these pages ---------- */
+.phero.phero--center h1.phero__title,
+.phero.phero--center p.phero__sub { font-family: 'Merriweather Sans', system-ui, sans-serif; }
+.phero.phero--center h1.phero__title { font-weight: 700; letter-spacing: -0.02em; }
+.phero.phero--center p.phero__sub {
+  max-width: 880px; margin-inline: auto; font-size: 1.0625rem; line-height: 1.8;
+  text-align: justify; text-align-last: left; text-justify: inter-word; hyphens: manual; text-wrap: pretty;
+}
+@media (max-width: 520px) { .phero.phero--center p.phero__sub { text-align: left; } }
+/* Pure white behind the forms. */
+body:has(.iskin) { background-color: #fff; }
+:root[data-theme='dark'] body:has(.iskin) { background-color: var(--bg); }

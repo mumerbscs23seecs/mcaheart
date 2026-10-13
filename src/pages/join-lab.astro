@@ -11,49 +11,29 @@ import RecruitmentForm from '../components/RecruitmentForm.astro';
 >
   <PageHero
     title="Join the MCA Heart Research Lab"
+    align="center"
     subtitle="We publish 75+ manuscripts and present 150+ abstracts annually across interventional cardiology, heart failure, endovascular intervention, structural heart disease, and related areas of cardiovascular medicine. Join a structured, collaborative research environment with opportunities for mentorship, skill development, and involvement in high-quality cardiovascular research."
     image="/assets/brand/get-involved-bg.webp"
   />
 
-  <section class="section section--tight">
-    <div class="shell shell--narrow join-intro">
-      <p>
-        This form takes about <strong>10 minutes</strong>. After you submit, you'll get an email with the
-        outcome - accepted or not - usually within <strong>five days</strong>.
-      </p>
-      <p class="join-intro__note">
-        No response within three weeks? Follow up at
-        <a class="link-underline" href="mailto:researchlab@mcaheart.com">researchlab@mcaheart.com</a>.
-      </p>
-    </div>
-  </section>
-
   <section class="section section--tight" id="form">
-    <div class="shell shell--narrow">
+    <div class="shell shell--wide">
+      <div class="iskin-intro">
+        <p>
+          This form takes about <strong>10 minutes</strong>. After you submit, you will receive an email with
+          the outcome, usually within <strong>five days</strong>. No response within three weeks? Follow up at
+          <a href="mailto:researchlab@mcaheart.com">researchlab@mcaheart.com</a>.
+        </p>
+      </div>
       <RecruitmentForm />
     </div>
   </section>
 </BaseLayout>
 
-<style>
-  /* Match the Contact page's hero scale - the other two Get Involved
-     pages share its background now, so the heading should read at the
-     same size instead of PageHero's larger default (--step-5). */
-  :global(.phero h1.phero__title) { font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem); }
-  /* This page's subtitle is longer than Contact's/Submit an Idea's - the
-     shared .lede 42ch cap wrapped it into 6 short lines, pushing this
-     hero taller than the other two Get Involved pages and breaking the
-     shared bottom-border position. Wider cap, same full text, fewer lines. */
-  :global(.phero p.phero__sub) { max-width: 62ch; }
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather+Sans:wght@400;500;600;700&display=swap" />
 
-  .join-intro { display: grid; gap: var(--space-s); color: var(--text); line-height: 1.75; }
-  .join-intro strong { color: var(--text-strong); }
-  .join-intro__note {
-    padding: 0.9rem 1.1rem;
-    background: var(--accent-wash);
-    border-left: 2px solid var(--blue);
-    border-radius: 0 var(--radius) var(--radius) 0;
-    font-size: 0.9rem;
-  }
-  .join-intro__note a { color: var(--blue); overflow-wrap: anywhere; }
+<style>
+  /* Same hero scale as Submit an Idea and Contact; the centred, justified
+     text style comes from src/styles/form-skin.css. */
+  :global(.phero h1.phero__title) { font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem); }
 </style>

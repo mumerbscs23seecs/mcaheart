@@ -1,6 +1,7 @@
 ---
 import '../styles/form.css';
-import '../styles/idea-form-skin.css';
+import '../styles/form-skin.css';
+import FormGuide from './FormGuide.astro';
 import {
   RESEARCH_TYPES,
   DATABASES,
@@ -20,7 +21,7 @@ const { prefill } = Astro.props;
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather+Sans:wght@400;500;600;700&display=swap" />
 <div class="iskin">
-<form class="iform" action="/api/idea-submission" method="post" enctype="multipart/form-data" novalidate data-idea-form>
+<form class="iform" id="idea" action="/api/idea-submission" method="post" enctype="multipart/form-data" novalidate data-idea-form>
   {/* ---------------------------------------------------------- Investigator */}
   <fieldset class="iform__group">
     <legend class="iform__legend"><span>1</span> Lead investigator</legend>
@@ -279,6 +280,7 @@ const { prefill } = Astro.props;
   <div class="iform__status" role="status" aria-live="polite" data-status hidden></div>
 </form>
 </div>
+<FormGuide />
 
 
 <script>
@@ -302,39 +304,6 @@ const { prefill } = Astro.props;
     };
     form.querySelectorAll('[data-research-type]').forEach((r) => r.addEventListener('change', applyType));
     applyType();
-
-    /* --- Section guide in the left margin, built from the section headings --- */
-    const groups = [...form.querySelectorAll<HTMLElement>('.iform__group')];
-    const rail = document.createElement('nav');
-    rail.className = 'iskin-rail';
-    rail.setAttribute('aria-label', 'Form sections');
-    const list = document.createElement('ol');
-    const items = groups.map((g, i) => {
-      if (!g.id) g.id = `idea-sec-${i + 1}`;
-      const text = (g.querySelector('legend')?.textContent ?? `Section ${i + 1}`).replace(/^\s*\d+\s*/, '').trim();
-      const li = document.createElement('li');
-      const a = document.createElement('a');
-      a.href = `#${g.id}`;
-      const n = document.createElement('span');
-      n.className = 'n';
-      n.textContent = String(i + 1);
-      a.append(n, document.createTextNode(text));
-      li.append(a);
-      list.append(li);
-      return li;
-    });
-    rail.append(list);
-    form.prepend(rail);
-    let raf = 0;
-    const spy = () => {
-      raf = 0;
-      let cur = 0;
-      groups.forEach((g, i) => { if (g.getBoundingClientRect().top <= innerHeight * 0.35) cur = i; });
-      items.forEach((li, i) => { li.className = i < cur ? 'done' : i === cur ? 'on' : ''; });
-    };
-    addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(spy); }, { passive: true });
-    addEventListener('resize', spy);
-    spy();
 
     const clearErrors = () => {
       form.querySelectorAll<HTMLElement>('[data-err-for]').forEach((el) => { el.hidden = true; el.textContent = ''; });

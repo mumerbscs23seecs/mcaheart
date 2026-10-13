@@ -1,13 +1,9 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHero from '../components/PageHero.astro';
 import ContactForm from '../components/ContactForm.astro';
 import { contactIntents } from '../data/site';
 
-const marqueePhrases = [
-  'Advancing Cardiovascular Research',
-  'Educating the Next Generation',
-  'Improving Cardiovascular Care',
-];
 ---
 
 <BaseLayout
@@ -15,44 +11,22 @@ const marqueePhrases = [
   description="Join a community of experts shaping the future of cardiology. Publish, present and lead the way in cardiovascular research."
   transparentHeader
 >
-  {/* ------------------------------------------------------------------ Hero */}
-  <section class="chero grid-ground">
-    <div class="chero__bg" aria-hidden="true">
-      <img src="/assets/brand/get-involved-bg.webp" alt="" fetchpriority="high" decoding="async" />
-    </div>
-
-    <div class="shell shell--wide chero__inner">
-      <h1 class="display chero__title">Connect With <em>MCA Heart</em></h1>
-      <p class="lede chero__sub">
-        Have a question about the lab, a research idea, or a potential collaboration? Reach out to
-        our team.
-      </p>
-    </div>
-
-    <div class="marquee" aria-hidden="true">
-      <div class="marquee__track" data-velocity="0.5">
-        {Array.from({ length: 4 }).map(() =>
-          marqueePhrases.map((phrase) => (
-            <span class="marquee__item">
-              {phrase}
-              <span class="marquee__dot"></span>
-            </span>
-          )),
-        )}
-      </div>
-    </div>
-  </section>
+  <PageHero
+    title="Connect with MCA Heart"
+    align="center"
+    subtitle="Have a question about the lab, a research idea, or a potential collaboration? Reach out to our team and we will get back to you."
+    image="/assets/brand/get-involved-bg.webp"
+  />
 
   {/* --------------------------------------------------------------- Intents */}
-  <section class="section intents">
-    <div class="shell shell--wide intents__grid" data-stack>
+  <section class="section section--tight intents">
+    <div class="shell shell--wide intents__grid">
       {contactIntents.map((c, i) => (
-        <article class="intent" data-reveal style={`--reveal-delay:${i * 110}ms`}>
-          <span class="intent__icon" aria-hidden="true">{c.icon}</span>
+        <article class="intent">
           <h2 class="intent__title">{c.title}</h2>
           <p class="intent__body">{c.body}</p>
           <a class="intent__cta link-underline" href={c.href}>
-            {c.ctaLabel} <span aria-hidden="true">&rarr;</span>
+            {c.ctaLabel}
           </a>
         </article>
       ))}
@@ -60,161 +34,37 @@ const marqueePhrases = [
   </section>
 
   {/* ------------------------------------------------------------------ Form */}
-  <section class="section form-section" id="enquiry">
-    <div class="shell shell--narrow">
-      <header class="form-section__head" data-reveal>
-        <h2 class="display form-section__title">Send us a note</h2>
-      </header>
-
-      <div data-reveal style="--reveal-delay:100ms">
-        <ContactForm />
-      </div>
+  <section class="section section--tight form-section" id="enquiry">
+    <div class="shell shell--wide">
+      <h2 class="form-section__title">Send us a note</h2>
+      <ContactForm />
     </div>
   </section>
 </BaseLayout>
 
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather+Sans:wght@400;500;600;700&display=swap" />
+
 <style>
-  /* ------------------------------------------------------------------ Hero */
-  /* Same box model as PageHero's .phero (join-lab/submit-idea) - fixed
-     viewport-relative min-height instead of purely content-driven, so
-     the hero's bottom border lands at the same place on all 3 Get
-     Involved pages regardless of how much title/subtitle text each has. */
-  .chero {
-    position: relative;
-    isolation: isolate;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    min-height: clamp(46vh, 30vh + 22vw, 68vh);
-    padding-block: calc(var(--header-h) + var(--space-l)) var(--space-xl);
-    border-bottom: 2px solid var(--ink);
-    overflow: hidden;
-  }
-  .chero__bg { position: absolute; inset: 0; z-index: -1; }
-  .chero__bg img { width: 100%; height: 100%; object-fit: cover; object-position: 70% 40%; }
-  /* The supplied art is mid-grey with baked-in type, so it reads as a faint
-     texture behind the headline rather than a competing image. */
-  .chero__bg::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      to top,
-      color-mix(in srgb, var(--bg) 100%, transparent) 0%,
-      color-mix(in srgb, var(--bg) 92%, transparent) 45%,
-      color-mix(in srgb, var(--bg) 80%, transparent) 100%
-    );
-  }
-  .chero__inner { padding-bottom: var(--space-l); }
-  .chero__title {
-    margin-top: var(--space-s);
-    font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem);
-  }
-  .chero__title em { font-style: normal; color: var(--blue); }
-  .chero__sub { margin-top: var(--space-m); }
+  /* Same hero scale as Submit an Idea and Join the Lab; the centred,
+     justified text style comes from src/styles/form-skin.css. */
+  :global(.phero h1.phero__title) { font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem); }
 
-  /* Scrolling strip, echoing the original site's repeated headline */
-  .marquee {
-    border: 1px solid var(--border-soft);
-    background: var(--surface);
-    padding-block: var(--space-s);
-    overflow: hidden;
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-sm);
-    margin-inline: var(--gutter);
-  }
-  .marquee__track {
-    display: flex;
-    align-items: center;
-    width: max-content;
-    animation: slide 36s linear infinite;
-  }
-  .marquee__item {
-    display: inline-flex;
-    align-items: center;
-    font-family: var(--font-serif);
-    font-size: var(--step-2);
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: -0.005em;
-    color: var(--text-strong);
-    white-space: nowrap;
-  }
-  .marquee__dot {
-    width: 6px;
-    height: 6px;
-    margin-inline: 1.75rem;
-    border-radius: 50%;
-    background: var(--blue);
-    flex-shrink: 0;
-  }
-  @keyframes slide {
-    from { transform: translateX(0); }
-    to   { transform: translateX(-50%); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .marquee__track { animation: none; }
-  }
-
-  /* --------------------------------------------------------------- Intents */
-  /* Extra push so the tiles start below a typical viewport and their
-     scroll-reveal (data-reveal) actually plays, instead of resolving
-     instantly because they were already on-screen at load. */
-  .intents { margin-top: var(--space-xl); }
+  /* The two "where to start" cards, on the form's 720px centre column. */
   .intents__grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
-    gap: var(--space-m);
+    max-width: 720px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px;
+    font-family: 'Merriweather Sans', system-ui, sans-serif;
   }
-  .intent {
-    padding: var(--space-m);
-    background: var(--surface);
-    border: 1px solid var(--border-soft);
-    border-top: 2px solid var(--blue);
-    border-radius: var(--radius);
-  }
-  .intent__icon { font-size: 1.9rem; line-height: 1; }
-  .intent__title {
-    margin-top: var(--space-s);
-    font-size: var(--step-2);
-  }
-  .intent__body {
-    margin-top: var(--space-xs);
-    font-size: var(--step--1);
-    line-height: 1.7;
-    color: var(--text-muted);
-  }
-  .intent__body strong { color: var(--text-strong); }
-  .intent__cta {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4em;
-    margin-top: var(--space-s);
-    font-size: var(--step--1);
-    font-weight: 700;
-    color: var(--blue);
-  }
+  @media (max-width: 640px) { .intents__grid { grid-template-columns: 1fr; } }
+  .intent { padding: 22px 24px; background: var(--surface); border: 1px solid #eadfe0; border-radius: 14px; display: flex; flex-direction: column; }
+  :root[data-theme='dark'] .intent { border-color: var(--border-soft); }
+  .intent__title { margin: 0; font-family: inherit; font-size: 1.125rem; font-weight: 700; line-height: 1.3; color: var(--text-strong); }
+  .intent__body { margin: 8px 0 0; font-size: 0.9375rem; line-height: 1.6; color: var(--text-strong); }
+  .intent__cta { margin-top: auto; padding-top: 14px; font-size: 0.9375rem; font-weight: 700; color: #7b1424; }
+  :root[data-theme='dark'] .intent__cta { color: #e2685a; }
 
-  @media (max-width: 760px) {
-    /* The hero is already a full screen tall on a phone, so the tiles are
-       below the fold anyway - the extra push only added a blank band. */
-    .intents { margin-top: 0; }
-    .intents__grid { gap: var(--space-l); }
-    .intent { min-height: 46svh; display: flex; flex-direction: column; }
-    .intent__cta { margin-top: auto; }
-    .chero__inner { padding-bottom: var(--space-m); }
-    .marquee { padding-block: 0.8rem; }
-    .marquee__item { font-size: var(--step-1); }
-    .marquee__dot { margin-inline: 1.1rem; }
-    .intent__cta { min-height: 44px; align-self: flex-start; padding-top: var(--space-s); }
-    .intent__cta::after { bottom: 0.55rem; }
-    .intent__icon { font-size: 2.4rem; }
-    .intent__title { font-size: 1.75rem; }
-    .intent__body { font-size: 1rem; }
+  .form-section__title {
+    max-width: 720px; margin: 0 auto 24px;
+    font-family: 'Merriweather Sans', system-ui, sans-serif; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; color: var(--text-strong);
   }
-
-  /* ------------------------------------------------------------------ Form */
-  .form-section { padding-top: 0; }
-  .form-section__head { text-align: center; margin-bottom: var(--space-l); }
-  .form-section__title { font-size: var(--step-3); }
 </style>

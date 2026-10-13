@@ -1,0 +1,45 @@
+---
+// Numbered section guide in the left margin of a public form (.iskin .iform),
+// built from the form's own section headings; the current section is marked
+// as you scroll. Styles live in src/styles/form-skin.css.
+---
+
+<script is:inline>
+  (() => {
+    document.querySelectorAll('.iskin .iform').forEach((form) => {
+      if (form.querySelector('.iskin-rail')) return;
+      const groups = [...form.querySelectorAll('.iform__group')];
+      if (groups.length < 2) return;
+      const rail = document.createElement('nav');
+      rail.className = 'iskin-rail';
+      rail.setAttribute('aria-label', 'Form sections');
+      const list = document.createElement('ol');
+      const items = groups.map((g, i) => {
+        if (!g.id) g.id = `${form.id || 'form'}-sec-${i + 1}`;
+        const text = (g.querySelector('legend')?.textContent ?? `Section ${i + 1}`).replace(/^\s*\d+\s*/, '').trim();
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = `#${g.id}`;
+        const n = document.createElement('span');
+        n.className = 'n';
+        n.textContent = String(i + 1);
+        a.append(n, document.createTextNode(text));
+        li.append(a);
+        list.append(li);
+        return li;
+      });
+      rail.append(list);
+      form.prepend(rail);
+      let raf = 0;
+      const spy = () => {
+        raf = 0;
+        let cur = 0;
+        groups.forEach((g, i) => { if (g.getBoundingClientRect().top <= innerHeight * 0.35) cur = i; });
+        items.forEach((li, i) => { li.className = i < cur ? 'done' : i === cur ? 'on' : ''; });
+      };
+      addEventListener('scroll', () => { if (!raf) raf = requestAnimationFrame(spy); }, { passive: true });
+      addEventListener('resize', spy);
+      spy();
+    });
+  })();
+</script>

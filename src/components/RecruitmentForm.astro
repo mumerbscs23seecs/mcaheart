@@ -1,11 +1,15 @@
 ---
 import '../styles/form.css';
+import '../styles/form-skin.css';
+import FormGuide from './FormGuide.astro';
 import { JOB_STATUSES, EXPERTISE, UPLOADS } from '../lib/recruitment-schema';
 
 const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
 ---
 
-<form class="iform" action="/api/recruitment" method="post" enctype="multipart/form-data" novalidate data-recruit-form>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather+Sans:wght@400;500;600;700&display=swap" />
+<div class="iskin">
+<form class="iform" id="join" action="/api/recruitment" method="post" enctype="multipart/form-data" novalidate data-recruit-form>
   {/* ---------------------------------------------------------------- About */}
   <fieldset class="iform__group">
     <legend class="iform__legend"><span>1</span> About you</legend>
@@ -228,6 +232,8 @@ const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
 
   <div class="iform__status" role="status" aria-live="polite" data-status hidden></div>
 </form>
+</div>
+<FormGuide />
 
 <script>
   const form = document.querySelector<HTMLFormElement>('[data-recruit-form]');

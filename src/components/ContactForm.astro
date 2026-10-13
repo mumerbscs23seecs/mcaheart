@@ -1,10 +1,13 @@
 ---
 import { INTENT_LABELS, VISA_OPTIONS, OBS_CV } from '../lib/contact-schema';
+import '../styles/form-skin.css';
 
 const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
 const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, string][];
 ---
 
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather+Sans:wght@400;500;600;700&display=swap" />
+<div class="iskin">
 <form
   class="cform"
   action="/api/contact"
@@ -217,6 +220,7 @@ const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, st
 
   <p class="cform__status" role="status" aria-live="polite" data-status hidden></p>
 </form>
+</div>
 
 <style>
   .cform {

@@ -30,15 +30,4 @@ import IdeaForm from '../components/IdeaForm.astro';
      pages share its background now, so the heading should read at the
      same size instead of PageHero's larger default (--step-5). */
   :global(.phero h1.phero__title) { font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem); }
-  /* The hero text reads as one justified paragraph on the form's centre line. */
-  :global(.phero.phero--center p.phero__sub) {
-    max-width: 880px; margin-inline: auto;
-    font-family: 'Merriweather Sans', system-ui, sans-serif; font-size: 1.0625rem; line-height: 1.8;
-    text-align: justify; text-align-last: left; text-justify: inter-word; hyphens: manual; text-wrap: pretty;
-  }
-  :global(.phero.phero--center h1.phero__title) { font-family: 'Merriweather Sans', system-ui, sans-serif; font-weight: 700; letter-spacing: -0.02em; }
-  @media (max-width: 520px) { :global(.phero.phero--center p.phero__sub) { text-align: left; } }
-  /* Pure white behind the form. */
-  :global(body:has(.idea-page)) { background-color: #fff; }
-  :global(:root[data-theme='dark'] body:has(.idea-page)) { background-color: var(--bg); }
 </style>
