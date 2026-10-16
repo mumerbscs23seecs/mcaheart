@@ -1,5 +1,5 @@
 /* MCA Research Pipeline - journal-submission-portal look (Editorial-Manager
-   style): Open Sans throughout, like every internal page and email,
+   style): Merriweather Sans throughout, like every internal page and email,
    submissions in a real table with an inline status control, blue titles /
    links and red "Actions". This palette + type is scoped to the pipeline
    area only - the marketing site keeps its Archivo / crimson system.
@@ -21,9 +21,9 @@
 
   /* Pipeline runs its own type. Overriding these here re-skins the whole
      pipeline area (app bar, tabs, detail pages) without touching the site. */
-  --pl-serif: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-sans: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-display: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --pl-serif: 'Merriweather Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: 'Merriweather Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-display: 'Merriweather Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-serif: var(--pl-serif);
 }
 

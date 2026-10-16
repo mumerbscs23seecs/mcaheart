@@ -21,6 +21,7 @@ export type NavItem = { label: string; href?: string; children?: NavLink[] };
 export const nav: NavItem[] = [
   { label: 'Research', href: '/research-group' },
   { label: 'Education', href: '/education' },
+  { label: 'Our Team', href: '/our-team' },
   {
     label: 'Get Involved',
     href: '/submit-idea',
@@ -40,7 +41,8 @@ export const director = {
   credentialsFull: 'MD MPH FACC FSCAI',
   /** Full title list - homepage only (research-group.astro shows just name + credentials). */
   roles: [
-    'Head and Principal Investigator, MCA Heart Research Lab',
+    'Founder and Head, MCA Heart',
+    'Principal Investigator, MCA Heart Research Lab',
     'Clinical Associate Professor of Medicine, Wayne State University',
     'Associate Program Director, Interventional Cardiology Fellowship, Detroit Medical Center',
     'Clinical Assistant Professor of Medicine, Michigan State University College of Osteopathic Medicine',
@@ -544,7 +546,7 @@ export const footerLinks = {
   ],
   other: [
     { label: 'About Us', href: '/research-group#about' },
-    { label: 'Our Team', href: '/research-group#voices' },
+    { label: 'Our Team', href: '/our-team' },
     { label: 'Networking', href: '/research-group#why-us' },
   ],
   legal: [
@@ -552,3 +554,32 @@ export const footerLinks = {
     { label: 'Terms & Conditions', href: '/terms' },
   ],
 } as const;
+
+/** The lab's core team on the Our Team page (Dr. Alraies has his own section
+ *  above them). Each card shows the photo, name and title; `details` appear
+ *  when the card is opened. No photo yet = initials. */
+export type TeamMember = { name: string; title: string; details: string[]; email?: string; photo?: string };
+const DMC_DEPT = 'Department of Interventional Cardiology, Detroit Medical Center Harper University Hospital';
+export const team: TeamMember[] = [
+  {
+    name: 'Jawad Basit',
+    title: 'Lead Research Fellow',
+    details: ['MCA Heart Research Lab', DMC_DEPT],
+    email: 'jawad.basit@mcaheart.com',
+    photo: '/assets/team/jawad-basit-sq.jpg',
+  },
+  {
+    name: 'Muhammad Burhan',
+    title: 'Research Fellow',
+    details: ['MCA Heart Research Lab', DMC_DEPT],
+    email: 'muhammad.burhan@mcaheart.com',
+    photo: '/assets/team/muhammad-burhan.jpg',
+  },
+  {
+    name: 'Alisia Dushaj',
+    title: 'Administrator',
+    details: ['MCA Heart Research Lab'],
+    email: 'alisia.dushaj@mcaheart.com',
+    photo: '/assets/team/alisia-dushaj.jpg',
+  },
+];

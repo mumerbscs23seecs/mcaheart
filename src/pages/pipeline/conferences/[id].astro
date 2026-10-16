@@ -9,6 +9,7 @@ import CalmActions from '../../../components/calm/CalmActions.astro';
 import CalmStatus from '../../../components/calm/CalmStatus.astro';
 import CalmDock from '../../../components/calm/CalmDock.astro';
 import { drawerInfo, stageColor, outcomeColor } from '../../../lib/calm';
+import { loadOverrides, applyOverrides, saveOverrides } from '../../../lib/conference-stats';
 
 export const prerender = false;
 const { supabase, person } = Astro.locals;
@@ -22,6 +23,23 @@ if (!conf) return Astro.redirect('/pipeline/conferences', 302);
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
+  if (String(form.get('action') ?? '') === 'set-stats') {
+    // Blank = use the live count again.
+    const num = (k: string) => {
+      const v = String(form.get(k) ?? '').trim();
+      if (!v) return null;
+      const n = Math.round(Number(v));
+      return Number.isFinite(n) && n >= 0 ? n : null;
+    };
+    const reset = form.get('reset') === '1';
+    const err = await saveOverrides(id!, reset
+      ? { submitted: null, accepted: null, rejected: null }
+      : { submitted: num('submitted'), accepted: num('accepted'), rejected: num('rejected') });
+    const msg = err
+      ? `err=${encodeURIComponent(err.includes('override') ? 'Run mca-pipeline/add-conference-stat-overrides.sql in Supabase first.' : err)}`
+      : `ok=${encodeURIComponent(reset ? 'Numbers back to the live counts.' : 'Numbers updated.')}`;
+    return Astro.redirect(`/pipeline/conferences/${id}?${msg}`);
+  }
   if (String(form.get('action') ?? '') === 'set-type') {
     const projectId = String(form.get('project_id') ?? '');
     const studyType = String(form.get('study_type') ?? '');
@@ -97,7 +115,10 @@ const fmtDate = (d: string | null) => {
   const dt = new Date(d);
   return `${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}-${dt.getFullYear()}`;
 };
-const s = score ?? { submitted: 0, accepted: 0, rejected: 0, accept_pct: null };
+// Hand-entered numbers (if any) replace the live counts.
+const { ready: overridesReady, byId: overrides } = await loadOverrides();
+const ov = overrides.get(id!);
+const s = applyOverrides(score, ov);
 const pending = Math.max(0, (s.submitted ?? 0) - (s.accepted ?? 0) - (s.rejected ?? 0));
 const cap = (x: string | null) => (x ? x[0].toUpperCase() + x.slice(1) : 'Pending');
 
@@ -134,6 +155,24 @@ const chips = Object.entries(KEY_LABEL).map(([key, label]) => ({
         <div><b class="is-bad">{s.rejected}</b><span>Rejected</span></div>
         <div><b>{s.accept_pct != null ? `${s.accept_pct}%` : '-'}</b><span>Acceptance</span></div>
       </div>
+      <details class="cf-edit">
+        <summary>{s.edited ? 'Edited numbers · Edit' : 'Edit'}</summary>
+        {overridesReady ? (
+          <form method="post" class="cf-edit__form">
+            <input type="hidden" name="action" value="set-stats" />
+            <label>Submitted<input type="number" name="submitted" min="0" step="1" value={ov?.submitted ?? ''} placeholder={String(score?.submitted ?? 0)} /></label>
+            <label>Accepted<input type="number" name="accepted" min="0" step="1" value={ov?.accepted ?? ''} placeholder={String(score?.accepted ?? 0)} /></label>
+            <label>Rejected<input type="number" name="rejected" min="0" step="1" value={ov?.rejected ?? ''} placeholder={String(score?.rejected ?? 0)} /></label>
+            <div class="cf-edit__btns">
+              <button type="submit">Save</button>
+              {s.edited && <button type="submit" name="reset" value="1" formnovalidate class="is-ghost">Use live counts</button>}
+            </div>
+            <p class="cf-edit__hint">Leave a box empty to use the live count (shown faintly). Acceptance is worked out from these numbers.</p>
+          </form>
+        ) : (
+          <p class="cf-edit__hint">To edit these numbers, run <code>mca-pipeline/add-conference-stat-overrides.sql</code> in Supabase once.</p>
+        )}
+      </details>
       {s.submitted > 0 && (
         <>
           <div class="cf-bar" role="img" aria-label={`${s.accepted} accepted, ${s.rejected} rejected, ${pending} pending out of ${s.submitted}`}>
@@ -197,7 +236,7 @@ const chips = Object.entries(KEY_LABEL).map(([key, label]) => ({
         {rows.map(({ attempt: a, p }: any) => (
           <tr data-cv-row data-cv-info={drawerInfo(p)} data-cv-f={keyFor(a, p)} data-cv-text={`${p.full_title ?? ''} ${p.title ?? ''} ${p.ref ?? ''}`}>
             <td class="t">
-              <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.full_title || p.title}</a>
+              <a href={`/pipeline/projects/${p.id}?from=/pipeline/conferences/${id}`} data-panel={p.id}>{p.full_title || p.title}</a>
               {p.full_title && p.title && <div class="cv-sub">{p.title}</div>}
             </td>
             <td class="cv-hide-sm">
@@ -231,7 +270,7 @@ const chips = Object.entries(KEY_LABEL).map(([key, label]) => ({
             <td class="x">
               <CalmActions actions={[
                 { icon: 'email', label: 'Email', href: `/pipeline/projects/${p.id}/email?from=/pipeline/conferences/${id}` },
-                { icon: 'progress', label: 'Check progress', href: `/pipeline/projects/${p.id}` },
+                { icon: 'progress', label: 'Check progress', href: `/pipeline/projects/${p.id}?from=/pipeline/conferences/${id}` },
               ]} />
             </td>
           </tr>
@@ -248,6 +287,19 @@ const chips = Object.entries(KEY_LABEL).map(([key, label]) => ({
   .cf-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 20px 40px; margin-bottom: 18px; }
   .cf-head__main { min-width: 0; }
   .cf-stats { flex: 0 1 420px; }
+  /* A quiet grey "Edit" for hand-entered numbers. */
+  .cf-edit { margin-top: 10px; }
+  .cf-edit > summary { display: inline-block; list-style: none; cursor: pointer; font-size: 0.8rem; color: var(--text-muted); opacity: 0.75; }
+  .cf-edit > summary::-webkit-details-marker { display: none; }
+  .cf-edit > summary:hover { opacity: 1; text-decoration: underline; text-underline-offset: 3px; }
+  .cf-edit__form { margin-top: 10px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .cf-edit__form label { display: grid; gap: 4px; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); }
+  .cf-edit__form input { width: 100%; padding: 8px 10px; border: 1px solid var(--cv-line, #dfe5ec); border-radius: 8px; background: var(--cv-bg, #fff); color: var(--text-strong); font: inherit; font-size: 0.9rem; }
+  .cf-edit__form input::placeholder { color: var(--text-muted); opacity: 0.6; }
+  .cf-edit__btns { grid-column: 1 / -1; display: flex; gap: 8px; }
+  .cf-edit__btns button { padding: 7px 14px; border: 1px solid var(--cv-line, #dfe5ec); border-radius: 8px; background: var(--cv-bg, #fff); color: var(--text-strong); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+  .cf-edit__btns button:hover { border-color: var(--cv-accent, #1f4e79); color: var(--cv-accent, #1f4e79); }
+  .cf-edit__hint { grid-column: 1 / -1; margin: 0; font-size: 0.78rem; color: var(--text-muted); }
   .cf-stats__nums { display: flex; gap: clamp(18px, 3vw, 34px); }
   .cf-stats__nums b {
     display: block; font-family: var(--font-display, sans-serif); font-weight: 800;

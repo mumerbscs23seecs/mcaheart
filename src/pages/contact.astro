@@ -2,7 +2,6 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PageHero from '../components/PageHero.astro';
 import ContactForm from '../components/ContactForm.astro';
-import { contactIntents } from '../data/site';
 
 ---
 
@@ -14,24 +13,9 @@ import { contactIntents } from '../data/site';
   <PageHero
     title="Connect with MCA Heart"
     align="center"
+    simple
     subtitle="Have a question about the lab, a research idea, or a potential collaboration? Reach out to our team and we will get back to you."
-    image="/assets/brand/get-involved-bg.webp"
   />
-
-  {/* --------------------------------------------------------------- Intents */}
-  <section class="section section--tight intents">
-    <div class="shell shell--wide intents__grid">
-      {contactIntents.map((c, i) => (
-        <article class="intent">
-          <h2 class="intent__title">{c.title}</h2>
-          <p class="intent__body">{c.body}</p>
-          <a class="intent__cta link-underline" href={c.href}>
-            {c.ctaLabel}
-          </a>
-        </article>
-      ))}
-    </div>
-  </section>
 
   {/* ------------------------------------------------------------------ Form */}
   <section class="section section--tight form-section" id="enquiry">
@@ -47,21 +31,6 @@ import { contactIntents } from '../data/site';
 <style>
   /* Same hero scale as Submit an Idea and Join the Lab; the centred,
      justified text style comes from src/styles/form-skin.css. */
-  :global(.phero h1.phero__title) { font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem); }
-
-  /* The two "where to start" cards, on the form's 720px centre column. */
-  .intents__grid {
-    max-width: 720px; margin: 0 auto;
-    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px;
-    font-family: 'Merriweather Sans', system-ui, sans-serif;
-  }
-  @media (max-width: 640px) { .intents__grid { grid-template-columns: 1fr; } }
-  .intent { padding: 22px 24px; background: var(--surface); border: 1px solid #eadfe0; border-radius: 14px; display: flex; flex-direction: column; }
-  :root[data-theme='dark'] .intent { border-color: var(--border-soft); }
-  .intent__title { margin: 0; font-family: inherit; font-size: 1.125rem; font-weight: 700; line-height: 1.3; color: var(--text-strong); }
-  .intent__body { margin: 8px 0 0; font-size: 0.9375rem; line-height: 1.6; color: var(--text-strong); }
-  .intent__cta { margin-top: auto; padding-top: 14px; font-size: 0.9375rem; font-weight: 700; color: #7b1424; }
-  :root[data-theme='dark'] .intent__cta { color: #e2685a; }
 
   .form-section__title {
     max-width: 720px; margin: 0 auto 24px;

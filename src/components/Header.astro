@@ -478,14 +478,13 @@ const moreActive = involved.some((c) => matches(c.href)) || matches('/login');
     white-space: nowrap;
     background: transparent;
     color: var(--text-strong);
-    border: 1px solid color-mix(in srgb, var(--text-strong) 50%, transparent);
+    border: 0;
     border-radius: 999px;
-    transition: background 0.2s var(--ease), border-color 0.2s var(--ease);
+    transition: background 0.2s var(--ease);
   }
   .authbar__logout-btn:hover,
   .authbar__logout-btn:focus-visible {
     background: color-mix(in srgb, var(--text-strong) 8%, transparent);
-    border-color: var(--text-strong);
   }
 
   /* --- Auth block (mobile drawer) --- */

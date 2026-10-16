@@ -103,8 +103,26 @@ const phaseTab =
       ? 'ongoing'
       : 'conferences';
 const activeTab = phaseTab;
-const backHref = `/pipeline/${phaseTab}`;
-const backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
+// Back link: to the page the paper was opened from when that page says so
+// (?from=, only ever a workflow path - e.g. a conference's own page), otherwise
+// to the list for the paper's current phase.
+const from = Astro.url.searchParams.get('from') ?? '';
+const fromOk = /^\/pipeline\/[a-z0-9/_-]*$/i.test(from);
+let backHref = `/pipeline/${phaseTab}`;
+let backLabel = phaseTab[0].toUpperCase() + phaseTab.slice(1);
+if (fromOk) {
+  backHref = from;
+  const confId = from.match(/^\/pipeline\/conferences\/([0-9a-f-]{36})$/i)?.[1];
+  if (confId) {
+    const { data: fromConf } = await supabase.from('conferences').select('name').eq('id', confId).maybeSingle();
+    backLabel = fromConf?.name ?? 'Conference';
+  } else {
+    const seg = from.split('/')[2] ?? '';
+    backLabel = seg ? seg[0].toUpperCase() + seg.slice(1) : backLabel;
+  }
+}
+// After an action, come back to this page still remembering where it was opened from.
+const returnHere = fromOk ? `/pipeline/projects/${id}?from=${encodeURIComponent(from)}` : '';
 
 const lastHistory = (history ?? [])[0];
 
@@ -605,6 +623,19 @@ const peopleRows2: { label: string; name: string | null }[] = [
   </div>
   </div>
 </PipelineLayout>
+
+<script is:inline define:vars={{ returnHere }}>
+  // Actions on this page come back here with the same "opened from" page, so
+  // the back link still leads to e.g. the conference the paper was opened from.
+  if (returnHere) {
+    document.querySelectorAll('form[action$="/gate"]').forEach((f) => {
+      if (f.querySelector('input[name="return"]')) return;
+      const i = document.createElement('input');
+      i.type = 'hidden'; i.name = 'return'; i.value = returnHere;
+      f.append(i);
+    });
+  }
+</script>
 
 <script is:inline>
   // Journal-name box appears only when the journal-phase stage is "Submitted".

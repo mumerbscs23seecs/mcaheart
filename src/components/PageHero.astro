@@ -14,14 +14,17 @@ interface Props {
   /** Show the supplied image exactly as given - no crop (object-fit: contain
    *  instead of cover) and no fade/tint overlay on top of it. */
   imageRaw?: boolean;
+  /** Plain heading on white: no image, no rule underneath, one fixed height
+   *  (the Get Involved pages all use it, so they line up page to page). */
+  simple?: boolean;
 }
 const {
-  eyebrow, title, subtitle, image, align = 'left', compact = false, hideTitle = false, imageRaw = false,
+  eyebrow, title, subtitle, image, align = 'left', compact = false, hideTitle = false, imageRaw = false, simple = false,
 } = Astro.props;
 ---
 
-<section class:list={['phero', align === 'center' && 'phero--center', compact && 'phero--compact']}>
-  {image && (
+<section class:list={['phero', align === 'center' && 'phero--center', compact && 'phero--compact', simple && 'phero--simple']}>
+  {image && !simple && (
     <div class:list={['phero__bg', imageRaw && 'phero__bg--raw']} aria-hidden="true">
       <img src={image} alt="" fetchpriority="high" decoding="async" />
     </div>
@@ -89,4 +92,29 @@ const {
     max-width: none;
   }
   .phero--compact .phero__sub { margin-top: var(--space-xs); }
+
+  /* --- Simple variant: a plain heading, the same size on every page that
+     uses it. The title sits on one line at a fixed spot and the block has
+     one fixed height, so the content below starts at the same place. --- */
+  .phero--simple {
+    align-items: flex-start;
+    min-height: 0;
+    height: clamp(300px, 22vw + 120px, 400px);
+    padding-block: calc(var(--header-h) + var(--space-l)) var(--space-m);
+    border-bottom: 0;
+    background: transparent; /* same white as the page, no visible band */
+  }
+  .phero--simple .phero__title {
+    margin-top: 0;
+    max-width: none;
+    font-size: clamp(1.9rem, 1rem + 3vw, 3.4rem);
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+  @media (max-width: 760px) {
+    .phero--simple { height: auto; min-height: 0; padding-bottom: var(--space-s); }
+    /* Long titles wrap on phones; every title keeps two lines' room so the
+       pages still line up with each other. */
+    .phero--simple .phero__title { white-space: normal; min-height: 2.2em; display: flex; align-items: center; justify-content: center; }
+  }
 </style>

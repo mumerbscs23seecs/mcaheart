@@ -29,6 +29,13 @@
         return li;
       });
       rail.append(list);
+      // Span exactly the form's own rows. A fixed large span left dozens of
+      // empty rows, each still adding the form's row gap below the last button.
+      const rows = [...form.children].filter((el) => {
+        const cs = getComputedStyle(el);
+        return cs.display !== 'none' && cs.position !== 'absolute' && cs.position !== 'fixed';
+      }).length;
+      rail.style.gridRow = `1 / span ${rows}`;
       form.prepend(rail);
       let raf = 0;
       const spy = () => {

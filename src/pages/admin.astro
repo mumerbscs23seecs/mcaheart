@@ -5,6 +5,7 @@ import { getPipelineSession } from '../lib/pipeline-auth';
 import { sweepPipelineReminders, type PipelineSweepResult } from '../lib/pipeline-reminders';
 import { getOverride, setOverride, clearOverride, STAT_KEYS, type StatKey } from '../lib/dashboard-overrides';
 import { stagesFor, stageOf } from '../lib/lifecycle.mjs';
+import { loadOverrides, applyOverrides } from '../lib/conference-stats';
 
 export const prerender = false;
 
@@ -209,7 +210,13 @@ if (supabase) {
   }
 
   // Latest conference that has decisions back.
-  const score = new Map((scoreRes.data ?? []).map((s: any) => [s.name, s]));
+  const { byId: statOverrides } = await loadOverrides();
+  const score = new Map(
+    (scoreRes.data ?? []).map((s: any) => {
+      const c = conferences.find((x: any) => x.name === s.name);
+      return [s.name, { ...s, ...applyOverrides(s, c ? statOverrides.get(c.id) : undefined) }];
+    }),
+  );
   const decided = [...conferences]
     .reverse()
     .find((c: any) => { const s: any = score.get(c.name); return s && (s.accepted ?? 0) + (s.rejected ?? 0) > 0 && (s.rejected ?? 0) > 0; })
@@ -746,7 +753,7 @@ const STAT_EDIT = { total: totalDisplay, active: activeDisplay, published: publi
   .dash-split { display: flex; gap: 2px; height: 10px; margin: 12px 0 0; }
   .dash-split i { display: block; }
   .dash-big { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
-  .dash-big small { font-family: 'Open Sans', sans-serif; font-size: 14px; font-weight: 400; letter-spacing: 0; color: var(--d-muted); margin-left: 6px; }
+  .dash-big small { font-family: inherit; font-size: 14px; font-weight: 400; letter-spacing: 0; color: var(--d-muted); margin-left: 6px; }
   .dash-link { display: inline-block; margin-top: 12px; font-size: 13.5px; font-weight: 600; color: var(--d-r1); text-decoration: none; }
   :global(:root[data-theme='dark']) .dash-link,
   :global(:root[data-theme='dark']) .dash-bars__peak { color: #f08a7e; }

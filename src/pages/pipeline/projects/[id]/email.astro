@@ -3,6 +3,8 @@
 // Status changes no longer send anything on their own - this is where emails
 // about a paper get written and sent, by choice.
 import PipelineLayout from '../../../../layouts/PipelineLayout.astro';
+import { stagesFor } from '../../../../lib/lifecycle.mjs';
+import '../../../../styles/calm.css';
 import EmailChips from '../../../../components/EmailChips.astro';
 import { EMAIL_TEMPLATES } from '../../../../lib/email-templates';
 import { renderComposedEmail, stageUpdateText } from '../../../../lib/pipeline-mailer';
@@ -93,10 +95,12 @@ const values = {
   notes: '',
 };
 
+// The current wording for this stage (the stored label can be an older one, e.g. "1/4").
+const currentLabel: string = stagesFor(p.phase).find((x: any) => x.code === p.stage)?.label ?? p.stage_label;
 const status = stageUpdateText({
   phase: p.phase,
   stage: p.stage,
-  stageLabel: p.stage_label,
+  stageLabel: currentLabel,
   projectTitle: '{{paper}}',
   venue: venue ? '{{journal}}' : null,
   sender: '{{sender}}',
@@ -104,7 +108,7 @@ const status = stageUpdateText({
 const templates = [
   {
     category: 'Status update',
-    title: `Current status: ${p.stage_label}`,
+    title: `Current status: ${currentLabel}`,
     description: "Formal wording for this paper's current status.",
     subject: status.subject,
     body: status.body,
@@ -114,8 +118,9 @@ const templates = [
 ---
 
 <PipelineLayout title={`Email · ${p.title}`} active={p.phase === 'journal' ? 'submissions' : p.phase === 'manuscript' ? 'ongoing' : 'conferences'}>
-  <div class="em">
-    <p class="pl-crumb"><a class="pl-link" href={back}>&larr; Back</a></p>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather+Sans:wght@400;500;600;700&display=swap" />
+  <div class="cv em">
+    <a class="em__back" href={back}>Back</a>
     <h1 class="em__title">{title}</h1>
     {p.full_title && <p class="em__short">{p.title}</p>}
 
@@ -170,32 +175,47 @@ const templates = [
 </PipelineLayout>
 
 <style is:global>
-  .em .pl-btn, .em .pl-crumb, .em .echips__label { text-transform: none; letter-spacing: 0; }
-  .em .pl-btn { font-size: 0.88rem; }
-  .em .echips__label { font-size: 0.82rem; font-weight: 600; }
-  .em__title { margin: 0; font-size: clamp(1.4rem, 1.1rem + 1.2vw, 2rem); line-height: 1.2; font-weight: 750; color: var(--text-strong); }
-  .em__short { margin: 4px 0 0; color: var(--pl-accent); font-weight: 700; }
-  .em__grid { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 28px; align-items: start; margin-top: 26px; }
+  /* Same look as the workflow lists and paper pages (tokens from .cv in
+     src/styles/calm.css): Merriweather Sans, the blue accent, rounded cards
+     and fields, sentence-case labels. */
+  .em { --pl-accent: var(--cv-accent); --accent-wash: var(--cv-tint); display: grid; gap: 0; padding-top: 4px; }
+  .em__back { justify-self: start; display: inline-flex; align-items: center; gap: 8px; margin-bottom: 18px; font-weight: 600; color: var(--cv-ink); text-decoration: none; }
+  .em__back::before { content: '\2190'; font-size: 1.1rem; }
+  .em__back:hover { color: var(--cv-accent); text-decoration: underline; text-underline-offset: 3px; }
+  .em__title { margin: 0; font-family: inherit; font-size: clamp(1.6rem, 1.2rem + 1.4vw, 2.25rem); line-height: 1.2; font-weight: 700; letter-spacing: -0.015em; color: var(--cv-ink); }
+  .em__short { margin: 8px 0 0; font-size: 1.0625rem; color: var(--cv-accent); font-weight: 700; }
+  .em__grid { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 24px; align-items: start; margin-top: 24px; }
   @media (max-width: 860px) { .em__grid { grid-template-columns: 1fr; } }
-  .em__side, .em__main { background: var(--surface, #fff); border: 1px solid var(--border-soft); padding: 20px 22px; }
-  .em__h { margin: 0 0 12px; font-size: 1rem; font-weight: 750; color: var(--text-strong); }
-  .em__h--gap { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border-soft); }
-  .em__field { display: grid; gap: 5px; margin-bottom: 12px; }
-  .em__field > span { font-size: 0.82rem; font-weight: 600; color: var(--text-muted); }
+  .em__side, .em__main { background: var(--cv-bg); border: 1px solid var(--cv-line); border-radius: 14px; padding: 22px 24px; }
+  .em__h { margin: 0 0 14px; font-family: inherit; font-size: 1rem; font-weight: 700; color: var(--cv-ink); }
+  .em__h--gap { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--cv-line); }
+  .em__field { display: grid; gap: 6px; margin-bottom: 14px; }
+  .em__field > span { font-size: 0.875rem; font-weight: 600; color: var(--cv-ink); }
   .em__field input, .em__field select, .em__field textarea {
-    width: 100%; padding: 9px 11px;
-    border: 1px solid var(--border-soft); border-radius: 0;
-    background: var(--bg, #fff); color: var(--text-strong); font: inherit; font-size: 0.92rem;
+    width: 100%; padding: 10px 12px;
+    border: 1px solid var(--cv-line); border-radius: 8px;
+    background: var(--cv-bg); color: var(--cv-ink); font: inherit; font-size: 0.9375rem;
   }
-  .em__field input:focus, .em__field select:focus, .em__field textarea:focus { outline: 0; border-color: var(--pl-accent); }
+  .em__field input::placeholder, .em__field textarea::placeholder { color: var(--cv-ink); opacity: 0.5; }
+  .em__field input:focus, .em__field select:focus, .em__field textarea:focus { outline: 0; border-color: var(--cv-accent); box-shadow: 0 0 0 3px var(--cv-tint); }
   .em__two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .em__desc { margin: 0 0 12px; font-size: 0.82rem; color: var(--text-muted); }
-  .em__tag { display: inline-block; margin: 0 0 6px; padding: 3px 10px; font-size: 0.72rem; font-weight: 700; color: var(--pl-accent); background: var(--accent-wash); border-radius: 999px; }
-  .em__draft { margin: 0 0 18px; font-size: 1.15rem; font-weight: 750; color: var(--text-strong); }
+  .em__desc { margin: 0 0 12px; font-size: 0.875rem; color: var(--cv-ink); }
+  .em__tag { display: inline-block; margin: 0 0 8px; padding: 4px 11px; font-size: 0.75rem; font-weight: 700; color: var(--cv-accent); background: var(--cv-tint); border-radius: 999px; }
+  .em__draft { margin: 0 0 18px; font-family: inherit; font-size: 1.2rem; font-weight: 700; color: var(--cv-ink); }
   .em__subject { font-weight: 600; }
-  .em__body { min-height: 380px; resize: vertical; line-height: 1.6; }
+  .em__body { min-height: 380px; resize: vertical; line-height: 1.65; }
   .em__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
   .em__actions + .em__desc { margin-top: 12px; }
+  .em .pl-btn {
+    display: inline-flex; align-items: center; justify-content: center; padding: 10px 20px;
+    border: 1px solid var(--cv-accent); border-radius: 8px; background: var(--cv-accent); color: #fff;
+    font-family: inherit; font-size: 0.9375rem; font-weight: 600; letter-spacing: 0; text-transform: none; text-decoration: none; cursor: pointer;
+  }
+  .em .pl-btn:hover { opacity: 0.9; }
+  .em .pl-btn--ghost { background: var(--cv-bg); border-color: var(--cv-line); color: var(--cv-ink); }
+  .em .pl-btn--ghost:hover { border-color: var(--cv-accent); color: var(--cv-accent); opacity: 1; }
+  .em .echips__label { font-size: 0.875rem; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--cv-ink); }
+  .em .echips__box { border-radius: 8px; border-color: var(--cv-line); }
 </style>
 
 <script is:inline>

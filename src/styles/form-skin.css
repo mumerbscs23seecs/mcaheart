@@ -116,7 +116,7 @@
 
 /* Section guide in the left margin (built by IdeaForm's script). */
 .iskin-rail {
-  display: none; grid-column: 1 !important; grid-row: 1 / span 40;
+  display: none; grid-column: 1 !important; /* rows set by FormGuide.astro */
   position: sticky; top: 96px; align-self: start; justify-self: end;
   width: min(100%, 208px); margin-right: 48px; padding-top: 24px;
 }

@@ -12,8 +12,8 @@ import IdeaForm from '../components/IdeaForm.astro';
   <PageHero
     title="Submit a research idea"
     align="center"
+    simple
     subtitle={`Submit a database study or meta-analysis for review by M.\u00a0Chadi Alraies, and the MCA Heart Research Lab team. Before submitting, conduct an up-to-date literature review, identify a clear research gap, and frame your question using PICO (Population, Intervention, Comparison, Outcome). Each idea is evaluated for clinical relevance, novelty, feasibility, and publication potential.`}
-    image="/assets/brand/get-involved-bg.webp"
   />
 
   <section class="section section--tight idea-page" id="form">
@@ -29,5 +29,4 @@ import IdeaForm from '../components/IdeaForm.astro';
   /* Match the Contact page's hero scale - the other two Get Involved
      pages share its background now, so the heading should read at the
      same size instead of PageHero's larger default (--step-5). */
-  :global(.phero h1.phero__title) { font-size: clamp(2.3rem, 1.35rem + 3.7vw, 5rem); }
 </style>

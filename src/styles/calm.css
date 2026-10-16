@@ -281,3 +281,13 @@ html[data-cv-icons='bold'] .cv-ib .cv-ic { stroke-width: 2.6; }
   .cv-dfoot { flex-wrap: wrap; }
 }
 @media (prefers-reduced-motion: reduce) { .cv-dim, .cv-drawer { transition: none; } }
+
+/* Medium screens (small laptops, split windows): the fixed side columns
+   would leave the title almost no room, so switch to the stacked layout
+   (related details share one column) and narrow the Status column. */
+@media (min-width: 821px) and (max-width: 1240px) {
+  .cv-table .cv-classic { display: none; }
+  .cv-table .cv-stacked { display: table-cell; }
+  .cv-table thead th:nth-last-child(2) { width: 230px !important; }
+  .cv-table td.t { padding-right: 20px; }
+}

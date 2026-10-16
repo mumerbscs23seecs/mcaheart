@@ -77,7 +77,7 @@ const chips = stagesFor('journal').map((s: any) => ({
                   <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.full_title || p.title}</a>
                   {p.full_title && p.title && <div class="cv-sub">{p.title}</div>}
                 </td>
-                <td class="cv-classic cv-hide-sm nw">{p.lead_name ?? '-'}</td>
+                <td class="cv-classic cv-hide-sm">{p.lead_name ?? '-'}</td>
                 <td class="cv-classic cv-hide-sm sm">{p.current_journal ?? '-'}</td>
                 <td class="cv-stacked cv-hide-sm">
                   <div class="cv-ln">{p.lead_name ?? '-'}</div>

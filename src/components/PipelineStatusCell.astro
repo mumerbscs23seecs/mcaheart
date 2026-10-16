@@ -1,5 +1,6 @@
 ---
 import { stagesFor } from '../lib/lifecycle.mjs';
+import { stageColor } from '../lib/calm';
 
 interface Props {
   /** A project_list row - needs id, phase, stage, stage_label, days_in_stage, archived_at. */
@@ -77,6 +78,7 @@ const editable =
             data-outcome={route?.outcome ?? ''}
             data-reject-stage={route?.rejectStage ?? ''}
             data-attempt={route ? openAttempt : ''}
+            data-color={stageColor(p.phase, s.code)}
           >{s.label}</option>
         );
       })}
@@ -114,7 +116,7 @@ const editable =
       <option value="" selected>{p.stage_label}</option>
       {options
         .filter((s: any) => s.code !== p.stage)
-        .map((s: any) => <option value={s.code} data-extra-field={extraFor(s.code)?.field ?? ''}>&rarr; {s.label}</option>)}
+        .map((s: any) => <option value={s.code} data-extra-field={extraFor(s.code)?.field ?? ''} data-color={stageColor(p.phase, s.code)}>&rarr; {s.label}</option>)}
     </select>
     {options.filter((s: any) => s.code !== p.stage).map((s: any) => {
       const extra = extraFor(s.code);
@@ -166,6 +168,12 @@ const editable =
     background: transparent;
     color: var(--text-strong, var(--ink));
   }
+  /* Batched: the Update bar saves, so the per-row buttons and the
+     "Confirm ...?" prompts aren't needed. */
+  .pl-status-extra__go, .pl-status-extra__label { display: none !important; }
+  .pl-status-extra:not(:has(input[type="text"])) { display: none !important; }
+  .pl-status-form.is-dirty select { box-shadow: 0 0 0 2px #e8a33d inset; border-radius: 8px; }
+  .pl-status-form.is-error select, .pl-status-form.is-error input { box-shadow: 0 0 0 2px #c0432b inset; border-radius: 8px; }
   .pl-status-extra__go--confirm {
     border-color: var(--pl-accent, var(--ink));
     background: var(--pl-accent, var(--ink));
@@ -173,78 +181,199 @@ const editable =
 </style>
 
 <script>
-  // Delegated once (Astro dedupes this script across every PipelineStatusCell
-  // instance on the page). Plain "advance the stage" selections still submit
-  // immediately; a selection that needs one more field (data-extra-field)
-  // reveals that field's box instead and waits for its own submit button.
-  // An outcome (data-outcome) swaps the form over to its own gate first
-  // (journal-outcome / abstract), so its Confirm button posts the right thing.
+  // Status changes are batched: picking a new status only marks the row
+  // (no reload). An "Update" bar collects every marked row; pressing Update
+  // saves them all in the background through the same endpoints as before,
+  // then refreshes each row in place. Astro dedupes this script across every
+  // PipelineStatusCell on the page.
+  type Dirty = { form: HTMLFormElement; select: HTMLSelectElement };
+  const dirty = new Map<HTMLFormElement, Dirty>();
+
+  let bar: HTMLElement | null = null;
+  function ensureBar() {
+    if (bar) return bar;
+    bar = document.createElement('div');
+    bar.className = 'st-bar';
+    bar.setAttribute('role', 'region');
+    bar.setAttribute('aria-label', 'Unsaved status changes');
+    bar.innerHTML =
+      '<p class="st-bar__text" data-st-text aria-live="polite"></p>' +
+      '<button type="button" class="st-bar__btn st-bar__btn--ghost" data-st-discard>Discard</button>' +
+      '<button type="button" class="st-bar__btn" data-st-update>Update</button>';
+    document.body.append(bar);
+    bar.querySelector('[data-st-update]')!.addEventListener('click', saveAll);
+    bar.querySelector('[data-st-discard]')!.addEventListener('click', discardAll);
+    return bar;
+  }
+  function refreshBar(message?: string, tone?: 'ok' | 'err') {
+    const b = ensureBar();
+    const n = dirty.size;
+    const text = b.querySelector<HTMLElement>('[data-st-text]')!;
+    b.dataset.tone = tone ?? '';
+    text.textContent = message ?? `${n} status ${n === 1 ? 'change' : 'changes'} not saved yet`;
+    b.querySelectorAll<HTMLButtonElement>('button').forEach((x) => { x.hidden = n === 0; });
+    b.classList.toggle('is-on', n > 0 || !!message);
+  }
+
+  const original = (sel: HTMLSelectElement) => [...sel.options].find((o) => o.defaultSelected)?.value ?? '';
+
+  function resetRow(form: HTMLFormElement) {
+    form.querySelectorAll<HTMLElement>('[data-status-extra]').forEach((box) => { box.hidden = true; });
+    form.querySelectorAll<HTMLElement>('[data-outcome-field]').forEach((el) => el.remove());
+    const gateInput = form.querySelector<HTMLInputElement>('[data-gate-input]');
+    if (gateInput) gateInput.value = 'stage';
+    form.classList.remove('is-dirty', 'is-error');
+  }
+
+  // Set up the form for the chosen status (outcome gate fields, journal box).
+  function prepare(form: HTMLFormElement, select: HTMLSelectElement) {
+    resetRow(form);
+    const chosen = select.selectedOptions[0];
+    const gateInput = form.querySelector<HTMLInputElement>('[data-gate-input]');
+    const outcome = chosen?.dataset.outcome;
+    if (outcome && gateInput) {
+      gateInput.value = chosen.dataset.gate || 'journal-outcome';
+      const add = (name: string, value: string) => {
+        const i = document.createElement('input');
+        i.type = 'hidden'; i.name = name; i.value = value; i.dataset.outcomeField = '1';
+        form.appendChild(i);
+      };
+      add('outcome', outcome);
+      add('attempt', chosen.dataset.attempt ?? '');
+      if (chosen.dataset.rejectStage) add('reject_stage', chosen.dataset.rejectStage);
+    }
+    if (chosen?.dataset.extraField) {
+      const box = form.querySelector<HTMLElement>(`[data-status-extra="${chosen.value}"]`);
+      if (box) { box.hidden = false; box.querySelector<HTMLInputElement>('input')?.focus(); }
+    }
+  }
+
   document.addEventListener('change', (e) => {
     const select = (e.target as HTMLElement | null)?.closest<HTMLSelectElement>('select[data-status-select]');
     if (!select) return;
     const form = select.closest<HTMLFormElement>('[data-status-form]');
     if (!form) return;
-
-    form.querySelectorAll<HTMLElement>('[data-status-extra]').forEach((box) => { box.hidden = true; });
-    // Clear any outcome fields a previous selection added, before maybe adding new ones.
-    form.querySelectorAll<HTMLElement>('[data-outcome-field]').forEach((el) => el.remove());
-
-    const chosen = select.selectedOptions[0];
-    const gateInput = form.querySelector<HTMLInputElement>('[data-gate-input]');
-    const outcome = chosen?.dataset.outcome;
-
-    if (outcome && gateInput) {
-      gateInput.value = chosen.dataset.gate || 'journal-outcome';
-      const addHidden = (name: string, value: string) => {
-        const input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = name;
-        input.value = value;
-        input.dataset.outcomeField = '1';
-        form.appendChild(input);
-      };
-      addHidden('outcome', outcome);
-      addHidden('attempt', chosen.dataset.attempt ?? '');
-      if (chosen.dataset.rejectStage) addHidden('reject_stage', chosen.dataset.rejectStage);
-
-      const box = form.querySelector<HTMLElement>(`[data-status-extra="${chosen.value}"]`);
-      if (box) {
-        box.hidden = false;
-        return; // wait for the box's own Confirm button
-      }
-    } else if (gateInput) {
-      gateInput.value = 'stage';
-    }
-
-    const extraField = chosen?.dataset.extraField;
-    if (extraField) {
-      const box = form.querySelector<HTMLElement>(`[data-status-extra="${chosen.value}"]`);
-      if (box) {
-        box.hidden = false;
-        box.querySelector<HTMLInputElement>('input')?.focus();
-        return; // wait for the box's own submit button
-      }
-    }
-
-    // Member's placeholder option ("") means "no change chosen yet" - don't submit that.
-    if (select.hasAttribute('data-member-select') && !select.value) return;
-    form.submit();
+    const back = select.value === original(select) || (select.hasAttribute('data-member-select') && !select.value);
+    if (back) { resetRow(form); dirty.delete(form); refreshBar(); return; }
+    prepare(form, select);
+    form.classList.add('is-dirty');
+    dirty.set(form, { form, select });
+    refreshBar();
   });
 
-  // "No" on a confirm box: put the status back to what it was, nothing is sent.
-  document.addEventListener('click', (e) => {
-    const no = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-status-cancel]');
-    if (!no) return;
-    const form = no.closest<HTMLFormElement>('[data-status-form]');
+  // Editing the journal name (on a paper already with an editor) is a change too.
+  document.addEventListener('input', (e) => {
+    const input = (e.target as HTMLElement | null)?.closest<HTMLInputElement>('[data-status-extra] input');
+    const form = input?.closest<HTMLFormElement>('[data-status-form]');
+    const select = form?.querySelector<HTMLSelectElement>('select[data-status-select]');
+    if (!form || !select || dirty.has(form)) return;
+    form.classList.add('is-dirty');
+    dirty.set(form, { form, select });
+    refreshBar();
+  });
+
+  // Enter in a journal-name box saves everything, like pressing Update.
+  document.addEventListener('submit', (e) => {
+    const form = (e.target as HTMLElement).closest<HTMLFormElement>('[data-status-form]');
     if (!form) return;
-    const select = form.querySelector<HTMLSelectElement>('select[data-status-select]');
-    if (select) {
-      const original = [...select.options].find((o) => o.defaultSelected);
-      if (original) select.value = original.value;
-    }
-    form.querySelectorAll<HTMLElement>('[data-status-extra]').forEach((box) => { box.hidden = true; });
-    form.querySelectorAll<HTMLElement>('[data-outcome-field]').forEach((el) => el.remove());
-    const gateInput = form.querySelector<HTMLInputElement>('[data-gate-input]');
-    if (gateInput) gateInput.value = 'stage';
+    e.preventDefault();
+    if (dirty.size) saveAll();
   });
+
+  function discardAll() {
+    for (const { form, select } of dirty.values()) {
+      select.value = original(select);
+      resetRow(form);
+    }
+    dirty.clear();
+    refreshBar();
+  }
+
+  let saving = false;
+  async function saveAll() {
+    if (saving || !dirty.size) return;
+    // A row that needs a journal name can't be saved without one.
+    for (const { form, select } of dirty.values()) {
+      const box = form.querySelector<HTMLElement>(`[data-status-extra="${select.value}"]`);
+      const input = box?.querySelector<HTMLInputElement>('input[type="text"]');
+      if (input && !input.value.trim()) {
+        form.classList.add('is-error');
+        input.focus();
+        refreshBar('Enter the journal name for the highlighted paper, then press Update.', 'err');
+        return;
+      }
+    }
+    saving = true;
+    const b = ensureBar();
+    b.querySelectorAll<HTMLButtonElement>('button').forEach((x) => { x.disabled = true; });
+    refreshBar(`Saving ${dirty.size}…`);
+    let ok = 0;
+    const errors: string[] = [];
+    for (const { form, select } of [...dirty.values()]) {
+      const data = new FormData(form);
+      data.set('return', '/pipeline/ping');
+      try {
+        const res = await fetch(form.action, { method: 'POST', body: data, credentials: 'same-origin' });
+        const err = new URL(res.url).searchParams.get('err');
+        if (!res.ok || err) throw new Error(err || `Error ${res.status}`);
+        // Saved: this becomes the row's new starting point.
+        const chosen = select.selectedOptions[0];
+        [...select.options].forEach((o) => { o.defaultSelected = o === chosen; });
+        if (select.hasAttribute('data-member-select')) {
+          const label = chosen?.textContent?.replace(/^→\s*/, '') ?? '';
+          select.value = '';
+          [...select.options].forEach((o) => { o.defaultSelected = o.value === ''; });
+          const note = form.querySelector<HTMLElement>('.pl-status__note');
+          if (note) note.textContent = `Requested: ${label} (waiting for approval)`;
+        } else {
+          const color = chosen?.dataset.color;
+          const cell = form.closest<HTMLElement>('.cv-st');
+          if (cell && color) cell.style.setProperty('--c', color);
+          const row = form.closest<HTMLElement>('[data-cv-row]');
+          if (row) row.dataset.cvF = select.value;
+          select.title = chosen?.textContent ?? '';
+        }
+        resetRow(form);
+        dirty.delete(form);
+        ok++;
+      } catch (err) {
+        form.classList.add('is-error');
+        const who = select.getAttribute('aria-label')?.replace(/^.*for /, '') ?? 'A paper';
+        errors.push(`${who}: ${(err as Error).message}`);
+      }
+    }
+    saving = false;
+    b.querySelectorAll<HTMLButtonElement>('button').forEach((x) => { x.disabled = false; });
+    if (errors.length) refreshBar(`${ok} saved, ${errors.length} not saved. ${errors[0]}`, 'err');
+    else {
+      refreshBar(`${ok} status ${ok === 1 ? 'change' : 'changes'} saved`, 'ok');
+      setTimeout(() => { if (!dirty.size) bar?.classList.remove('is-on'); }, 2600);
+    }
+  }
+
+  // Leaving the page with unsaved changes asks first.
+  addEventListener('beforeunload', (e) => { if (dirty.size) { e.preventDefault(); e.returnValue = ''; } });
 </script>
+
+<style is:global>
+  /* The Update bar: appears when a status has been changed, saves them all. */
+  .st-bar {
+    position: fixed; left: 50%; bottom: 72px; z-index: 150; translate: -50% 260%;
+    display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px);
+    padding: 10px 12px 10px 18px; border-radius: 12px;
+    background: #161615; color: #fff; box-shadow: 0 14px 40px -12px rgba(0, 0, 0, 0.45);
+    font-family: 'Merriweather Sans', system-ui, sans-serif; font-size: 0.9rem;
+    transition: translate 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+  .st-bar.is-on { translate: -50% 0; }
+  .st-bar[data-tone='ok'] .st-bar__text::before { content: '\2713  '; color: #4ade80; }
+  .st-bar[data-tone='err'] .st-bar__text { color: #fca5a5; }
+  .st-bar__text { margin: 0 6px 0 0; }
+  .st-bar__btn {
+    padding: 8px 18px; border: 1px solid #fff; border-radius: 8px; background: #fff; color: #161615;
+    font: inherit; font-weight: 700; cursor: pointer;
+  }
+  .st-bar__btn--ghost { background: transparent; color: #fff; border-color: rgba(255, 255, 255, 0.4); font-weight: 600; }
+  .st-bar__btn:disabled { opacity: 0.5; cursor: progress; }
+  @media (prefers-reduced-motion: reduce) { .st-bar { transition: none; } }
+</style>

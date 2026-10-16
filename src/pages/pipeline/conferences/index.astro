@@ -2,6 +2,7 @@
 import PipelineLayout from '../../../layouts/PipelineLayout.astro';
 import PipelineStatusCell from '../../../components/PipelineStatusCell.astro';
 import { scopeProjects } from '../../../lib/pipeline-scope';
+import { loadOverrides, applyOverrides } from '../../../lib/conference-stats';
 
 export const prerender = false;
 const { supabase, person } = Astro.locals;
@@ -66,9 +67,14 @@ if (isAdmin) {
     supabase.from('conference_scorecard').select('*'),
   ]);
   const score = new Map((scorecard ?? []).map((s: any) => [s.name, s]));
+  const { byId: overrides } = await loadOverrides();
   rows = (conferences ?? [])
     .filter((c: any) => !activeSeries || c.name.startsWith(activeSeries))
-    .map((c: any) => ({ ...c, ...(score.get(c.name) ?? { submitted: 0, accepted: 0, rejected: 0, accept_pct: null, recycled_in: 0 }) }));
+    .map((c: any) => {
+      const live = score.get(c.name) ?? { submitted: 0, accepted: 0, rejected: 0, accept_pct: null, recycled_in: 0 };
+      // Hand-entered numbers from the conference's own page win over the live counts.
+      return { ...c, ...live, ...applyOverrides(live, overrides.get(c.id)) };
+    });
 }
 ---
 
