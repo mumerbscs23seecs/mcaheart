@@ -321,8 +321,8 @@ import { researchStats } from '../data/site';
   }
 
   /* Scroll-away (every size): as the hero leaves, the three headline lines
-     shear apart in alternating directions, the heart lifts, swells and
-     turns, and the copy lifts away. --xs is written by effects.ts. */
+     shear apart in alternating directions, the heart lifts and swells
+     (no turning), and the copy lifts away. --xs is written by effects.ts. */
   .hero__line {
     translate: calc(var(--xs, 0) * var(--dir) * 42vw) 0;
   }
@@ -333,7 +333,6 @@ import { researchStats } from '../data/site';
   .hero__art {
     translate: 0 calc(var(--xs, 0) * -24svh);
     scale: calc(1 + var(--xs, 0) * 0.3);
-    rotate: calc(var(--xs, 0) * -10deg);
   }
   .hero__rest {
     opacity: calc(1 - var(--xs, 0) * 1.7);
