@@ -6,14 +6,16 @@ interface Props {
   ctaLabel: string;
   ctaHref: string;
   image?: string;
+  /** Which part of the picture to keep in view (CSS object-position), e.g. 'center 30%'. */
+  imagePosition?: string;
 }
-const { eyebrow, title, body, ctaLabel, ctaHref, image } = Astro.props;
+const { eyebrow, title, body, ctaLabel, ctaHref, image, imagePosition } = Astro.props;
 ---
 
 <section class="cta dark-ground">
   {image && (
     <div class="cta__bg" aria-hidden="true">
-      <img src={image} alt="" loading="lazy" decoding="async" data-parallax="0.12" />
+      <img src={image} alt="" loading="lazy" decoding="async" data-parallax="0.12" style={imagePosition ? `object-position:${imagePosition}` : undefined} />
     </div>
   )}
 
