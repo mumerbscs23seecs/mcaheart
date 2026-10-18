@@ -162,7 +162,7 @@ import { researchStats } from '../data/site';
     display: flex;
     align-items: center;
     min-height: 100svh;
-    padding-block: calc(var(--header-h) + var(--space-l)) var(--space-xl);
+    padding-block: calc(var(--header-h) + var(--space-l)) var(--space-m);
     margin-top: calc(var(--header-h) * -1);
     overflow: hidden;
   }
@@ -417,6 +417,11 @@ import { researchStats } from '../data/site';
   }
 
   /* ------------------------------------------------------------- Pillars */
+  /* Sits straight under the hero (the society logo row used to fill this
+     gap), so it doesn't need its full top padding. */
+  .pillars { padding-top: var(--space-s); }
+  /* On wide screens the full-height hero leaves room under its buttons. */
+  @media (min-width: 861px) { .pillars { padding-top: 0; margin-top: calc(var(--space-l) * -1); } }
   .pillars__title { font-size: var(--step-3); margin-top: var(--space-s); }
 
   .pillars__grid {
