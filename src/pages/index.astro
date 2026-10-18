@@ -1,7 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import CTABanner from '../components/CTABanner.astro';
-import Societies from '../components/Societies.astro';
 import { researchStats } from '../data/site';
 
 ---
@@ -42,30 +41,6 @@ import { researchStats } from '../data/site';
     </div>
   </section>
 
-  <Societies />
-
-  {/* ------------------------------------------------------------------ Impact */}
-  <section class="section--tall impact dark-ground">
-    <div class="impact__bg" aria-hidden="true">
-      <img src="/assets/home/aorta.webp" alt="" loading="lazy" decoding="async" data-parallax="0.12" />
-    </div>
-
-    <div class="shell shell--wide">
-      <header class="impact__head section-head" data-reveal>
-        <h2 class="display impact__title">Impact<br />through<br />excellence</h2>
-      </header>
-
-      <dl class="impact__grid impact__grid--research">
-        {researchStats.map((s, i) => (
-          <div class="stat" data-reveal style={`--reveal-delay:${i * 100}ms`}>
-            <dt class="stat__value" data-count={s.value}>{s.value}</dt>
-            <dd class="stat__label">{s.label}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  </section>
-
   {/* --------------------------------------------------------------- Pillars */}
   <section class="section pillars">
     <div class="shell shell--wide">
@@ -102,6 +77,28 @@ import { researchStats } from '../data/site';
           </span>
         </a>
       </div>
+    </div>
+  </section>
+
+  {/* ------------------------------------------------------------------ Impact */}
+  <section class="section--tall impact dark-ground">
+    <div class="impact__bg" aria-hidden="true">
+      <img src="/assets/home/aorta.webp" alt="" loading="lazy" decoding="async" data-parallax="0.12" />
+    </div>
+
+    <div class="shell shell--wide">
+      <header class="impact__head section-head" data-reveal>
+        <h2 class="display impact__title">Impact<br />through<br />excellence</h2>
+      </header>
+
+      <dl class="impact__grid impact__grid--research">
+        {researchStats.map((s, i) => (
+          <div class="stat" data-reveal style={`--reveal-delay:${i * 100}ms`}>
+            <dt class="stat__value" data-count={s.value}>{s.value}</dt>
+            <dd class="stat__label">{s.label}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   </section>
 
