@@ -288,7 +288,9 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
     border-radius: 999px;
   }
 
-  .appbar__account { margin-left: auto; display: flex; align-items: center; gap: 0.9rem; flex-shrink: 0; }
+  /* Always the right-hand column, even on pages where the tabs sit in their
+     own row below (members) and the middle column is empty. */
+  .appbar__account { grid-column: 3; justify-self: end; margin-left: auto; display: flex; align-items: center; gap: 0.9rem; flex-shrink: 0; }
 
   /* notification bell */
   .nbell { position: relative; display: inline-flex; }

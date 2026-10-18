@@ -35,7 +35,6 @@ const middle = rest.join(' ');
       </div>
       <div class="ot-hero__visual" data-ot-visual aria-hidden="true">
         <span class="ot-hero__disc"></span>
-        <span class="ot-hero__frame"></span>
         {/* PREVIEW: background options */}
         <span class="ot-x ot-x--word">Heart</span>
         <span class="ot-x ot-x--block"></span>
@@ -59,6 +58,7 @@ const middle = rest.join(' ');
           <ul class="ot-lead__roles">
             {director.roles.map((r, i) => <li class:list={[i < 2 && 'is-key']}>{r}</li>)}
           </ul>
+          <a class="ot-lead__email" href={`mailto:${director.email}`}>{director.email}</a>
           <ul class="ot-links">
             {director.academicLinks.map((l) => (
               <li>
@@ -175,11 +175,6 @@ const middle = rest.join(' ');
     background: var(--ot-disc); border: 1px solid var(--ot-line);
     transform: translate3d(calc(var(--p) * 30px), calc(var(--p) * -24px), 0);
   }
-  .ot-hero__frame {
-    position: absolute; inset: 10% 4% 6% 18%;
-    border: 1px solid color-mix(in srgb, var(--ot-red) 35%, transparent);
-    transform: translate3d(calc(var(--p) * -34px), calc(var(--p) * 28px), 0) rotate(calc(7deg - var(--p) * 14deg));
-  }
   .ot-hero__visual img {
     position: relative; z-index: 1; height: 92%; width: auto; max-width: 100%;
     object-fit: contain; will-change: transform;
@@ -188,7 +183,7 @@ const middle = rest.join(' ');
 
   /* ---------------- PREVIEW: background options (?bg=…) ---------------- */
   .ot-x { display: none; pointer-events: none; }
-  .ot:not([data-bg="current"]) :is(.ot-hero__disc, .ot-hero__frame) { display: none; }
+  .ot:not([data-bg="current"]) .ot-hero__disc { display: none; }
   .ot:not([data-bg="current"]) .ot-lead__portrait::before,
   .ot:not([data-bg="current"]) .ot-lead__portrait::after { display: none; }
 
@@ -225,14 +220,14 @@ const middle = rest.join(' ');
     display: grid; grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
     column-gap: clamp(3rem, 1rem + 7vw, 8rem); row-gap: 2.5rem; align-items: center;
   }
-  /* The photo has extra backdrop above the head, so the arch never clips it. */
+  /* A plain rectangle; 4:5 trims the extra backdrop above the head. */
   .ot-lead__portrait {
-    position: relative; width: min(100%, 460px); aspect-ratio: 1150 / 1550; justify-self: center;
+    position: relative; width: min(100%, 460px); aspect-ratio: 4 / 5; justify-self: center;
     --x: 0px; --y: 0px;
   }
   .ot-lead__portrait::before {
     content: ''; position: absolute; inset: 5% -8% -3% 12%; z-index: 0;
-    background: var(--ot-disc); border-radius: 48% 48% 2px 2px; transform: rotate(4deg);
+    background: var(--ot-disc); border-radius: 2px; transform: rotate(4deg);
   }
   .ot-lead__portrait::after {
     content: ''; position: absolute; inset: 0 7% 0 -9%; z-index: 2; pointer-events: none;
@@ -242,7 +237,7 @@ const middle = rest.join(' ');
   .ot-lead__portrait img {
     position: relative; z-index: 1; width: 100%; height: 100%;
     object-fit: cover; object-position: center bottom;
-    clip-path: inset(0 round 46% 46% 2px 2px);
+    border-radius: 2px;
     will-change: transform;
   }
   .ot-lead__copy { will-change: transform, opacity; }
@@ -263,6 +258,7 @@ const middle = rest.join(' ');
   .ot-lead__roles li.is-key { font-size: 1.05rem; font-weight: 700; color: var(--ot-ink); }
   .ot-lead__roles li.is-key + li:not(.is-key) { margin-top: 0.5rem; }
 
+  .ot-lead__email { display: inline-block; margin-top: 1.25rem; font-weight: 700; color: var(--ot-red); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
   .ot-links { list-style: none; margin: 1.75rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.6rem; }
   .ot-links__label { margin: 1.5rem 0 0; font-size: 0.95rem; font-weight: 700; color: var(--ot-ink); }
   .ot-links--social { margin-top: 0.6rem; }
@@ -309,7 +305,7 @@ const middle = rest.join(' ');
     background: var(--ot-disc); display: grid; place-items: center; position: relative;
   }
   .ot-card__photo::after { content: ''; position: absolute; inset: 8px; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.7); pointer-events: none; }
-  .ot-card__photo img { width: 100%; height: 100%; object-fit: cover; object-position: center 30%; filter: grayscale(100%); transition: filter 0.6s ease, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+  .ot-card__photo img { width: 100%; height: 100%; object-fit: cover; object-position: center 30%; filter: grayscale(35%); transition: filter 0.6s ease, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
   .ot-card__initials { font-weight: 800; font-size: clamp(2.4rem, 1.6rem + 2.6vw, 3.6rem); letter-spacing: -0.04em; color: var(--ot-red); }
   .ot-card__name { margin: 1.1rem 0 0; font-size: clamp(1.1rem, 0.9rem + 0.7vw, 1.45rem); line-height: 1.15; }
   .ot-card__title { margin: 0.4rem 0 0; font-size: 0.95rem; font-weight: 700; color: var(--ot-red); }

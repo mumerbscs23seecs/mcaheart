@@ -39,6 +39,7 @@ export const director = {
   credentials: 'MD MPH',
   /** Full form - homepage only. */
   credentialsFull: 'MD MPH FACC FSCAI',
+  email: 'chadi.alraies@mcaheart.com',
   /** Full title list - homepage only (research-group.astro shows just name + credentials). */
   roles: [
     'Founder and Head, MCA Heart',
@@ -563,7 +564,7 @@ const DMC_DEPT = 'Department of Interventional Cardiology, Detroit Medical Cente
 export const team: TeamMember[] = [
   {
     name: 'Jawad Basit',
-    title: 'Lead Research Fellow',
+    title: 'Senior Research Fellow',
     details: ['MCA Heart Research Lab', DMC_DEPT],
     email: 'jawad.basit@mcaheart.com',
     photo: '/assets/team/jawad-basit-sq.jpg',
