@@ -148,6 +148,9 @@ const LINKS: Record<string, string> = {
   'World Journal of Surgery': 'https://mc.manuscriptcentral.com/wjsurgery',
 };
 
+/** Every journal on the lab's list, for the journal-name picker. */
+export const JOURNAL_NAMES = Object.keys(LINKS).sort((a, b) => a.localeCompare(b));
+
 /** Lower-case, "&" as "and", punctuation and extra spaces removed, so
  *  "Archives of Medical Science – Atherosclerotic Diseases" still matches. */
 const norm = (s: string) =>

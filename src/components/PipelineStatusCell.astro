@@ -92,7 +92,8 @@ const editable =
         // be corrected without needing to re-trigger a change event first.
         return (
           <span class="pl-status-extra" data-status-extra={s.code} hidden={!isCurrent}>
-            <input type="text" name={extra.field} placeholder={extra.placeholder} value={isCurrent ? (p.current_journal ?? '') : ''} />
+            <input type="text" name={extra.field} placeholder={extra.placeholder} value={isCurrent ? (p.current_journal ?? '') : ''}
+              list={extra.field === 'journal' ? 'pl-journal-options' : undefined} autocomplete="off" data-journal-input={extra.field === 'journal' ? '' : undefined} />
             <button type="submit" class="pl-status-extra__go">Update</button>
           </span>
         );
@@ -122,7 +123,8 @@ const editable =
       const extra = extraFor(s.code);
       return extra && (
         <span class="pl-status-extra" data-status-extra={s.code} hidden>
-          <input type="text" name={extra.field} placeholder={extra.placeholder} />
+          <input type="text" name={extra.field} placeholder={extra.placeholder}
+            list={extra.field === 'journal' ? 'pl-journal-options' : undefined} autocomplete="off" />
           <button type="submit" class="pl-status-extra__go">Request</button>
         </span>
       );
@@ -186,6 +188,17 @@ const editable =
   // saves them all in the background through the same endpoints as before,
   // then refreshes each row in place. Astro dedupes this script across every
   // PipelineStatusCell on the page.
+  import { JOURNAL_NAMES, journalSiteHref } from '../lib/journal-links';
+
+  // The journal-name boxes suggest every journal on the lab's list (one shared
+  // list per page). Picking one also gives the row its submission link.
+  if (document.querySelector('[list="pl-journal-options"]') && !document.getElementById('pl-journal-options')) {
+    const dl = document.createElement('datalist');
+    dl.id = 'pl-journal-options';
+    for (const name of JOURNAL_NAMES) dl.append(new Option(name));
+    document.body.append(dl);
+  }
+
   type Dirty = { form: HTMLFormElement; select: HTMLSelectElement };
   const dirty = new Map<HTMLFormElement, Dirty>();
 
@@ -332,8 +345,19 @@ const editable =
           const row = form.closest<HTMLElement>('[data-cv-row]');
           if (row) row.dataset.cvF = select.value;
           select.title = chosen?.textContent ?? '';
+          // A new journal name shows in the row straight away, with its link.
+          const journal = form.querySelector<HTMLInputElement>(`[data-status-extra="${select.value}"] input[name="journal"]`)?.value.trim();
+          if (row && journal) {
+            row.querySelectorAll<HTMLElement>('[data-cv-journal]').forEach((el) => { el.textContent = journal; });
+            const site = row.querySelector<HTMLAnchorElement>('a[aria-label="Open journal site"]');
+            const href = journalSiteHref(journal);
+            if (site && href) site.href = href;
+          }
         }
         resetRow(form);
+        // Still on a stage with a field (e.g. Submitted + journal): keep its box showing.
+        const keep = form.querySelector<HTMLElement>(`[data-status-extra="${select.value}"]`);
+        if (keep && keep.querySelector('input[type="text"]')) keep.hidden = false;
         dirty.delete(form);
         ok++;
       } catch (err) {

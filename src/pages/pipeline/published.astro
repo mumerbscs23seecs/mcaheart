@@ -66,10 +66,10 @@ const journalHref = (p: any) => journalSiteHref(p.current_journal, portal.get(p.
                   </div>
                 </td>
                 <td class="cv-classic cv-hide-sm">{p.lead_name ?? '-'}</td>
-                <td class="cv-classic cv-hide-sm sm">{p.current_journal ?? '-'}</td>
+                <td class="cv-classic cv-hide-sm sm" data-cv-journal>{p.current_journal ?? '-'}</td>
                 <td class="cv-stacked cv-hide-sm">
                   <div class="cv-ln">{p.lead_name ?? '-'}</div>
-                  <div class="cv-jn">{p.current_journal ?? '-'}</div>
+                  <div class="cv-jn" data-cv-journal>{p.current_journal ?? '-'}</div>
                 </td>
                 <td>
                   <CalmStatus color={stageColor(p.phase, p.stage)}>
