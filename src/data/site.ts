@@ -583,4 +583,11 @@ export const team: TeamMember[] = [
     email: 'alisia.dushaj@mcaheart.com',
     photo: '/assets/team/alisia-dushaj.jpg',
   },
+  {
+    name: 'Muhammad Umer',
+    title: 'Web Architect',
+    details: ['MCA Heart Research Lab'],
+    email: 'muh4mm4dumer@gmail.com',
+    photo: '/assets/team/muhammad-umer.jpg',
+  },
 ];

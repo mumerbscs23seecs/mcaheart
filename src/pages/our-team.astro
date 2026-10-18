@@ -94,7 +94,7 @@ const middle = rest.join(' ');
     </section>
 
     {/* --------------------------------------------------------- Team
-        A triangle: two on top, one centred below. A card shows the photo,
+        Two on top, then one centred per row below. A card shows the photo,
         name and title; hovering (or tapping) it brings it to the middle,
         larger, with the details. */}
     <section class="ot-team" aria-labelledby="ot-team-title">
@@ -285,6 +285,7 @@ const middle = rest.join(' ');
   .ot-card:nth-child(1) { grid-column: 2 / span 2; }
   .ot-card:nth-child(2) { grid-column: 4 / span 2; }
   .ot-card:nth-child(3) { grid-column: 3 / span 2; }
+  .ot-card:nth-child(4) { grid-column: 3 / span 2; }
 
   .ot-card__body {
     --tx: 0px; --ty: 0px;
@@ -351,6 +352,7 @@ const middle = rest.join(' ');
     .ot-card:nth-child(1) { transform: translate3d(-70px, 45px, 0) scale(0.92); }
     .ot-card:nth-child(2) { transform: translate3d(70px, 45px, 0) scale(0.92); }
     .ot-card:nth-child(3) { transform: translate3d(0, 65px, 0) scale(0.92); }
+    .ot-card:nth-child(4) { transform: translate3d(0, 65px, 0) scale(0.92); }
     .ot-card.in-view { opacity: 1; transform: none; }
   }
   @keyframes ot-line { from { opacity: 0; transform: translateX(-8%); } }
