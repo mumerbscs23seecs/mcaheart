@@ -9,13 +9,13 @@ import { getPipelineTasks } from '../lib/pipeline-tasks';
 
 interface Props {
   title: string;
-  active?: 'conferences' | 'ongoing' | 'submissions' | 'published' | 'tasks' | 'ideas';
+  active?: 'conferences' | 'ongoing' | 'submissions' | 'published' | 'tasks' | 'ideas' | 'requests';
 }
 const { title, active } = Astro.props;
 const { supabase, person } = Astro.locals;
 const isAdmin = person.role === 'admin';
 
-type Tab = { key: string; label: string; href: string; count: number | null; alert?: boolean };
+type Tab = { key: string; label: string; href: string; count: number | null; alert?: boolean; items?: { label: string; href: string }[] };
 
 // Admins reach Tasks from the top app bar now (Manage > Tasks) and don't
 // render this tab, so skip the query that only fed its badge count.
@@ -77,9 +77,16 @@ const tabs: Tab[] = [
     ? []
     : [
         taskTab,
-        // No count: this one is an action ("propose one"), not a queue of
-        // work - a number beside it would read as "N new ideas".
-        { key: 'ideas', label: 'New Idea', href: '/pipeline/ideas', count: null },
+        // No count: these are things to ask for, not a queue of work. New
+        // ideas, letters of recommendation and joining a topic all start here.
+        {
+          key: 'requests', label: 'Requests', href: '/pipeline/requests', count: null,
+          items: [
+            { label: 'New idea', href: '/pipeline/ideas' },
+            { label: 'Letter of recommendation', href: '/pipeline/requests?type=lor' },
+            { label: 'Join a new topic', href: '/pipeline/requests?type=topic' },
+          ],
+        },
       ]),
 ];
 ---
@@ -109,7 +116,19 @@ const tabs: Tab[] = [
 
     <nav class="pl-tabs" aria-label="Workflow sections">
       <div class="pl-tabs__row">
-        {tabs.map((t) => (
+        {tabs.map((t) => t.items ? (
+          // A tab that opens a small menu (members' Requests), like Review /
+          // Manage in the admin bar.
+          <span class="pl-tabmenu" data-tabmenu>
+            <button type="button" class:list={['pl-tab', 'pl-tabmenu__btn', active === t.key && 'is-active']} aria-haspopup="true" aria-expanded="false" data-tabmenu-toggle>
+              {t.label}
+              <svg viewBox="0 0 20 20" width="12" height="12" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="m5 7.5 5 5 5-5" /></svg>
+            </button>
+            <div class="pl-tabmenu__panel" data-tabmenu-panel hidden>
+              {t.items.map((s) => <a href={s.href}>{s.label}</a>)}
+            </div>
+          </span>
+        ) : (
           <a class:list={['pl-tab', active === t.key && 'is-active']} href={t.href}>
             {t.label}
             {typeof t.count === 'number' && (
@@ -288,5 +307,31 @@ const tabs: Tab[] = [
         if (initial) open(initial, false);
       })();
     </script>
-  </body>
+      <script>
+      // Members' Requests tab menu. The tab strip scrolls sideways on small
+      // screens (overflow-x), which would clip an absolutely positioned panel,
+      // so the panel is fixed and placed under its tab when it opens.
+      document.querySelectorAll<HTMLElement>('[data-tabmenu]').forEach((menu) => {
+        const btn = menu.querySelector<HTMLButtonElement>('[data-tabmenu-toggle]')!;
+        const panel = menu.querySelector<HTMLElement>('[data-tabmenu-panel]')!;
+        const place = () => {
+          const r = btn.getBoundingClientRect();
+          const w = panel.offsetWidth;
+          panel.style.top = `${r.bottom + 6}px`;
+          panel.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2))}px`;
+        };
+        const set = (open: boolean) => {
+          panel.hidden = !open;
+          btn.setAttribute('aria-expanded', String(open));
+          menu.classList.toggle('is-open', open);
+          if (open) place();
+        };
+        btn.addEventListener('click', (e) => { e.stopPropagation(); set(panel.hidden); });
+        document.addEventListener('click', (e) => { if (!menu.contains(e.target as Node)) set(false); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) { set(false); btn.focus(); } });
+        addEventListener('scroll', () => { if (!panel.hidden) place(); }, { passive: true });
+        addEventListener('resize', () => { if (!panel.hidden) place(); });
+      });
+    </script>
+</body>
 </html>

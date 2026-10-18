@@ -119,6 +119,23 @@
 .pl-tab__count { color: rgba(255, 255, 255, 0.5); }
 .pl-tab.is-active .pl-tab__count { color: #e2685a; }
 
+/* Members' Requests tab: opens a small menu like Review / Manage up top. */
+.pl-tabmenu { display: inline-flex; }
+.pl-tabmenu__btn { display: inline-flex; align-items: center; gap: 0.35em; background: none; border: 0; border-bottom: 2px solid transparent; cursor: pointer; }
+.pl-tabmenu__btn svg { opacity: 0.7; transition: transform 0.15s; }
+.pl-tabmenu.is-open .pl-tabmenu__btn svg { transform: rotate(180deg); }
+.pl-tabmenu__panel {
+  position: fixed; z-index: 140; min-width: 220px; padding: 0.4rem;
+  background: var(--surface, #fff); border: 1px solid var(--border-soft); border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(20, 20, 18, 0.18);
+}
+.pl-tabmenu__panel[hidden] { display: none; }
+.pl-tabmenu__panel a {
+  display: block; padding: 0.55rem 0.7rem; border-radius: 9px;
+  font-family: var(--font-sans); font-size: 0.86rem; font-weight: 700; color: var(--text-strong); text-decoration: none; white-space: nowrap;
+}
+.pl-tabmenu__panel a:hover, .pl-tabmenu__panel a:focus-visible { background: var(--bg-tint); outline: none; }
+
 /* ---------- page shell ---------- */
 .pl-main { max-width: 1320px; margin: 0 auto; padding: 40px 32px 80px; }
 @media (max-width: 640px) { .pl-main, .pl-tabs__row { padding-left: 20px; padding-right: 20px; } }

@@ -4,6 +4,7 @@ import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
 import { listRequests, markAllRequestsRead, type RequestRecord } from '../../lib/requests';
 import { INTENT_LABELS, INTENTS, type Intent } from '../../lib/contact-schema';
+import { intentRows } from '../../lib/mailer';
 
 export const prerender = false;
 
@@ -36,23 +37,8 @@ const ago = (t: number) => {
   return d === 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`;
 };
 
-const NEEDS_LETTER_LABEL: Record<string, string> = { yes: 'Yes', no: 'No' };
-
-/** Rows specific to the chosen reason - mirrors mailer.ts's intentRows. */
-function detailRows(r: RequestRecord): Array<[string, string]> {
-  if (r.intent === 'collaborate') return [['Message', r.message || '-']];
-  if (r.intent === 'recommendation') return [['Name', r.recName || '-']];
-  return [
-    ['Name', r.obsName || '-'],
-    ['Plans to apply for IM match', r.obsApplyDate || '-'],
-    ['Needs a letter confirming the rotation', NEEDS_LETTER_LABEL[r.obsNeedsLetter ?? ''] ?? '-'],
-    ['Professional status', r.obsStatus || '-'],
-    ['USMLEs completed', r.obsUsmle || '-'],
-    ['Visa situation', r.obsVisa || '-'],
-    ['Year of graduation', r.obsGradYear || '-'],
-    ['Intended rotation dates', `${r.obsStart || '?'} → ${r.obsEnd || '?'}`],
-  ];
-}
+/** Rows specific to the chosen reason - the same rows the email shows. */
+const detailRows = (r: RequestRecord) => intentRows(r);
 ---
 
 <AppLayout title="Requests" heading="Contact requests" user={me} active="requests">
@@ -86,6 +72,7 @@ function detailRows(r: RequestRecord): Array<[string, string]> {
         <details class="idea">
           <summary class="idea__summary">
             <span class="idea__pill">{INTENT_LABELS[r.intent]}</span>
+            {r.source === 'member' && <span class="idea__pill">From a member</span>}
             <span class="idea__title">{r.fullName}</span>
             <span class="idea__meta">{r.email} · {ago(r.submittedAt)}</span>
             <span class="idea__chev" aria-hidden="true">▾</span>

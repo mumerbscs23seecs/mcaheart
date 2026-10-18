@@ -36,7 +36,8 @@ const fmt = (t: number | null) => {
 };
 ---
 
-<PipelineLayout title="Ideas" active="ideas">
+<PipelineLayout title="Ideas" active={person.role === 'admin' ? 'ideas' : 'requests'}>
+  {person.role !== 'admin' && <p class="pl-crumb"><a class="pl-link" href="/pipeline/requests">← Requests</a></p>}
   <h1 class="pl-h1">Research ideas</h1>
   <p class="pl-sub">
     Propose a database or meta-analysis project. You're signed in, so your name and

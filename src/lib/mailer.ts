@@ -13,13 +13,28 @@ const TO = import.meta.env.CONTACT_TO ?? 'researchlab@mcaheart.com';
 
 const NEEDS_LETTER_LABEL: Record<string, string> = { yes: 'Yes', no: 'No' };
 
-/** Rows specific to the chosen reason for getting in touch. */
-function intentRows(data: ContactPayload): Array<[string, string]> {
+/** Rows specific to the chosen reason for getting in touch. Also used by
+ *  the admin inbox (admin/requests.astro). */
+export function intentRows(data: ContactPayload): Array<[string, string]> {
   if (data.intent === 'collaborate') {
     return [['Message', data.message || '-']];
   }
   if (data.intent === 'recommendation') {
-    return [['Name', data.recName || '-']];
+    // Older public enquiries only had a name.
+    if (!data.recPurpose) return [['Name', data.recName || '-']];
+    return [
+      ['Letter for', data.recPurpose || '-'],
+      ['Deadline', data.recDeadline || '-'],
+      ['Work with the lab', data.recWork || '-'],
+    ];
+  }
+  if (data.intent === 'topic') {
+    return [
+      ['Area or kind of topic', data.topicArea || '-'],
+      ['Would like to help with', data.topicRole || '-'],
+      ['Hours per week', data.topicHours || '-'],
+      ['Note', data.topicNote || '-'],
+    ];
   }
   if (data.intent === 'trending') {
     return [['Message', data.trendingMessage || '-']];
@@ -42,7 +57,7 @@ function intentRows(data: ContactPayload): Array<[string, string]> {
 
 function renderEmail(data: ContactPayload, note: string): string {
   const inner =
-    heading('New enquiry from the website') +
+    heading(data.source === 'member' ? 'New request from a member' : 'New enquiry from the website') +
     dataTable([
       ['Name', data.fullName],
       ['Email', data.email],
@@ -74,7 +89,7 @@ export async function deliverEnquiry(data: ContactPayload, opts: DeliverOpts = {
   const sent = await sendEmail({
     to: TO,
     replyTo: data.email,
-    subject: `Website enquiry (${INTENT_LABELS[data.intent]}): ${data.fullName}`,
+    subject: `${data.source === 'member' ? 'Member request' : 'Website enquiry'} (${INTENT_LABELS[data.intent]}): ${data.fullName}`,
     html: renderEmail(data, note),
     attachments: opts.attachments,
   });

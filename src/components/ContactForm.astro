@@ -1,9 +1,9 @@
 ---
-import { INTENT_LABELS, VISA_OPTIONS, OBS_CV } from '../lib/contact-schema';
+import { INTENT_LABELS, PUBLIC_INTENTS, VISA_OPTIONS, OBS_CV } from '../lib/contact-schema';
 import '../styles/form-skin.css';
 
 const mb = (b: number) => `${Math.round(b / 1024 / 1024)} MB`;
-const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, string][];
+const intents = PUBLIC_INTENTS.map((k) => [k, INTENT_LABELS[k]] as const);
 ---
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather+Sans:wght@400;500;600;700&display=swap" />
@@ -76,16 +76,6 @@ const intents = Object.entries(INTENT_LABELS) as [keyof typeof INTENT_LABELS, st
                 rows="6" maxlength="4000"
                 placeholder="Example: I am a PGY-2 IM resident interested in joining the MCA Heart Research Lab."></textarea>
       <p class="field__error" data-error-for="message" hidden></p>
-    </div>
-  </div>
-
-  {/* --------------------------------------------------- Recommendation */}
-  <div class="cform__panel" data-intent-panel="recommendation" hidden>
-    <div class="field">
-      <label class="field__label" for="recName">Full name <span aria-hidden="true">*</span></label>
-      <p class="field__help">We'll add a few more questions here soon - for now, your name is enough to get started.</p>
-      <input class="field__input" id="recName" name="recName" type="text" maxlength="120" placeholder="Your full name" />
-      <p class="field__error" data-error-for="recName" hidden></p>
     </div>
   </div>
 

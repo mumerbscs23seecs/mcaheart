@@ -184,8 +184,7 @@ const middle = rest.join(' ');
   /* ---------------- PREVIEW: background options (?bg=…) ---------------- */
   .ot-x { display: none; pointer-events: none; }
   .ot:not([data-bg="current"]) .ot-hero__disc { display: none; }
-  .ot:not([data-bg="current"]) .ot-lead__portrait::before,
-  .ot:not([data-bg="current"]) .ot-lead__portrait::after { display: none; }
+  .ot:not([data-bg="current"]) .ot-lead__portrait::before { display: none; }
 
   /* 1. ECG: one heartbeat line that draws itself, behind the art. */
   .ot[data-bg="ecg"] .ot-x--ecg { display: block; position: absolute; z-index: 0; overflow: visible; max-width: none; }
@@ -228,11 +227,6 @@ const middle = rest.join(' ');
   .ot-lead__portrait::before {
     content: ''; position: absolute; inset: 5% -8% -3% 12%; z-index: 0;
     background: var(--ot-disc); border-radius: 2px; transform: rotate(4deg);
-  }
-  .ot-lead__portrait::after {
-    content: ''; position: absolute; inset: 0 7% 0 -9%; z-index: 2; pointer-events: none;
-    border: 1px solid color-mix(in srgb, var(--ot-red) 40%, transparent);
-    transform: translate3d(var(--x), var(--y), 0) rotate(-4deg);
   }
   .ot-lead__portrait img {
     position: relative; z-index: 1; width: 100%; height: 100%;

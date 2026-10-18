@@ -5,12 +5,19 @@ import { z } from 'zod';
  * server-side enforcement can never drift apart.
  */
 
-export const INTENTS = ['collaborate', 'recommendation', 'observership', 'trending', 'other'] as const;
+/** Every kind of request the admin inbox (Admin -> Requests) can hold. */
+export const INTENTS = ['collaborate', 'recommendation', 'topic', 'observership', 'trending', 'other'] as const;
 export type Intent = (typeof INTENTS)[number];
+
+/** What the public Contact form offers. Letters of recommendation and joining
+ *  a topic are members-only, asked for from the portal's Requests page. */
+export const PUBLIC_INTENTS = ['collaborate', 'observership', 'trending', 'other'] as const;
+export type PublicIntent = (typeof PUBLIC_INTENTS)[number];
 
 export const INTENT_LABELS: Record<Intent, string> = {
   collaborate: 'Looking for a collaboration',
   recommendation: 'Letter of recommendation',
+  topic: 'Join a new topic',
   observership: 'Request for observership',
   trending: 'Join Heart Trending',
   other: 'Other reason',
@@ -52,15 +59,28 @@ export const contactSchema = z
 
     designation: z.string().trim().max(160).optional().or(z.literal('')),
 
-    intent: z.enum(INTENTS, {
+    intent: z.enum(PUBLIC_INTENTS, {
       errorMap: () => ({ message: 'Please choose why you are getting in touch.' }),
     }),
 
     // --- Collaboration - just the free-text note below.
     message: optText(4000),
 
-    // --- Letter of recommendation - more fields to follow; just a name for now.
+    // --- Letter of recommendation. Older public enquiries only carried a
+    // name; member requests (portal) carry the rest.
     recName: optText(120),
+    recPurpose: optText(300),
+    recDeadline: optText(20),
+    recWork: optText(4000),
+
+    // --- Join a new topic (members).
+    topicArea: optText(300),
+    topicRole: optText(120),
+    topicHours: optText(40),
+    topicNote: optText(4000),
+
+    /** 'member' for requests sent from the portal. */
+    source: optText(20),
 
     // --- Request for observership.
     obsName: optText(120),
@@ -99,10 +119,6 @@ export const contactSchema = z
         'message',
         'Please tell us a little more - at least 10 characters.',
       );
-    }
-
-    if (data.intent === 'recommendation') {
-      need(data.recName && data.recName.trim().length >= 2, 'recName', 'Please enter your full name.');
     }
 
     if (data.intent === 'observership') {
@@ -145,7 +161,25 @@ export const contactSchema = z
     }
   });
 
-export type ContactPayload = z.infer<typeof contactSchema>;
+/** A stored request: a public enquiry, or a member request from the portal. */
+export type ContactPayload = Omit<z.infer<typeof contactSchema>, 'intent'> & { intent: Intent };
+
+/** Member requests from the portal's Requests page. */
+export const memberRequestSchema = z.discriminatedUnion('intent', [
+  z.object({
+    intent: z.literal('recommendation'),
+    recPurpose: z.string({ required_error: 'Tell us what the letter is for.' }).trim().min(3, 'Tell us what the letter is for.').max(300),
+    recDeadline: z.string({ required_error: 'Add the deadline.' }).trim().min(1, 'Add the deadline.').max(20),
+    recWork: z.string({ required_error: 'List the papers or projects you worked on - at least 10 characters.' }).trim().min(10, 'List the papers or projects you worked on - at least 10 characters.').max(4000),
+  }),
+  z.object({
+    intent: z.literal('topic'),
+    topicArea: z.string({ required_error: 'Tell us the area or kind of topic.' }).trim().min(3, 'Tell us the area or kind of topic.').max(300),
+    topicRole: z.string({ required_error: 'Choose how you would like to help.' }).trim().min(1, 'Choose how you would like to help.').max(120),
+    topicHours: optText(40),
+    topicNote: optText(4000),
+  }),
+]);
 
 /** CV upload limit for the observership request - matches the field's own help text. */
 export const OBS_CV = {
