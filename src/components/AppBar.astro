@@ -79,14 +79,11 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
       <span><b>MCA</b> HEART</span>
     </a>
 
-    {navItems.length > 0 && (
-      <button type="button" class="appbar__burger" data-nav-toggle aria-controls="appbar-nav" aria-expanded="false" aria-label="Menu">
-        <span></span><span></span><span></span>
-      </button>
-    )}
+    <button type="button" class="appbar__burger" data-nav-toggle aria-controls="appbar-nav" aria-expanded="false" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
 
-    {navItems.length > 0 && (
-      <nav class="appbar__nav" id="appbar-nav" aria-label="Members">
+    <nav class:list={['appbar__nav', navItems.length === 0 && 'appbar__nav--acct-only']} id="appbar-nav" aria-label="Members">
         {navItems.map((item) =>
           item.type === 'link' ? (
             <a
@@ -121,8 +118,27 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
             </span>
           ),
         )}
+
+        {/* Phones only: the account and theme controls live in this menu
+            instead of the bar, which keeps just the bell. */}
+        <div class="appbar__navacct">
+          <div class="appbar__navid">
+            <span class="acct__avatar">{initials}</span>
+            <span>
+              <b>{name}</b>
+              {email && <small>{email}</small>}
+            </span>
+          </div>
+          <div class="appbar__navrow">
+            <span>Dark mode</span>
+            <ThemeToggle />
+          </div>
+          <a class="appbar__navrow" href="/account/password">Change password</a>
+          <form method="post" action="/logout">
+            <button class="appbar__navrow appbar__navrow--out" type="submit">Sign out</button>
+          </form>
+        </div>
       </nav>
-    )}
 
     <div class="appbar__account">
       <span class="nbell" data-nbell>
@@ -148,7 +164,7 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
         </div>
       </span>
 
-      <ThemeToggle variant="plain" />
+      <ThemeToggle />
 
       <span class="acct" data-acct>
         <button type="button" class="acct__trigger" data-acct-toggle aria-haspopup="true" aria-expanded="false" aria-label="Account menu">
@@ -409,8 +425,9 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
   .acct__row--out { color: #7a1322; font-weight: 600; }
   :root[data-theme='dark'] .acct__row--out { color: #f08a7e; }
 
-  /* The menu button only exists on phones (below). */
-  .appbar__burger { display: none; }
+  /* The menu button and the in-menu account block only exist on phones (below). */
+  .appbar__burger, .appbar__navacct { display: none; }
+  .appbar__nav--acct-only { display: none; }
 
   @media (max-width: 720px) {
     /* Phones: one compact row - logo, then bell / theme / account, then a
@@ -443,6 +460,23 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
     .appbar__menu { display: flex; flex-direction: column; width: 100%; }
     .appbar__menu-panel { position: static; translate: none; margin: 0 0 0.4rem; width: 100%; box-shadow: none; }
 
+    /* The bar keeps only the bell; theme and account move into the menu. */
+    .appbar__account > .theme-toggle, .appbar__account > .acct { display: none; }
+    .appbar__navacct { display: grid; margin-top: 0.4rem; padding-top: 0.6rem; border-top: 1px solid rgba(255, 255, 255, 0.22); color: #fff; }
+    .appbar__nav--acct-only .appbar__navacct { margin-top: 0; border-top: 0; }
+    .appbar__navid { display: flex; align-items: center; gap: 0.75rem; padding: 0.4rem 0.25rem 0.7rem; }
+    .appbar__navid b { display: block; font-size: 0.95rem; overflow-wrap: anywhere; }
+    .appbar__navid small { display: block; font-size: 0.78rem; color: rgba(255, 255, 255, 0.75); overflow-wrap: anywhere; }
+    .appbar__navid .acct__avatar { width: 38px; height: 38px; background: #fff; color: #7a1322; }
+    .appbar__navacct form { margin: 0; }
+    .appbar__navrow {
+      display: flex; align-items: center; justify-content: space-between; width: 100%;
+      min-height: 48px; padding: 0 0.25rem;
+      background: none; border: 0; border-top: 1px solid rgba(255, 255, 255, 0.14);
+      font: inherit; font-size: 0.95rem; font-weight: 700; color: #fff; text-align: left; text-decoration: none; cursor: pointer;
+    }
+    .appbar__navrow:hover { background: rgba(255, 255, 255, 0.08); }
+
     /* Bell and account panels span the screen width just under the bar. */
     .acct__panel, .nbell__panel { position: fixed; top: 60px; left: 12px; right: 12px; width: auto; }
   }
@@ -459,7 +493,7 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
   .nbell__dot { background: #fff; color: #7a1322; box-shadow: 0 0 0 2px #7a1322; }
   .nbell__btn { color: #fff; }
   .nbell__btn:hover, .nbell.is-open .nbell__btn { color: #fff; background: rgba(255, 255, 255, 0.16); }
-  .appbar .theme-toggle { color: #fff; }
+  .appbar .theme-toggle { color: #fff; border-color: rgba(255, 255, 255, 0.55); }
   .appbar .theme-toggle:hover, .appbar .theme-toggle:active { background: rgba(255, 255, 255, 0.16); color: #fff; }
   .appbar .acct { margin-left: 0.6rem; }
   .appbar .acct__trigger .acct__avatar { background: #fff; color: #7a1322; }

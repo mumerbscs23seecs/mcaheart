@@ -121,14 +121,10 @@
   color-scheme: light;
 }
 
-/* Phones: a compact top bar, and a bottom tab bar (--dock-h) that every
-   fixed/pinned layout reserves room for via --dock-space. */
+/* Phones: a compact top bar. (--dock-h / --dock-space stay at 0 - there
+   is no bottom tab bar any more; menus open from the top-right burger.) */
 @media (max-width: 760px) {
-  :root {
-    --header-h: 60px;
-    --dock-h: 60px;
-    --dock-space: calc(var(--dock-h) + env(safe-area-inset-bottom, 0px));
-  }
+  :root { --header-h: 60px; }
 }
 
 /* ---------- 1b. Dark mode ------------------------------------------------
@@ -253,10 +249,6 @@ body {
   text-rendering: optimizeLegibility;
   overflow-x: hidden;
   transition: background-color 0.25s var(--ease), color 0.25s var(--ease);
-}
-/* Phones: the page ends above the tab bar, not under it. */
-@media (max-width: 760px) {
-  body { padding-bottom: var(--dock-space); }
 }
 html.is-locked { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) {

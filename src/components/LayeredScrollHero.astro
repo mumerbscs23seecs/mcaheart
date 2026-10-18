@@ -10,14 +10,12 @@
  * it as custom properties on the pin; every layer's motion is a CSS calc()
  * off those. Three modes, chosen by media query:
  *   desktop  - wide stage, side art exits, wordmark rises (the original);
- *   phone    - opens on the whole composition, then the camera pushes in
- *              on the wordmark while the side art exits; the lab's numbers
- *              rise in below and count up with the scroll;
+ *   phone    - the backdrop fills the whole screen; the side art exits
+ *              and the wordmark rises as on desktop, while the camera
+ *              pushes in a little on the wordmark;
  *   at rest  - reduced motion, or a landscape phone too short to pin:
  *              no scroll-lock, the composition sits still.
  */
-import { researchStats, director } from '../data/site';
-
 interface Props {
   title: string;
 }
@@ -56,19 +54,6 @@ const base = '/assets/research/hero-layers';
         </div>
       </div>
 
-      {/* Phone only - the desktop composition is left exactly as designed. */}
-      <div class="lshero__copy">
-        <p class="lshero__eyebrow" style="--k:0">Led by {director.name}, {director.credentials}</p>
-        <ul class="lshero__stats">
-          {researchStats.map((s, i) => (
-            <li style={`--k:${i + 1}`}>
-              <span class="lshero__num" data-count={s.value}>{s.value}</span>
-              <span class="lshero__label">{s.label}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-      <p class="lshero__cue" aria-hidden="true">Scroll</p>
     </div>
   </div>
 </section>
@@ -86,7 +71,6 @@ const base = '/assets/research/hero-layers';
   .lshero__pin {
     --p: 0;
     --pside: 0;
-    --pc: 0;
     position: sticky;
     top: 0;
     height: 100vh;
@@ -163,9 +147,6 @@ const base = '/assets/research/hero-layers';
     transform: translate3d(0, calc(var(--p) * -26%), 0) scale(calc(1 - var(--p) * 0.08));
   }
 
-  .lshero__copy,
-  .lshero__cue { display: none; }
-
   /* ============================================================== Camera
      Phones and the at-rest layout use a taller frame than the artwork, so
      the composition lives in one canvas that can be moved as a camera: it
@@ -183,77 +164,32 @@ const base = '/assets/research/hero-layers';
   }
 
   /* ================================================================ Phone
-     Pinned for a shorter run: the whole composition, then the camera pushes
-     in on the wordmark as the side art flies out, then the lab's numbers
-     lift in below it and count up with the scroll. */
+     Full-screen: the backdrop photo covers the whole window, the artwork
+     sits across the middle and plays the desktop motion (side art exits,
+     wordmark rises) while the camera pushes in a little on the wordmark. */
   @media (max-width: 760px) {
-    .lshero__space { height: 290svh; }
+    /* Starts under the top bar, so the photo runs to the top of the screen. */
+    .lshero__space { height: 260svh; margin-top: calc(-1 * var(--header-h)); }
     .lshero__pin {
       height: 100svh;
       max-height: none;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: var(--space-m);
-      padding: calc(var(--header-h) * 0.6) 0 var(--dock-space);
     }
     .lshero__stage {
-      flex: none;
-      aspect-ratio: 4 / 5;
-      max-height: 56svh;
-    }
-    #ls-logo { transform: none; }
-
-    .lshero__copy { display: block; padding-inline: var(--gutter); }
-    .lshero__copy [style*='--k'] {
-      --t: clamp(0, calc(var(--pc) * 3.2 - var(--k) * 0.55), 1);
-      opacity: var(--t);
-      translate: 0 calc((1 - var(--t)) * 28px);
-    }
-    .lshero__eyebrow {
-      font-size: 0.75rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.16em;
-      color: var(--text-muted);
-      padding-bottom: var(--space-xs);
-      border-bottom: 2px solid var(--ink);
-    }
-    .lshero__stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: var(--space-xs);
-      margin-top: var(--space-s);
-    }
-    .lshero__stats li { display: grid; gap: 0.3rem; align-content: start; }
-    .lshero__num {
-      font-family: var(--font-display);
-      font-size: clamp(1.7rem, 1rem + 3.4vw, 2.3rem);
-      font-weight: 800;
-      line-height: 1;
-      letter-spacing: -0.02em;
-      font-variant-numeric: tabular-nums;
-      color: var(--blue);
-    }
-    .lshero__label { font-size: 0.8125rem; line-height: 1.35; color: var(--text); }
-
-    .lshero__cue {
-      display: block;
       position: absolute;
-      left: 50%;
-      bottom: calc(var(--dock-space) + var(--header-h) + 14px);
-      font-size: 0.75rem;
-      font-weight: 700;
-      letter-spacing: 0.22em;
-      text-transform: uppercase;
-      color: var(--text-muted);
-      opacity: calc(1 - var(--pside) * 5);
-      animation: ls-bob 1.8s ease-in-out infinite;
+      inset: 0;
+      aspect-ratio: auto;
     }
-  }
-  @keyframes ls-bob {
-    0%, 100% { transform: translate(-50%, 0); }
-    50% { transform: translate(-50%, 7px); }
+    .lshero__canvas {
+      transform: translateY(calc(-50% + var(--header-h) / 2)) scale(calc(1 + 0.55 * var(--pz, 0)));
+    }
+    /* The artwork was drawn for a wide frame, so on a tall screen its top
+       and bottom edges would show as hard cuts across the backdrop. Fade
+       them out so the art melts into the photo instead. */
+    .lsgroup {
+      -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16%, #000 76%, transparent 100%);
+      mask-image: linear-gradient(to bottom, transparent 0, #000 16%, #000 76%, transparent 100%);
+    }
+
   }
 
   /* ============================================================= At rest
@@ -265,7 +201,6 @@ const base = '/assets/research/hero-layers';
     .lshero__pin {
       --p: 0 !important;
       --pside: 0 !important;
-      --pc: 1 !important;
       --pz: 1 !important;
       position: relative;
       height: auto;
@@ -273,7 +208,6 @@ const base = '/assets/research/hero-layers';
       padding-block: 0 var(--space-l);
     }
     .lshero__stage { aspect-ratio: 4 / 3; max-height: 72svh; }
-    .lshero__cue { display: none; }
   }
 </style>
 
@@ -284,15 +218,10 @@ const base = '/assets/research/hero-layers';
   const pin = document.getElementById('lsheroPin');
   const REST_QUERY = '(prefers-reduced-motion: reduce), (max-height: 520px)';
   const atRest = matchMedia(REST_QUERY);
-  const phoneQ = matchMedia('(max-width: 760px)');
 
   if (space && pin) {
     const ease = (v: number) => (v < 0.5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2);
     const smooth = follower(0.16);
-    const nums = Array.from(pin.querySelectorAll<HTMLElement>('[data-count]')).map((el) => {
-      const raw = el.dataset.count ?? '';
-      return { el, raw, target: parseInt(raw.replace(/\D/g, ''), 10) || 0, suffix: raw.replace(/[0-9]/g, '') };
-    });
     const stage = pin.querySelector<HTMLElement>('.lshero__stage')!;
     let top = 0;
     let travel = 0;
@@ -308,7 +237,6 @@ const base = '/assets/research/hero-layers';
       update({ y, dt }) {
         if (atRest.matches) {
           smooth.reset();
-          nums.forEach((n) => { if (n.el.textContent !== n.raw) n.el.textContent = n.raw; });
           return;
         }
         const target = clamp((y - top) / travel);
@@ -317,17 +245,6 @@ const base = '/assets/research/hero-layers';
         setVar(pin, '--p', p, 4);
         setVar(pin, '--pside', clamp(p / 0.55), 4);
         setVar(pin, '--pz', ease(clamp(raw / 0.6)), 4);
-        const pc = clamp((p - 0.4) / 0.5);
-        setVar(pin, '--pc', pc, 4);
-
-        // Phone: the figures count up with the scroll itself.
-        if (phoneQ.matches) {
-          nums.forEach((n, i) => {
-            const t = clamp(pc * 1.4 - i * 0.14);
-            const txt = t >= 1 ? n.raw : Math.round(n.target * (1 - Math.pow(1 - t, 3))) + n.suffix;
-            if (n.el.textContent !== txt) n.el.textContent = txt;
-          });
-        }
         return raw !== target;
       },
     });

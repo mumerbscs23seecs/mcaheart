@@ -374,6 +374,21 @@ const middle = rest.join(' ');
     /* On phones a tapped card grows in place; the details sit under it. */
     .ot-tri.has-open .ot-card.is-open .ot-card__body { transform: scale(1.04); }
     .ot-card__details { position: static; translate: none; width: 100%; margin-top: 0.75rem; display: none; }
+
+    /* Phones: the intro reads like the landing page - heading on the left,
+       a smaller heart beside it on the right, no backdrop disc. */
+    .ot-hero {
+      grid-template-columns: minmax(0, 1fr) 40%;
+      min-height: auto;
+      padding: var(--space-l) var(--gutter) var(--space-l);
+      gap: 0;
+    }
+    .ot-hero__title { font-size: clamp(2.1rem, 0.4rem + 8vw, 3rem); }
+    .ot-hero__visual { grid-row: auto; height: min(104vw, 440px); min-height: 0; margin-right: calc(-0.6 * var(--gutter)); }
+    .ot-hero__visual img { height: 100%; }
+    /* A smaller portrait, so it doesn't fill the whole screen. */
+    .ot-lead__portrait { width: min(62%, 250px); }
+    .ot-hero__disc { display: none; }
     .ot-card.is-open .ot-card__details { display: grid; }
   }
   @media (prefers-reduced-motion: reduce) {
