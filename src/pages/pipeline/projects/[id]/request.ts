@@ -17,9 +17,9 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
   const stage = String(form.get('stage') ?? '').trim();
   const journal = String(form.get('journal') ?? '').trim();
   let note = String(form.get('note') ?? '').trim() || null;
-  // request_stage_change has no dedicated journal param - fold it into the
-  // note so the coordinator sees it when deciding (gate.astro's set_submitted_
-  // journal path is admin-only, this is just a heads-up for the request).
+  // The journal goes to request_stage_change as its own field (approving a
+  // "Submitted" request records it), and into the note too, so it shows
+  // wherever the request is listed.
   if (journal) note = `Journal: ${journal}${note ? `\n\n${note}` : ''}`;
   const reviewUrl = String(form.get('review_url') ?? '').trim();
   const ret = String(form.get('return') ?? '');
@@ -37,6 +37,7 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
     p_stage: stage,
     p_note: note,
     p_review_url: reviewUrl || null,
+    p_journal: journal || null,
   });
   if (error) return to('err', error.message);
 

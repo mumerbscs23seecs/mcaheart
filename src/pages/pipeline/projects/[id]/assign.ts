@@ -3,7 +3,7 @@ import type { APIRoute } from 'astro';
 export const prerender = false;
 
 /**
- * Admin sets who's on a project - lead, co-lead, analyst, presenter,
+ * Admin (or the paper's lead) sets who's on a project - lead, co-lead, analyst, presenter,
  * corresponding author. This is also how an analyst gets member-portal
  * access to a paper: scopeProjects() (pipeline-scope.ts) already grants
  * a person visibility into any project where they sit in one of these five
@@ -15,15 +15,19 @@ export const POST: APIRoute = async ({ params, request, locals, redirect }) => {
   const id = params.id!;
   const back = `/pipeline/projects/${id}`;
 
-  if (person.role !== 'admin') return redirect(`${back}?err=${encodeURIComponent('Admins only.')}`);
+  const isAdmin = person.role === 'admin';
+  const { data: cur } = await supabase.from('projects').select('lead_id').eq('id', id).maybeSingle();
+  const isLead = !!cur && cur.lead_id === person.id;
+  if (!isAdmin && !isLead) return redirect(`${back}?err=${encodeURIComponent('Only the lead or a coordinator can change the people.')}`);
 
   const form = await request.formData();
   const pick = (name: string) => String(form.get(name) ?? '').trim() || null;
+  // The lead can change everyone but themselves - the lead slot stays put.
   const teamMemberIds = [...new Set(form.getAll('team_member_ids').map((v) => String(v).trim()).filter(Boolean))];
 
   const { error } = await supabase.rpc('assign_people', {
     p_project: id,
-    p_lead_id: pick('lead_id'),
+    p_lead_id: isAdmin ? pick('lead_id') : cur!.lead_id,
     p_colead_id: pick('colead_id'),
     p_analyst_id: pick('analyst_id'),
     p_presenter_id: pick('presenter_id'),

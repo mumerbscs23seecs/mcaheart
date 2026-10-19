@@ -4,6 +4,7 @@ import PeoplePicker from '../../../components/PeoplePicker.astro';
 import TeamPicker from '../../../components/TeamPicker.astro';
 import { stagesFor } from '../../../lib/lifecycle.mjs';
 import { personOnProject } from '../../../lib/pipeline-scope';
+import { supabaseAdmin } from '../../../lib/supabase';
 import { docLinkLabel, DOC_LINK_HINT } from '../../../lib/doc-links';
 import { stageColor } from '../../../lib/calm';
 import '../../../styles/calm.css';
@@ -34,9 +35,15 @@ const teamMembers = teamMemberIds.map((id) => who.get(id)).filter(Boolean) as { 
 // setting analyst_id here is also how that person gets member-portal
 // access to this paper (scopeProjects() grants visibility off these
 // same five columns).
+// The paper's lead gets the same pickers (all but the Lead one); the roster
+// is read with the service client since members can't list everyone.
+const isLead = !isAdmin && p.lead_id === person.id;
+const canEditPeople = (isAdmin || isLead) && !p.archived_at;
 const { data: roster } = isAdmin
   ? await supabase.from('people').select('id,full_name').eq('active', true).order('full_name')
-  : { data: [] };
+  : isLead
+    ? await supabaseAdmin().from('people').select('id,full_name').eq('active', true).order('full_name')
+    : { data: [] };
 
 const { data: confAttempts } = await supabase
   .from('conference_attempts')
@@ -562,11 +569,11 @@ const peopleRows2: { label: string; name: string | null }[] = [
         )}
       </dl>
 
-      {isAdmin && (
+      {canEditPeople && (
         <details class="pl-inline-details pd-edit" style="margin-top:14px">
           <summary>Edit people</summary>
           <form method="post" action={`/pipeline/projects/${id}/assign`} class="pl-mini pl-mini--col" style="margin-top:10px">
-            <PeoplePicker name="lead_id" label="Lead" roster={roster ?? []} selectedId={p.lead_id} selectedName={who.get(p.lead_id)?.full_name} />
+            {isAdmin && <PeoplePicker name="lead_id" label="Lead" roster={roster ?? []} selectedId={p.lead_id} selectedName={who.get(p.lead_id)?.full_name} />}
             <PeoplePicker name="colead_id" label="Co-lead" roster={roster ?? []} selectedId={p.colead_id} selectedName={who.get(p.colead_id)?.full_name} />
             <PeoplePicker name="analyst_id" label="Analyst" roster={roster ?? []} selectedId={p.analyst_id} selectedName={who.get(p.analyst_id)?.full_name} />
             <PeoplePicker name="presenter_id" label="Presenter" roster={roster ?? []} selectedId={p.presenter_id} selectedName={who.get(p.presenter_id)?.full_name} />

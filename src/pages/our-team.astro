@@ -358,6 +358,8 @@ const middle = rest.join(' ');
   @keyframes ot-line { from { opacity: 0; transform: translateX(-8%); } }
   @keyframes ot-fade { from { opacity: 0; transform: translateY(24px); } }
 
+  /* Desktop: lift the heart a little so its tip clears the fold. */
+  @media (min-width: 861px) { .ot-hero__visual { top: -8vh; } }
   @media (max-width: 1000px) { .ot-lead__name { white-space: normal; } }
   @media (max-width: 860px) {
     .ot-hero { grid-template-columns: 1fr; padding-top: var(--space-m); gap: 1rem; }

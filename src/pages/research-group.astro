@@ -5,7 +5,6 @@ export const prerender = false;
 
 import BaseLayout from '../layouts/BaseLayout.astro';
 import LayeredScrollHero from '../components/LayeredScrollHero.astro';
-import CTABanner from '../components/CTABanner.astro';
 import Societies from '../components/Societies.astro';
 import { missionVision, recentPublications as fallbackPublications } from '../data/site';
 import { fetchRecentPublications } from '../lib/pubmed-feed';
@@ -160,13 +159,6 @@ const testimonials = await listTestimonialsPublic();
     </div>
   </section>
 
-  <CTABanner
-    title="Get in touch with us"
-    body="Tell us where you are in your training and what you want to work on. We will point you to the right project."
-    ctaLabel="Start the conversation"
-    ctaHref="/contact"
-    image="/assets/home/group-photo.webp"
-  />
 </BaseLayout>
 
 <style>
