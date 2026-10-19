@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { isDocLink, DOC_LINK_HINT } from '../../../../lib/doc-links';
 import { deliverRequestSubmitted } from '../../../../lib/pipeline-mailer';
 import { stagesFor } from '../../../../lib/lifecycle.mjs';
+import { wantsCoordinatorEmail } from '../../../../lib/coordinator-emails';
 
 export const prerender = false;
 
@@ -46,7 +47,7 @@ export const POST: APIRoute = async ({ params, request, locals, redirect, url })
   if (p0) {
     const stageLabel = stagesFor(p0.phase).find((s: any) => s.code === stage)?.label ?? stage;
     const { data: admins } = await supabase.from('people').select('email').eq('role', 'admin').eq('active', true);
-    const adminEmails = (admins ?? []).map((a: any) => a.email).filter(REAL);
+    const adminEmails = (admins ?? []).map((a: any) => a.email).filter(REAL).filter(wantsCoordinatorEmail);
     if (adminEmails.length) {
       const sent = await deliverRequestSubmitted({
         to: adminEmails,

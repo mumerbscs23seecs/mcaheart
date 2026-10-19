@@ -11,6 +11,7 @@
  * this - see mca-pipeline/links-reminders.sql). Each level fires at most once.
  */
 import { supabaseAdmin } from './supabase';
+import { wantsCoordinatorEmail } from './coordinator-emails';
 import { deliverPipelineReminder } from './pipeline-mailer';
 
 const REAL = (e: string | null | undefined) => !!e && !e.endsWith('@import.invalid');
@@ -48,7 +49,8 @@ export async function sweepPipelineReminders(dryRun = false): Promise<PipelineSw
     (await db.from('people').select('email').eq('role', 'admin').eq('active', true)).data ?? []
   )
     .map((a: any) => a.email)
-    .filter(REAL);
+    .filter(REAL)
+    .filter(wantsCoordinatorEmail);
 
   const sent: PipelineSweepResult['sent'] = [];
   const flagged: string[] = [];
