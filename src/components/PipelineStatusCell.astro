@@ -28,9 +28,13 @@ const OUTCOME_ROUTE: Record<string, Record<string, Route>> = {
     rejected_no_comments: { gate: 'journal-outcome', outcome: 'rejected', rejectStage: 'rejected_no_comments' },
   },
 };
-const routeFor = (code: string): Route | undefined => OUTCOME_ROUTE[p.phase]?.[code];
 const openAttempt =
   p.phase === 'journal' ? p.open_journal_attempt_id : p.phase === 'conference' ? p.open_conference_attempt_id : null;
+// A journal paper with no open attempt still offers every status: the
+// outcome is then saved as a plain stage change instead of through the gate.
+const routeFor = (code: string): Route | undefined =>
+  p.phase === 'journal' && !openAttempt ? undefined : OUTCOME_ROUTE[p.phase]?.[code];
+const isOutcome = (code: string) => !!OUTCOME_ROUTE[p.phase]?.[code];
 // A decided abstract is frozen - its status cell becomes read-only.
 const FROZEN: Record<string, string[]> = { conference: ['accepted', 'rejected'] };
 const frozen = FROZEN[p.phase] ?? [];
@@ -39,8 +43,8 @@ const frozen = FROZEN[p.phase] ?? [];
 // decide); members never see outcome codes - those aren't theirs to set,
 // and journal-phase requests aren't supported at all (the coordinator
 // handles Submissions directly).
-const adminOptions = stagesFor(p.phase).filter((s: any) => !(routeFor(s.code) && !openAttempt));
-const memberOptions = stagesFor(p.phase).filter((s: any) => !routeFor(s.code));
+const adminOptions = stagesFor(p.phase).filter((s: any) => p.phase === 'journal' || !(routeFor(s.code) && !openAttempt));
+const memberOptions = stagesFor(p.phase).filter((s: any) => !isOutcome(s.code));
 const options = isAdmin ? adminOptions : memberOptions;
 
 // A handful of stage codes need one more field before they can apply - gate.astro
