@@ -10,10 +10,40 @@ import { scopeProjects } from '../../lib/pipeline-scope';
 import { stagesFor } from '../../lib/lifecycle.mjs';
 import { journalSiteHref } from '../../lib/journal-links';
 import { drawerInfo, stageColor } from '../../lib/calm';
+import PeoplePicker from '../../components/PeoplePicker.astro';
+import { fellowsFor, sortByFellow, FELLOWS } from '../../lib/research-fellow';
+import { STUDY_TYPES } from '../../lib/lifecycle.mjs';
 
 export const prerender = false;
 const { supabase, person } = Astro.locals;
 const isAdmin = person.role === 'admin';
+
+// Coordinators can add a paper straight onto Submissions.
+if (isAdmin && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  if (String(form.get('action') ?? '') === 'add-paper') {
+    const title = String(form.get('title') ?? '').trim();
+    const studyType = String(form.get('study_type') ?? '');
+    if (!title || !studyType) {
+      return Astro.redirect(`/pipeline/submissions?err=${encodeURIComponent('Title and study type are both required.')}`);
+    }
+    const { error } = await supabase.rpc('create_project_in_journal', {
+      p_title: title,
+      p_study_type: studyType,
+      p_lead_id: String(form.get('lead_id') ?? '').trim() || null,
+      p_analyst_id: String(form.get('analyst_id') ?? '').trim() || null,
+      p_journal: String(form.get('journal') ?? '').trim() || null,
+      p_fellow: String(form.get('fellow') ?? 'burhan'),
+    });
+    const msg = error
+      ? `err=${encodeURIComponent(error.message.includes('create_project_in_journal') ? 'Run mca-pipeline/add-research-fellow.sql in Supabase first.' : error.message)}`
+      : `ok=${encodeURIComponent(`Added "${title}".`)}`;
+    return Astro.redirect(`/pipeline/submissions?${msg}`);
+  }
+}
+const { data: people } = isAdmin
+  ? await supabase.from('people').select('id,full_name').eq('active', true).order('full_name')
+  : { data: [] };
 
 let query = supabase
   .from('project_list')
@@ -30,7 +60,9 @@ if (isAdmin) query = query.neq('stage', 'published');
 if (!isAdmin) query = scopeProjects(query, person);
 
 const { data: rows, error } = await query;
-const list = rows ?? [];
+// Burhan's papers first, then Jawad's (no divider) - see research-fellow.ts.
+const fellows = await fellowsFor((rows ?? []).map((p: any) => p.id));
+const list = sortByFellow((rows ?? []) as any[], fellows);
 
 // "Open journal site": the attempt's own portal link, then the lab's list of
 // submission links (src/lib/journal-links.ts), then a web search.
@@ -51,6 +83,41 @@ const chips = stagesFor('journal').map((s: any) => ({
 <PipelineLayout title="Submissions" active="submissions">
   <div class="cv">
     <CalmBar title="Submissions" count={list.length} />
+    {isAdmin && (
+        <details class="pl-inline-details" style="margin:0 0 18px">
+          <summary>+ Add a paper</summary>
+          <p class="pl-muted" style="padding:10px 0 0; font-size:.85rem">
+            Adds the paper straight to Submissions. With a journal it starts as "Submitted/With editor"; without one, "Submission awaited".
+          </p>
+          <form method="post" class="pl-mini pl-mini--col" style="margin-top:10px">
+            <input type="hidden" name="action" value="add-paper" />
+            <label class="pl-field">
+              <span>Title</span>
+              <input name="title" required placeholder="Paper title" />
+            </label>
+            <label class="pl-field">
+              <span>Study type</span>
+              <select name="study_type" required>
+                <option value="" selected disabled>Choose one</option>
+                {STUDY_TYPES.map((t) => <option value={t}>{t}</option>)}
+              </select>
+            </label>
+            <PeoplePicker name="lead_id" label="Lead (optional)" roster={people ?? []} />
+            <PeoplePicker name="analyst_id" label="Analyst (optional)" roster={people ?? []} />
+            <label class="pl-field">
+              <span>Journal (optional)</span>
+              <input name="journal" placeholder="Journal name" />
+            </label>
+            <label class="pl-field">
+              <span>Research fellow</span>
+              <select name="fellow">
+                {FELLOWS.map((f) => <option value={f.key}>{f.label}</option>)}
+              </select>
+            </label>
+            <button class="pl-btn" type="submit">Add paper</button>
+          </form>
+        </details>
+    )}
     {error && <p class="pl-flash pl-flash--err">{error.message}</p>}
     <CalmFilters items={chips} total={list.length} />
 
@@ -77,7 +144,9 @@ const chips = stagesFor('journal').map((s: any) => ({
                   <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.full_title || p.title}</a>
                   {p.full_title && p.title && <div class="cv-sub">{p.title}</div>}
                 </td>
-                <td class="cv-classic cv-hide-sm">{p.lead_name ?? '-'}</td>
+                <td class="cv-classic cv-hide-sm">
+                  {p.lead_name ?? '-'}
+                </td>
                 <td class="cv-classic cv-hide-sm sm" data-cv-journal>{p.current_journal ?? '-'}</td>
                 <td class="cv-stacked cv-hide-sm">
                   <div class="cv-ln">{p.lead_name ?? '-'}</div>
