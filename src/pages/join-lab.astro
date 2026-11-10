@@ -48,4 +48,17 @@ import RecruitmentForm from '../components/RecruitmentForm.astro';
     font-size: 0.9em;
   }
   .join-note strong { color: inherit; }
+  /* Dark mode: a faint amber tint instead of the pale yellow block. */
+  @media (prefers-color-scheme: dark) {
+    :global(:root:not([data-theme='light'])) .join-note {
+      background: rgba(243, 215, 120, 0.1);
+      color: #efe3bd;
+      border-left-color: #b8952f;
+    }
+  }
+  :global(:root[data-theme='dark']) .join-note {
+    background: rgba(243, 215, 120, 0.1);
+    color: #efe3bd;
+    border-left-color: #b8952f;
+  }
 </style>
