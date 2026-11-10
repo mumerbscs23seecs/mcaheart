@@ -24,6 +24,11 @@ import RecruitmentForm from '../components/RecruitmentForm.astro';
           the outcome, usually within <strong>five days</strong>. No response within three weeks? Follow up at
           <a href="mailto:researchlab@mcaheart.com">researchlab@mcaheart.com</a>.
         </p>
+        <p class="join-note">
+          <span aria-hidden="true">⚠️</span>
+          <strong>Note:</strong> This is the application form for joining the MCA Heart Lab as a remote research
+          collaborator. It is not a research fellow position and does not involve any onsite work.
+        </p>
       </div>
       <RecruitmentForm />
     </div>
@@ -35,4 +40,12 @@ import RecruitmentForm from '../components/RecruitmentForm.astro';
 <style>
   /* Same hero scale as Submit an Idea and Contact; the centred, justified
      text style comes from src/styles/form-skin.css. */
+  .join-note {
+    padding: 12px 16px;
+    background: #fffbe8;
+    color: #1a1a1a;
+    border-left: 3px solid #f3d778;
+    font-size: 0.9em;
+  }
+  .join-note strong { color: inherit; }
 </style>

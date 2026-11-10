@@ -585,7 +585,7 @@ export const team: TeamMember[] = [
   },
   {
     name: 'Muhammad Umer',
-    title: 'Web Architect',
+    title: 'Web & Digital Media Manager',
     details: ['MCA Heart Research Lab'],
     email: 'muh4mm4dumer@gmail.com',
     photo: '/assets/team/muhammad-umer.jpg',
