@@ -73,7 +73,7 @@ const OUTCOME_HINT: Record<IdeaOutcome, string> = {
 };
 
 // Initial reviews need mca-pipeline/add-idea-reviews.sql. Until it's run, the
-// review step is skipped and any admin can tick the outcome straight away.
+// review step is hidden and any admin can tick the outcome straight away.
 async function loadReviews(): Promise<{ ready: boolean; map: Map<string, IdeaReview[]> }> {
   try {
     return { ready: true, map: await listIdeaReviews() };
@@ -85,11 +85,10 @@ async function loadReviews(): Promise<{ ready: boolean; map: Map<string, IdeaRev
 /** Why `me` can't make the final decision on this idea yet, or null if they can. */
 function decisionBlocked(reviews: IdeaReview[], ready: boolean): string | null {
   if (!ready) return null;
+  // Jawad and Burhan can each decide on their own: the initial review is there
+  // for when one wants the other's opinion first, not a required second vote.
+  if (myReviewer) return null;
   if (reviews.length === 0) return 'Jawad or Burhan needs to add an initial review first.';
-  if (myReviewer && reviews.every((r) => r.reviewer === myReviewer)) {
-    const other = REVIEWERS.find((r) => r.key !== myReviewer)!.name;
-    return `You wrote the initial review, so ${other} makes the final decision.`;
-  }
   return null;
 }
 
@@ -290,7 +289,7 @@ const decidedLabel = (i: IdeaRecord) =>
             <span class="idea__meta">
               {i.leadName} · {i.researchType} · {i.conference === 'none' ? 'no conference' : i.conference === 'flexible' ? 'conf. flexible' : i.conference} · {ago(i.submittedAt)}
               {reviewsReady && i.status === 'pending' && (
-                <> · <b class="idea__stage">{(reviews.get(i.id) ?? []).length ? 'Awaiting final decision' : 'Awaiting initial review'}</b></>
+                <> · <b class="idea__stage">{(reviews.get(i.id) ?? []).length ? 'Reviewed, awaiting final decision' : 'Awaiting decision'}</b></>
               )}
             </span>
             <span class="idea__chev" aria-hidden="true">▾</span>
@@ -305,16 +304,16 @@ const decidedLabel = (i: IdeaRecord) =>
                 <>
                   {pendingIdea && reviewsReady && (
                     <ol class="steps" aria-label="Review progress">
-                      <li class:list={['steps__item', first ? 'is-done' : 'is-current']}>
+                      <li class:list={['steps__item', first && 'is-done']}>
                         <span class="steps__num">{first ? '✓' : '1'}</span>
                         <span class="steps__text">
                           <b>Initial review</b>
-                          <small>{first ? `${reviewerName(first.reviewer)} · ${RECOMMENDATION_LABEL[first.recommendation]}` : 'Jawad or Burhan'}</small>
+                          <small>{first ? `${reviewerName(first.reviewer)} · ${RECOMMENDATION_LABEL[first.recommendation]}` : 'Optional'}</small>
                         </span>
                       </li>
-                      <li class:list={['steps__item', first && 'is-current']}>
+                      <li class:list={['steps__item', (first || myReviewer) && 'is-current']}>
                         <span class="steps__num">2</span>
-                        <span class="steps__text"><b>Final decision</b><small>{first ? `${REVIEWERS.find((r) => r.key !== first.reviewer)?.name ?? 'The other reviewer'}` : 'The other reviewer'}</small></span>
+                        <span class="steps__text"><b>Final decision</b><small>Jawad or Burhan</small></span>
                       </li>
                       <li class="steps__item">
                         <span class="steps__num">3</span>
@@ -384,7 +383,7 @@ const decidedLabel = (i: IdeaRecord) =>
                           <form method="post" class="panel">
                             <input type="hidden" name="ideaId" value={i.id} />
                             <input type="hidden" name="action" value="review" />
-                            <h3 class="panel__title">{mine ? 'Your initial review' : 'Add your initial review'}</h3>
+                            <h3 class="panel__title">{mine ? 'Your initial review' : 'Add an initial review (optional)'}</h3>
                             <div class="opts opts--3">
                               {(['accept', 'reject', 'modify'] as Recommendation[]).map((opt) => (
                                 <label class:list={['opt', `opt--${opt}`]}>
@@ -395,7 +394,7 @@ const decidedLabel = (i: IdeaRecord) =>
                               ))}
                             </div>
                             <label class="field">
-                              <span class="field__label">Comments for the final reviewer</span>
+                              <span class="field__label">Comments for the other reviewer</span>
                               <textarea name="review_comment" rows="3" placeholder="What should the other reviewer know?">{mine?.comment ?? ''}</textarea>
                             </label>
                             <div class="panel__foot">
