@@ -1,0 +1,126 @@
+---
+/**
+ * A filter bar for a list on the same page: a search box, some dropdowns and
+ * a "submitted" window. Each list item carries what it's filtered on:
+ *   data-lf-item               marks an item
+ *   data-lf-text="..."         lower-case text the search box looks in
+ *   data-lf-<key>="a b"        the value(s) a dropdown with that key matches
+ *   data-lf-days="12"          days since it was submitted
+ * Filtering happens in the browser, instantly, and the choices are kept in
+ * the address bar so a reload (or a decision being sent) keeps them.
+ */
+interface Option { value: string; label: string }
+interface Props {
+  searchLabel: string;
+  filters: { key: string; label: string; options: Option[] }[];
+  noun: string;
+}
+const { searchLabel, filters, noun } = Astro.props;
+---
+<div class="lf" data-lf data-noun={noun}>
+  <label class="lf__search">
+    <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
+    <input type="search" placeholder={searchLabel} aria-label={searchLabel} data-lf-search autocomplete="off" />
+  </label>
+  {filters.map((f) => (
+    <label class="lf__field">
+      <span>{f.label}</span>
+      <select data-lf-key={f.key}>
+        <option value="">All</option>
+        {f.options.map((o) => <option value={o.value}>{o.label}</option>)}
+      </select>
+    </label>
+  ))}
+  <label class="lf__field">
+    <span>Submitted</span>
+    <select data-lf-key="__days">
+      <option value="">Any time</option>
+      <option value="7">Last 7 days</option>
+      <option value="30">Last 30 days</option>
+      <option value="90">Last 3 months</option>
+      <option value="old">Over 3 months ago</option>
+    </select>
+  </label>
+  <p class="lf__count" data-lf-count aria-live="polite"></p>
+  <button type="button" class="lf__clear" data-lf-clear hidden>Clear filters</button>
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('[data-lf]').forEach((bar) => {
+    const items = [...document.querySelectorAll<HTMLElement>('[data-lf-item]')];
+    const search = bar.querySelector<HTMLInputElement>('[data-lf-search]')!;
+    const selects = [...bar.querySelectorAll<HTMLSelectElement>('[data-lf-key]')];
+    const count = bar.querySelector<HTMLElement>('[data-lf-count]')!;
+    const clear = bar.querySelector<HTMLButtonElement>('[data-lf-clear]')!;
+    const noun = bar.dataset.noun ?? 'items';
+
+    // Restore from the address bar.
+    const params = new URLSearchParams(location.search);
+    if (params.get('q')) search.value = params.get('q')!;
+    for (const s of selects) {
+      const v = params.get(`f_${s.dataset.lfKey}`);
+      if (v && [...s.options].some((o) => o.value === v)) s.value = v;
+    }
+
+    function apply() {
+      const q = search.value.trim().toLowerCase();
+      let shown = 0;
+      for (const it of items) {
+        let ok = !q || (it.dataset.lfText ?? '').includes(q);
+        for (const s of selects) {
+          if (!ok || !s.value) continue;
+          const key = s.dataset.lfKey!;
+          if (key === '__days') {
+            const d = Number(it.dataset.lfDays ?? 0);
+            ok = s.value === 'old' ? d > 90 : d <= Number(s.value);
+          } else {
+            const vals = (it.dataset[`lf${key.charAt(0).toUpperCase()}${key.slice(1)}`] ?? '').split(' ');
+            ok = vals.includes(s.value);
+          }
+        }
+        it.hidden = !ok;
+        if (ok) shown++;
+      }
+      const active = !!q || selects.some((s) => s.value);
+      count.textContent = active ? `Showing ${shown} of ${items.length} ${noun}` : `${items.length} ${noun}`;
+      clear.hidden = !active;
+      // Keep the choices in the address bar (without adding history entries).
+      const url = new URL(location.href);
+      url.searchParams.delete('q');
+      for (const s of selects) url.searchParams.delete(`f_${s.dataset.lfKey}`);
+      if (q) url.searchParams.set('q', search.value.trim());
+      for (const s of selects) if (s.value) url.searchParams.set(`f_${s.dataset.lfKey}`, s.value);
+      history.replaceState(history.state, '', url);
+      document.dispatchEvent(new CustomEvent('lf:change'));
+    }
+    search.addEventListener('input', apply);
+    selects.forEach((s) => s.addEventListener('change', apply));
+    clear.addEventListener('click', () => { search.value = ''; selects.forEach((s) => { s.value = ''; }); apply(); search.focus(); });
+    apply();
+  });
+</script>
+
+<style>
+  .lf {
+    display: flex; flex-wrap: wrap; align-items: end; gap: 0.6rem 0.8rem;
+    padding: 0.8rem 0.9rem; margin-bottom: var(--space-s);
+    background: var(--surface); border: 1px solid var(--border-soft);
+  }
+  .lf__search {
+    flex: 1 1 220px; display: flex; align-items: center; gap: 0.45rem;
+    padding: 0.55rem 0.7rem; background: var(--bg); border: 1px solid var(--border-soft); color: var(--text-muted);
+  }
+  .lf__search:focus-within { border-color: var(--blue); }
+  .lf__search input { border: 0; background: none; outline: none; width: 100%; min-width: 0; font: inherit; font-size: 0.88rem; color: var(--text-strong); }
+  .lf__field { display: grid; gap: 0.25rem; }
+  .lf__field span { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+  .lf__field select {
+    padding: 0.5rem 0.6rem; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 0;
+    font: inherit; font-size: 0.85rem; color: var(--text-strong); max-width: 210px;
+  }
+  .lf__count { margin: 0 0 0.45rem; font-size: 0.8rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .lf__clear { margin-bottom: 0.4rem; border: 0; background: none; padding: 0; font: inherit; font-size: 0.8rem; font-weight: 600; color: var(--blue); cursor: pointer; }
+  .lf__clear[hidden] { display: none; }
+  :global([data-lf-item][hidden]) { display: none !important; }
+  @media (max-width: 640px) { .lf__field { flex: 1 1 140px; } .lf__field select { max-width: none; width: 100%; } }
+</style>

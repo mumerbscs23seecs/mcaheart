@@ -15,6 +15,7 @@ import { reviewerFor, REVIEWERS } from '../../lib/applications';
 import { deliverIdeaDecision, renderIdeaDecisionEmail } from '../../lib/idea-mailer';
 import { CONFERENCE_LABELS, COMMITMENT_LABELS, type Conference } from '../../lib/idea-schema';
 import type { IdeaRecord } from '../../lib/ideas';
+import ListFilter from '../../components/ListFilter.astro';
 
 export const prerender = false;
 
@@ -58,6 +59,11 @@ function studyTypeFor(idea: IdeaRecord): string {
 
 type Flash = { tone: 'ok' | 'error'; text: string };
 let flash: Flash | null = null;
+// Many decisions at once: the review screen, then what happened to each.
+type BatchItem = { id: string; title: string; author: string; to: string; outcome: IdeaOutcome; conference: string; note: string; subject: string; html: string };
+let batch: { items: BatchItem[]; cc: string[]; bcc: string[]; skipped: string[] } | null = null;
+let batchResults: { name: string; tone: 'ok' | 'error'; text: string }[] | null = null;
+const BATCH_MAX = 25;
 // Which idea to show expanded after a POST, so saving a review doesn't collapse it.
 let openId = '';
 
@@ -90,6 +96,110 @@ function decisionBlocked(reviews: IdeaReview[], ready: boolean): string | null {
   if (myReviewer) return null;
   if (reviews.length === 0) return 'Jawad or Burhan needs to add an initial review first.';
   return null;
+}
+
+/**
+ * Record one idea's final decision and act on it: add an approved idea to the
+ * pipeline and send it to the chosen conference, then email the author.
+ * Used by the single decision form and by "many decisions at once".
+ */
+async function applyIdeaDecision(
+  ideaId: string, outcome: IdeaOutcome, conference: string, note: string, cc: string[], bcc: string[],
+): Promise<Flash> {
+  const decision = OUTCOME_STATUS[outcome];
+  const result = await decideIdea(ideaId, outcome, me.name, note);
+  if (!result.ok || !result.idea) {
+    return { tone: 'error', text: result.error ?? 'Could not record that decision.' };
+  } else {
+    const idea = result.idea;
+    let pipelineNote = '';
+    if (decision === 'approved') {
+      if (!supabase) {
+        pipelineNote = ' (could not reach the pipeline database - add the project by hand)';
+      } else {
+        const { data: person } = await supabase
+          .from('people')
+          .select('id')
+          .ilike('email', idea.leadEmail)
+          .maybeSingle();
+        const { data: created, error: createErr } = await supabase.rpc('create_project_from_idea', {
+          p_title: idea.title,
+          p_study_type: studyTypeFor(idea),
+          p_lead_id: person?.id ?? null,
+          p_submitter_label: `${idea.leadName} <${idea.leadEmail}>`,
+        });
+        if (createErr) {
+          pipelineNote = ` (pipeline project not created: ${createErr.message})`;
+        } else {
+          // The RPC's return shape isn't pinned down here (scalar id, a
+          // row, or nothing) - fall back to looking the new project up by
+          // the exact title/submitter we just created it with if it
+          // didn't hand back a usable id directly.
+          let newProjectId: string | null =
+            typeof created === 'string'
+              ? created
+              : Array.isArray(created)
+                ? (created[0]?.id ?? null)
+                : (created?.id ?? null);
+          if (!newProjectId) {
+            const { data: justCreated } = await supabase
+              .from('projects')
+              .select('id')
+              .eq('title', idea.title)
+              .eq('submitter_label', `${idea.leadName} <${idea.leadEmail}>`)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            newProjectId = justCreated?.id ?? null;
+          }
+
+          const leadNote = person?.id
+            ? ' - added to the pipeline as the lead'
+            : ' - added to the pipeline, but no lead was assigned (no pipeline account for that email yet)';
+
+          if (!newProjectId) {
+            pipelineNote = `${leadNote} (could not find it again to send it to ${conference} - open it in the pipeline and use "Send to conference")`;
+          } else {
+            const { error: gateErr } = await supabase.rpc('gate1_send_to_conference', {
+              p_project: newProjectId,
+              p_conference: conference,
+              p_recycled_from: null,
+            });
+            pipelineNote = gateErr
+              ? `${leadNote}, but could not send it to ${conference}: ${gateErr.message}`
+              : `${leadNote} and sent to ${conference}`;
+          }
+        }
+      }
+    }
+    let emailed = true;
+    let notSetUp = false;
+    try {
+      notSetUp = !(await deliverIdeaDecision({
+        to: idea.leadEmail,
+        title: idea.title,
+        outcome,
+        note: idea.decisionNote,
+        cc,
+        bcc,
+      }));
+    } catch (err) {
+      emailed = false;
+      console.error('[ideas] decision email failed:', err);
+    }
+    const verb = OUTCOME_LABEL[outcome];
+    return notSetUp
+      ? { tone: 'error', text: `${verb} and recorded${decision === 'approved' ? pipelineNote : ''}, but no email was sent: email sending isn't set up on this server (it only works on mcaheart.com).` }
+      : emailed
+      ? {
+          tone: 'ok',
+          text: `${verb}${decision === 'approved' ? pipelineNote : ''} - email sent to ${idea.leadEmail}.`,
+        }
+      : {
+          tone: 'error',
+          text: `${verb} and recorded${decision === 'approved' ? pipelineNote : ''}, but the email to ${idea.leadEmail} could not be sent.`,
+        };
+  }
 }
 
 if (Astro.request.method === 'POST') {
@@ -126,99 +236,41 @@ if (Astro.request.method === 'POST') {
   }
 
   if (action === 'confirm' && !flash && outcome) {
-    const decision = OUTCOME_STATUS[outcome];
-    const result = await decideIdea(ideaId, outcome, me.name, note);
-    if (!result.ok || !result.idea) {
-      flash = { tone: 'error', text: result.error ?? 'Could not record that decision.' };
+    flash = await applyIdeaDecision(ideaId, outcome, conference, note, emailsFrom(form, 'cc'), emailsFrom(form, 'bcc'));
+  }
+
+  // --- Many decisions at once: review screen, then send ------------------------
+  if (action === 'batch-preview' || action === 'batch-confirm') {
+    openId = '';
+    const ids = [...new Set(form.getAll('ids').map(String))].slice(0, BATCH_MAX);
+    const { ready, map } = await loadReviews();
+    const items: BatchItem[] = [];
+    const skipped: string[] = [];
+    for (const id of ids) {
+      const idea = await getIdea(id).catch(() => undefined);
+      if (!idea) { skipped.push('an idea that no longer exists'); continue; }
+      if (idea.status !== 'pending') { skipped.push(`"${idea.title}" (already decided)`); continue; }
+      const blocked = decisionBlocked(map.get(id) ?? [], ready);
+      if (blocked) { skipped.push(`"${idea.title}" (${blocked.replace(/\.$/, '')})`); continue; }
+      const o = OUTCOMES.find((x) => x === form.get(`outcome-${id}`));
+      if (!o) { skipped.push(`"${idea.title}" (no decision chosen)`); continue; }
+      const conf = String(form.get(`conference-${id}`) ?? '');
+      if (o === 'approved' && !conf) { skipped.push(`"${idea.title}" (choose a conference to approve it)`); continue; }
+      const itemNote = String(form.get(`note-${id}`) ?? '');
+      const { subject, html } = renderIdeaDecisionEmail({ to: idea.leadEmail, title: idea.title, outcome: o, note: itemNote.trim() || null });
+      items.push({ id, title: idea.title, author: idea.leadName, to: idea.leadEmail, outcome: o, conference: o === 'approved' ? conf : '', note: itemNote, subject, html });
+    }
+    if (action === 'batch-preview') {
+      if (!items.length) flash = { tone: 'error', text: skipped.length ? `Nothing to send: ${skipped.join('; ')}.` : 'Choose a decision for at least one idea.' };
+      else batch = { items, cc: emailsFrom(form, 'cc'), bcc: emailsFrom(form, 'bcc'), skipped };
     } else {
-      const idea = result.idea;
-      let pipelineNote = '';
-      if (decision === 'approved') {
-        if (!supabase) {
-          pipelineNote = ' (could not reach the pipeline database - add the project by hand)';
-        } else {
-          const { data: person } = await supabase
-            .from('people')
-            .select('id')
-            .ilike('email', idea.leadEmail)
-            .maybeSingle();
-          const { data: created, error: createErr } = await supabase.rpc('create_project_from_idea', {
-            p_title: idea.title,
-            p_study_type: studyTypeFor(idea),
-            p_lead_id: person?.id ?? null,
-            p_submitter_label: `${idea.leadName} <${idea.leadEmail}>`,
-          });
-          if (createErr) {
-            pipelineNote = ` (pipeline project not created: ${createErr.message})`;
-          } else {
-            // The RPC's return shape isn't pinned down here (scalar id, a
-            // row, or nothing) - fall back to looking the new project up by
-            // the exact title/submitter we just created it with if it
-            // didn't hand back a usable id directly.
-            let newProjectId: string | null =
-              typeof created === 'string'
-                ? created
-                : Array.isArray(created)
-                  ? (created[0]?.id ?? null)
-                  : (created?.id ?? null);
-            if (!newProjectId) {
-              const { data: justCreated } = await supabase
-                .from('projects')
-                .select('id')
-                .eq('title', idea.title)
-                .eq('submitter_label', `${idea.leadName} <${idea.leadEmail}>`)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
-              newProjectId = justCreated?.id ?? null;
-            }
-
-            const leadNote = person?.id
-              ? ' - added to the pipeline as the lead'
-              : ' - added to the pipeline, but no lead was assigned (no pipeline account for that email yet)';
-
-            if (!newProjectId) {
-              pipelineNote = `${leadNote} (could not find it again to send it to ${conference} - open it in the pipeline and use "Send to conference")`;
-            } else {
-              const { error: gateErr } = await supabase.rpc('gate1_send_to_conference', {
-                p_project: newProjectId,
-                p_conference: conference,
-                p_recycled_from: null,
-              });
-              pipelineNote = gateErr
-                ? `${leadNote}, but could not send it to ${conference}: ${gateErr.message}`
-                : `${leadNote} and sent to ${conference}`;
-            }
-          }
-        }
+      const cc = emailsFrom(form, 'cc');
+      const bcc = emailsFrom(form, 'bcc');
+      batchResults = skipped.map((name) => ({ name, tone: 'error' as const, text: 'Skipped' }));
+      for (const it of items) {
+        const r = await applyIdeaDecision(it.id, it.outcome, it.conference, it.note, cc, bcc);
+        batchResults.push({ name: it.title, tone: r.tone, text: r.text });
       }
-      let emailed = true;
-      let notSetUp = false;
-      try {
-        notSetUp = !(await deliverIdeaDecision({
-          to: idea.leadEmail,
-          title: idea.title,
-          outcome,
-          note: idea.decisionNote,
-          cc: emailsFrom(form, 'cc'),
-          bcc: emailsFrom(form, 'bcc'),
-        }));
-      } catch (err) {
-        emailed = false;
-        console.error('[ideas] decision email failed:', err);
-      }
-      const verb = OUTCOME_LABEL[outcome];
-      flash = notSetUp
-        ? { tone: 'error', text: `${verb} and recorded${decision === 'approved' ? pipelineNote : ''}, but no email was sent: email sending isn't set up on this server (it only works on mcaheart.com).` }
-        : emailed
-        ? {
-            tone: 'ok',
-            text: `${verb}${decision === 'approved' ? pipelineNote : ''} - email sent to ${idea.leadEmail}.`,
-          }
-        : {
-            tone: 'error',
-            text: `${verb} and recorded${decision === 'approved' ? pipelineNote : ''}, but the email to ${idea.leadEmail} could not be sent.`,
-          };
     }
   }
 }
@@ -272,17 +324,94 @@ const decidedLabel = (i: IdeaRecord) =>
       </div>
     )}
 
-    {dbReady && (
+    {batchResults && (
+      <section class="bres" aria-label="What happened">
+        <h2 class="bres__title">Decisions sent</h2>
+        <ul class="bres__list">
+          {batchResults.map((r) => (
+            <li class:list={['bres__item', `bres__item--${r.tone}`]}><b>{r.name}</b> {r.text}</li>
+          ))}
+        </ul>
+      </section>
+    )}
+
+    {dbReady && batch && (
+      <form method="post" class="bprev" data-bprev>
+        <h2 class="bprev__title">Review {batch.items.length} decision email{batch.items.length === 1 ? '' : 's'}</h2>
+        <p class="adm-hint">Nothing has been sent yet. Check each email, add an explanation if you like, then send them all.</p>
+        {batch.skipped.length > 0 && <p class="adm-hint">Left out: {batch.skipped.join('; ')}.</p>}
+        <div class="bprev__copy">
+          <EmailChips name="cc" label="CC (every email)" initial={batch.cc} listId="copy-roster" recommended={COPY_SUGGESTIONS} />
+          <EmailChips name="bcc" label="BCC (every email)" initial={batch.bcc} listId="copy-roster" recommended={COPY_SUGGESTIONS} />
+        </div>
+        <ol class="bprev__list">
+          {batch.items.map((it) => (
+            <li class="bprev__item">
+              <input type="hidden" name="ids" value={it.id} />
+              <input type="hidden" name={`outcome-${it.id}`} value={it.outcome} />
+              <input type="hidden" name={`conference-${it.id}`} value={it.conference} />
+              <div class="bprev__head">
+                <span class:list={['bprev__pill', `bprev__pill--${OUTCOME_STATUS[it.outcome]}`]}>{OUTCOME_LABEL[it.outcome]}</span>
+                {it.conference && <span class="bprev__conf">to {it.conference}</span>}
+              </div>
+              <p class="bprev__name">{it.title}</p>
+              <p class="bprev__to">{it.author} · {it.to}</p>
+              <label class="field">
+                <span class="field__label">Explanation (optional)</span>
+                <textarea name={`note-${it.id}`} rows="2" placeholder="Shown in bold under the boxes in the email.">{it.note}</textarea>
+              </label>
+              <details class="bprev__mail">
+                <summary>Show the email · {it.subject}</summary>
+                <iframe class="mailwin__frame" srcdoc={it.html} title={`Email to ${it.author}`} sandbox=""></iframe>
+              </details>
+            </li>
+          ))}
+        </ol>
+        <div class="bprev__actions">
+          <button class="btn btn--ghost" type="submit" name="action" value="batch-preview">Refresh the emails</button>
+          <button class="btn" type="submit" name="action" value="batch-confirm" data-bprev-send>{batch.items.length === 1 ? 'Send the email' : `Send all ${batch.items.length} emails`}</button>
+          <a class="bprev__cancel" href="/admin/ideas">Cancel</a>
+        </div>
+      </form>
+    )}
+
+    {dbReady && !batch && (
       <>
     <p class="ideas__count">
       <strong>{pending}</strong> awaiting review · {ideas.length} total
     </p>
 
+    <ListFilter
+      noun="ideas"
+      searchLabel="Search title or author"
+      filters={[
+        { key: 'status', label: 'Status', options: [
+          { value: 'pending', label: 'Pending' }, { value: 'approved', label: 'Approved' },
+          { value: 'withheld', label: 'Held (modify / details)' }, { value: 'declined', label: 'Rejected' },
+        ] },
+        { key: 'type', label: 'Type', options: [{ value: 'database', label: 'Database' }, { value: 'meta', label: 'Meta-analysis' }] },
+        { key: 'conf', label: 'Conference', options: [
+          { value: 'TCT', label: 'TCT' }, { value: 'SCAI', label: 'SCAI' }, { value: 'ACC', label: 'ACC' },
+          { value: 'flexible', label: 'Flexible' }, { value: 'none', label: 'No conference' },
+        ] },
+        ...(reviewsReady ? [{ key: 'review', label: 'Initial review', options: [
+          { value: 'none', label: 'Not reviewed yet' }, { value: 'done', label: 'Reviewed' },
+        ] }] : []),
+      ]}
+    />
+
     {ideas.length === 0 && <p class="adm-hint">No idea submissions yet.</p>}
 
     <div class="ideas__list">
       {ideas.map((i) => (
-        <details class="idea" open={i.id === openId}>
+        <details class="idea" open={i.id === openId}
+          data-lf-item
+          data-lf-text={`${i.title} ${i.leadName} ${i.leadEmail}`.toLowerCase()}
+          data-lf-status={i.status}
+          data-lf-type={i.researchType === 'Meta-analysis' ? 'meta' : 'database'}
+          data-lf-conf={i.conference}
+          data-lf-review={i.status === 'pending' ? ((reviews.get(i.id) ?? []).length ? 'done' : 'none') : ''}
+          data-lf-days={Math.floor((Date.now() - i.submittedAt) / 86_400_000)}>
           <summary class="idea__summary">
             <span class:list={['idea__pill', `idea__pill--${i.status}`]}>{i.status}</span>
             <span class="idea__title">{i.title}</span>
@@ -292,6 +421,18 @@ const decidedLabel = (i: IdeaRecord) =>
                 <> · <b class="idea__stage">{(reviews.get(i.id) ?? []).length ? 'Reviewed, awaiting final decision' : 'Awaiting decision'}</b></>
               )}
             </span>
+            {i.status === 'pending' && !decisionBlocked(reviews.get(i.id) ?? [], reviewsReady) && (
+              <span class="iq" data-iq data-id={i.id}>
+                <select class="iq__outcome" aria-label={`Decision for ${i.title}`} data-iq-outcome>
+                  <option value="">Decide…</option>
+                  {OUTCOMES.map((o) => <option value={o}>{OUTCOME_LABEL[o]}</option>)}
+                </select>
+                <select class="iq__conf" aria-label="Send to conference" data-iq-conf hidden>
+                  <option value="" selected={!defaultConferenceFor(i)}>Conference…</option>
+                  {conferenceOptions.map((c) => <option value={c} selected={c === defaultConferenceFor(i)}>{c}</option>)}
+                </select>
+              </span>
+            )}
             <span class="idea__chev" aria-hidden="true">▾</span>
           </summary>
 
@@ -485,6 +626,14 @@ const decidedLabel = (i: IdeaRecord) =>
         </details>
       ))}
     </div>
+
+    <form method="post" class="bbar" data-ibar hidden>
+      <input type="hidden" name="action" value="batch-preview" />
+      <span class="bbar__text" data-ibar-text></span>
+      <span data-ibar-fields></span>
+      <button class="btn" type="submit">Review &amp; send emails</button>
+      <button class="bbar__undo" type="button" data-ibar-reset>Clear decisions</button>
+    </form>
       </>
     )}
     <datalist id="copy-roster">
@@ -492,6 +641,69 @@ const decidedLabel = (i: IdeaRecord) =>
     </datalist>
   </div>
 </AppLayout>
+
+<script>
+  // Quick decisions in the collapsed rows. Nothing is sent until the review
+  // screen ("Review & send emails" in the bar at the bottom).
+  const ibar = document.querySelector<HTMLFormElement>('[data-ibar]');
+  if (ibar) {
+    const text = ibar.querySelector<HTMLElement>('[data-ibar-text]')!;
+    const fields = ibar.querySelector<HTMLElement>('[data-ibar-fields]')!;
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-iq]')];
+    const MAX = 25;
+    // The controls sit inside each row's <summary>: clicks there must not open the row.
+    rows.forEach((r) => {
+      r.addEventListener('click', (e) => e.preventDefault());
+      r.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') e.stopPropagation(); });
+      const outcome = r.querySelector<HTMLSelectElement>('[data-iq-outcome]')!;
+      const conf = r.querySelector<HTMLSelectElement>('[data-iq-conf]')!;
+      outcome.addEventListener('change', () => {
+        conf.hidden = outcome.value !== 'approved';
+        r.classList.toggle('is-set', !!outcome.value);
+        update();
+      });
+      conf.addEventListener('change', update);
+    });
+    const add = (name: string, value: string) => fields.append(Object.assign(document.createElement('input'), { type: 'hidden', name, value }));
+    function update() {
+      fields.replaceChildren();
+      const chosen = rows.filter((r) => r.querySelector<HTMLSelectElement>('[data-iq-outcome]')!.value
+        && !r.closest<HTMLElement>('[data-lf-item]')?.hidden);
+      let missingConf = 0;
+      for (const r of chosen.slice(0, MAX)) {
+        const id = r.dataset.id!;
+        const o = r.querySelector<HTMLSelectElement>('[data-iq-outcome]')!.value;
+        const c = r.querySelector<HTMLSelectElement>('[data-iq-conf]')!.value;
+        if (o === 'approved' && !c) missingConf++;
+        add('ids', id);
+        add(`outcome-${id}`, o);
+        if (o === 'approved') add(`conference-${id}`, c);
+      }
+      const n = chosen.length;
+      text.textContent = (n > MAX ? `${n} chosen - the first ${MAX} go in this batch` : `${n} decision${n === 1 ? '' : 's'} ready`)
+        + (missingConf ? ` · ${missingConf} approval${missingConf === 1 ? ' needs' : 's need'} a conference` : '');
+      ibar.hidden = n === 0;
+    }
+    ibar.querySelector('[data-ibar-reset]')?.addEventListener('click', () => {
+      rows.forEach((r) => {
+        r.querySelector<HTMLSelectElement>('[data-iq-outcome]')!.value = '';
+        r.querySelector<HTMLSelectElement>('[data-iq-conf]')!.hidden = true;
+        r.classList.remove('is-set');
+      });
+      update();
+    });
+    document.addEventListener('lf:change', update);
+    update();
+  }
+
+  document.querySelector<HTMLFormElement>('[data-bprev]')?.addEventListener('submit', (e) => {
+    const btn = (e as SubmitEvent).submitter as HTMLButtonElement | null;
+    if (btn?.hasAttribute('data-bprev-send')) {
+      if (!confirm('Send all of these emails now?')) { e.preventDefault(); return; }
+      setTimeout(() => { btn.disabled = true; btn.textContent = 'Sending…'; }, 0);
+    }
+  });
+</script>
 
 <script>
   import { renderIdeaDecisionEmail, type IdeaOutcome } from '../../lib/idea-email-template';
@@ -514,6 +726,43 @@ const decidedLabel = (i: IdeaRecord) =>
     update();
   });
 </script>
+
+<style>
+  .iq { grid-column: 2 / 3; display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.35rem; }
+  .iq select { padding: 0.3rem 0.45rem; font: inherit; font-size: 0.78rem; border: 1px solid var(--border-soft); background: var(--bg); color: var(--text-strong); border-radius: 0; max-width: 260px; }
+  .iq select[hidden] { display: none; }
+  .iq.is-set .iq__outcome { border-color: var(--blue); outline: 1px solid var(--blue); font-weight: 700; }
+  .bbar {
+    position: sticky; bottom: 0; z-index: 20; margin-top: var(--space-m);
+    display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: center;
+    padding: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--ink); border-top: 3px solid var(--blue);
+  }
+  .bbar[hidden] { display: none; }
+  .bbar__text { font-size: 0.86rem; font-weight: 600; color: var(--text-strong); }
+  .bbar__undo { border: 0; background: none; padding: 0; font: inherit; font-size: 0.8rem; color: var(--text-muted); text-decoration: underline; cursor: pointer; }
+  .bres { margin-bottom: var(--space-m); padding: 1rem 1.1rem; border: 1px solid var(--border); background: var(--surface); }
+  .bres__title { margin: 0 0 0.5rem; font-size: 1rem; color: var(--text-strong); }
+  .bres__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.35rem; }
+  .bres__item { font-size: 0.86rem; padding-left: 0.7rem; border-left: 3px solid var(--ok); color: var(--text); }
+  .bres__item--error { border-left-color: var(--red); }
+  .bprev { display: grid; gap: var(--space-s); }
+  .bprev__title { margin: 0; font-size: 1.2rem; color: var(--text-strong); }
+  .bprev__copy { display: grid; gap: 0.6rem; }
+  .bprev__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.8rem; }
+  .bprev__item { display: grid; gap: 0.45rem; padding: 0.9rem 1rem; border: 1px solid var(--border-soft); background: var(--surface); }
+  .bprev__head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+  .bprev__pill { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.2rem 0.5rem; }
+  .bprev__pill--approved { color: var(--ok); background: var(--ok-bg); }
+  .bprev__pill--declined { color: var(--red); background: var(--red-wash); }
+  .bprev__pill--withheld { color: var(--warn); background: var(--warn-bg); }
+  .bprev__conf { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+  .bprev__name { margin: 0; font-weight: 600; color: var(--text-strong); font-size: 0.92rem; line-height: 1.4; }
+  .bprev__to { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
+  .bprev__mail summary { cursor: pointer; font-size: 0.82rem; font-weight: 600; color: var(--blue); }
+  .bprev__mail .mailwin__frame { margin-top: 0.5rem; height: 520px; border: 1px solid var(--border-soft); }
+  .bprev__actions { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; gap: 0.6rem 1rem; align-items: center; background: var(--bg); padding: 0.7rem 0; border-top: 1px solid var(--border-soft); }
+  .bprev__cancel { font-size: 0.85rem; color: var(--text-muted); }
+</style>
 
 <style>
   .ideas__count { font-size: 0.86rem; color: var(--text-muted); }
