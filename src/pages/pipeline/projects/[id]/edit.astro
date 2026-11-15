@@ -1,0 +1,371 @@
+---
+/**
+ * Edit a paper: one page, one Save. Everything that can be corrected on a
+ * paper lives here - details, people, the skills it needs, its conference and
+ * journal entries, and its history lines.
+ *   Admins: everything.   The paper's lead: titles, people (not the lead
+ *   slot) and the skills it needs.
+ * Each change goes through the same SQL function as before, which re-checks
+ * who may make it; only fields that actually changed are sent.
+ */
+import PipelineLayout from '../../../../layouts/PipelineLayout.astro';
+import PeoplePicker from '../../../../components/PeoplePicker.astro';
+import TeamPicker from '../../../../components/TeamPicker.astro';
+import { STUDY_TYPES } from '../../../../lib/lifecycle.mjs';
+import { FELLOWS } from '../../../../lib/research-fellow';
+import { SKILLS, isSkill } from '../../../../lib/skills';
+import { supabaseAdmin } from '../../../../lib/supabase';
+import '../../../../styles/calm.css';
+
+export const prerender = false;
+const { supabase, person } = Astro.locals as any;
+const id = String(Astro.params.id ?? '');
+const isAdmin = person.role === 'admin';
+const back = `/pipeline/projects/${id}`;
+
+const { data: p } = await supabase.from('project_list').select('*').eq('id', id).maybeSingle();
+if (!p) return Astro.redirect('/pipeline/conferences', 302);
+const isLead = p.lead_id === person.id;
+if (!isAdmin && !(isLead && !p.archived_at)) return Astro.redirect(back, 302);
+
+const missingSql = (m: string) =>
+  /could not find the function|does not exist|schema cache/i.test(m)
+    ? `${m.split('.')[0]}. This part needs the latest SQL (run-this-nov15.sql) to be run first.`
+    : m;
+
+// ------------------------------------------------------------------ data
+async function load() {
+  const { data: needsRow, error: needsErr } = await supabase.from('projects').select('needed_skills,research_fellow').eq('id', id).maybeSingle();
+  const { data: confAttempts } = await supabase
+    .from('conference_attempts')
+    .select('id,outcome,submitted_on,decided_on,conference:conferences(name)')
+    .eq('project_id', id)
+    .order('submitted_on', { ascending: false });
+  const { data: journalAttempts } = await supabase
+    .from('journal_attempts')
+    .select('id,journal,outcome,submitted_on,decided_on,revision_round')
+    .eq('project_id', id)
+    .order('submitted_on', { ascending: false });
+  const { data: history } = isAdmin
+    ? await supabase.from('project_history').select('at,label,actor,kind,detail').eq('project_id', id).order('at', { ascending: false }).limit(200)
+    : { data: [] };
+  const { data: evs } = isAdmin
+    ? await supabase.from('events').select('id,at,kind,detail').eq('project_id', id)
+    : { data: [] };
+  const ids = new Map<string, number[]>();
+  for (const e of evs ?? []) {
+    const k = `${e.at}|${e.kind}|${JSON.stringify(e.detail)}`;
+    ids.set(k, [...(ids.get(k) ?? []), e.id]);
+  }
+  const lines = (history ?? []).map((h: any) => ({
+    ...h,
+    eventId: ids.get(`${h.at}|${h.kind}|${JSON.stringify(h.detail)}`)?.shift() ?? null,
+    text: h.detail?.label_override || h.detail?.system || h.label,
+    auto: h.detail?.system || h.label,
+  })).filter((h: any) => h.eventId);
+  return {
+    needsReady: !needsErr,
+    needed: ((needsRow as any)?.needed_skills ?? []).filter(isSkill) as string[],
+    fellow: ((needsRow as any)?.research_fellow ?? 'burhan') as string,
+    confAttempts: confAttempts ?? [],
+    journalAttempts: journalAttempts ?? [],
+    lines,
+  };
+}
+
+// ------------------------------------------------------------------ save
+let problems: string[] = [];
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const before = await load();
+  const str = (k: string) => String(form.get(k) ?? '').trim();
+  const pick = (k: string) => str(k) || null;
+  const day = (k: string) => (/^\d{4}-\d{2}-\d{2}$/.test(str(k)) ? str(k) : null);
+  const done: string[] = [];
+  const run = async (what: string, call: Promise<{ error: any }>) => {
+    const { error } = await call;
+    if (error) problems.push(`${what}: ${missingSql(error.message)}`);
+    else done.push(what);
+  };
+
+  // Details
+  const title = str('title');
+  const fullTitle = str('full_title');
+  if (title !== p.title || (fullTitle || null) !== (p.full_title || null)) {
+    await run('Title', supabase.rpc('set_project_titles', { p_project: id, p_title: title, p_full_title: fullTitle }));
+  }
+  if (isAdmin) {
+    const st = str('study_type');
+    if (st && st !== p.study_type && STUDY_TYPES.includes(st)) await run('Type of research', supabase.rpc('set_study_type', { p_project: id, p_study_type: st }));
+    const fellow = str('research_fellow');
+    if (fellow && fellow !== before.fellow) await run('Research fellow', supabase.rpc('set_research_fellow', { p_project: id, p_fellow: fellow }));
+  }
+
+  // People
+  const people = {
+    lead_id: isAdmin ? pick('lead_id') : p.lead_id,
+    colead_id: pick('colead_id'),
+    analyst_id: pick('analyst_id'),
+    presenter_id: pick('presenter_id'),
+    corresponding_id: pick('corresponding_id'),
+  };
+  const peopleChanged = (Object.keys(people) as (keyof typeof people)[]).some((k) => (people[k] ?? null) !== (p[k] ?? null));
+  if (peopleChanged) {
+    await run('People', supabase.rpc('assign_people', {
+      p_project: id, p_lead_id: people.lead_id, p_colead_id: people.colead_id, p_analyst_id: people.analyst_id,
+      p_presenter_id: people.presenter_id, p_corresponding_id: people.corresponding_id,
+    }));
+  }
+  const team = [...new Set(form.getAll('team_member_ids').map((v) => String(v).trim()).filter(Boolean))];
+  if ([...team].sort().join() !== [...(p.team_member_ids ?? [])].sort().join()) {
+    await run('Team members', supabase.rpc('set_team_members', { p_project: id, p_member_ids: team }));
+  }
+
+  // Skills needed
+  if (before.needsReady && form.has('needs_set')) {
+    const needs = form.getAll('needs').map(String).filter(isSkill);
+    if ([...needs].sort().join('|') !== [...before.needed].sort().join('|')) {
+      await run('Skills needed', supabase.rpc('set_project_needs', { p_project: id, p_skills: needs }));
+    }
+  }
+
+  if (isAdmin) {
+    // Conference entries
+    for (const a of before.confAttempts as any[]) {
+      const conf = str(`conf-${a.id}`);
+      const sub = day(`conf-sub-${a.id}`);
+      const dec = day(`conf-dec-${a.id}`);
+      if (!form.has(`conf-${a.id}`)) continue;
+      if (conf !== (a.conference?.name ?? '') || sub !== (a.submitted_on ?? null) || dec !== (a.decided_on ?? null)) {
+        await run(`Conference entry ${conf}`, supabase.rpc('edit_conference_attempt', { p_attempt: a.id, p_conference: conf, p_submitted_on: sub, p_decided_on: dec }));
+      }
+    }
+    // Journal entries
+    for (const a of before.journalAttempts as any[]) {
+      if (!form.has(`jr-${a.id}`)) continue;
+      const jr = str(`jr-${a.id}`);
+      const sub = day(`jr-sub-${a.id}`);
+      const dec = day(`jr-dec-${a.id}`);
+      const round = Number(str(`jr-rev-${a.id}`) || 0);
+      if (jr !== a.journal || sub !== (a.submitted_on ?? null) || dec !== (a.decided_on ?? null) || round !== (a.revision_round ?? 0)) {
+        await run(`Journal entry ${jr || a.journal}`, supabase.rpc('edit_journal_attempt', {
+          p_attempt: a.id, p_journal: jr, p_submitted_on: sub, p_decided_on: dec, p_revision_round: Number.isInteger(round) ? round : -1,
+        }));
+      }
+    }
+    // History lines
+    for (const h of before.lines as any[]) {
+      const key = `ev-${h.eventId}`;
+      if (!form.has(`${key}-date`)) continue;
+      if (form.get(`${key}-delete`) === 'on') {
+        await run('Delete a history line', supabase.rpc('delete_event', { p_event: h.eventId }));
+        continue;
+      }
+      const date = day(`${key}-date`);
+      const text = str(`${key}-text`);
+      if (!date) { problems.push(`History line "${h.text}": enter a date.`); continue; }
+      const sameDay = date === new Date(h.at).toISOString().slice(0, 10);
+      const sameText = text === h.text;
+      if (sameDay && sameText) continue;
+      const at = new Date(h.at);
+      const [y, m, d] = date.split('-').map(Number);
+      at.setUTCFullYear(y, m - 1, d);
+      await run('History line', supabase.rpc('edit_event', { p_event: h.eventId, p_at: at.toISOString(), p_label: text && text !== h.auto ? text : null }));
+    }
+  }
+
+  if (!problems.length) {
+    const msg = done.length ? 'Changes saved.' : 'Nothing was changed.';
+    return Astro.redirect(`${back}?ok=${encodeURIComponent(msg)}`, 303);
+  }
+  if (done.length) problems.unshift(`Saved: ${[...new Set(done)].join(', ')}. These could not be saved:`);
+}
+
+const data = await load();
+const { data: fresh } = await supabase.from('project_list').select('*').eq('id', id).maybeSingle();
+const cur = fresh ?? p;
+const { data: allConferences } = await supabase.from('conferences').select('name').order('abstract_deadline', { ascending: false });
+const { data: roster } = isAdmin
+  ? await supabase.from('people').select('id,full_name').eq('active', true).order('full_name')
+  : await supabaseAdmin().from('people').select('id,full_name').eq('active', true).order('full_name');
+const nameOf = new Map((roster ?? []).map((r: any) => [r.id, r.full_name]));
+const teamMembers = (cur.team_member_ids ?? []).map((tid: string) => ({ id: tid, full_name: nameOf.get(tid) ?? 'Former member' }));
+const isoDay = (d: string) => new Date(d).toISOString().slice(0, 10);
+const fmt = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+---
+
+<PipelineLayout title={`Edit ${cur.title}`} journals>
+  <form method="post" class="cv ed" novalidate>
+    <header class="ed__head">
+      <a class="ed__back" href={back}>&larr; Back to the paper</a>
+      <h1 class="ed__title">Edit paper</h1>
+      <p class="ed__ref">{cur.ref} · {cur.title}</p>
+    </header>
+
+    {problems.length > 0 && (
+      <div class="pl-flash pl-flash--err" role="alert">
+        {problems.map((m) => <p>{m}</p>)}
+      </div>
+    )}
+
+    <section class="ed__sec">
+      <h2>Paper</h2>
+      <div class="ed__grid">
+        <label class="ed__f ed__f--wide"><span>Short title</span><input name="title" required maxlength="300" value={cur.title} /></label>
+        <label class="ed__f ed__f--wide"><span>Full title</span><textarea name="full_title" rows="2" maxlength="1000" placeholder="Shown on Submissions">{cur.full_title ?? ''}</textarea></label>
+        {isAdmin && (
+          <>
+            <label class="ed__f"><span>Type of research</span>
+              <select name="study_type">{STUDY_TYPES.map((t: string) => <option value={t} selected={t === cur.study_type}>{t}</option>)}</select>
+            </label>
+            <label class="ed__f"><span>Research fellow</span>
+              <select name="research_fellow">{FELLOWS.map((f) => <option value={f.key} selected={f.key === data.fellow}>{f.label}</option>)}</select>
+            </label>
+          </>
+        )}
+      </div>
+    </section>
+
+    <section class="ed__sec">
+      <h2>People</h2>
+      <div class="ed__grid ed__people">
+        {isAdmin
+          ? <PeoplePicker name="lead_id" label="Lead" roster={roster ?? []} selectedId={cur.lead_id} selectedName={nameOf.get(cur.lead_id)} />
+          : <label class="ed__f"><span>Lead</span><input value={nameOf.get(cur.lead_id) ?? ''} disabled /></label>}
+        <PeoplePicker name="colead_id" label="Co-lead" roster={roster ?? []} selectedId={cur.colead_id} selectedName={nameOf.get(cur.colead_id)} />
+        <PeoplePicker name="analyst_id" label="Analyst" roster={roster ?? []} selectedId={cur.analyst_id} selectedName={nameOf.get(cur.analyst_id)} />
+        <PeoplePicker name="presenter_id" label="Presenter" roster={roster ?? []} selectedId={cur.presenter_id} selectedName={nameOf.get(cur.presenter_id)} />
+        <PeoplePicker name="corresponding_id" label="Corresponding author" roster={roster ?? []} selectedId={cur.corresponding_id} selectedName={nameOf.get(cur.corresponding_id)} />
+        <div class="ed__f--wide"><TeamPicker name="team_member_ids" label="Team members" roster={roster ?? []} selected={teamMembers} /></div>
+      </div>
+    </section>
+
+    <section class="ed__sec">
+      <h2>Mentees needed</h2>
+      {data.needsReady ? (
+        <>
+          <input type="hidden" name="needs_set" value="1" />
+          <p class="ed__hint">Optional. Tick what this paper needs help with, so coordinators can find the right mentees.</p>
+          <div class="ed__chips">
+            {SKILLS.map((s) => (
+              <label class="ed__chip"><input type="checkbox" name="needs" value={s} checked={data.needed.includes(s)} /><span>{s}</span></label>
+            ))}
+          </div>
+        </>
+      ) : (
+        <p class="ed__hint">Available once run-this-nov15.sql has been run.</p>
+      )}
+    </section>
+
+    {isAdmin && data.confAttempts.length > 0 && (
+      <section class="ed__sec">
+        <h2>Conference entries</h2>
+        {data.confAttempts.map((a: any) => (
+          <div class="ed__row">
+            <label class="ed__f ed__f--grow"><span>Conference</span>
+              <select name={`conf-${a.id}`}>{(allConferences ?? []).map((c: any) => <option value={c.name} selected={c.name === a.conference?.name}>{c.name}</option>)}</select>
+            </label>
+            <label class="ed__f"><span>Submitted</span><input type="date" name={`conf-sub-${a.id}`} value={a.submitted_on ?? ''} required /></label>
+            <label class="ed__f"><span>Decided</span><input type="date" name={`conf-dec-${a.id}`} value={a.decided_on ?? ''} /></label>
+            <span class="ed__state">{a.outcome ?? 'Pending'}</span>
+          </div>
+        ))}
+      </section>
+    )}
+
+    {isAdmin && data.journalAttempts.length > 0 && (
+      <section class="ed__sec">
+        <h2>Journal entries</h2>
+        {data.journalAttempts.map((a: any) => (
+          <div class="ed__row">
+            <label class="ed__f ed__f--grow"><span>Journal</span><input name={`jr-${a.id}`} value={a.journal} required maxlength="300" list="pl-journal-options" autocomplete="off" /></label>
+            <label class="ed__f"><span>Submitted</span><input type="date" name={`jr-sub-${a.id}`} value={a.submitted_on ?? ''} required /></label>
+            <label class="ed__f"><span>Decided</span><input type="date" name={`jr-dec-${a.id}`} value={a.decided_on ?? ''} /></label>
+            <label class="ed__f ed__f--num"><span>Revision</span><input type="number" min="0" max="20" name={`jr-rev-${a.id}`} value={a.revision_round ?? 0} /></label>
+            <span class="ed__state">{a.outcome ?? 'Open'}</span>
+          </div>
+        ))}
+      </section>
+    )}
+
+    {isAdmin && data.lines.length > 0 && (
+      <section class="ed__sec">
+        <h2>History</h2>
+        <p class="ed__hint">Correcting a line changes the record only, not the paper's status.</p>
+        {data.lines.map((h: any) => (
+          <div class="ed__row ed__row--hist">
+            <label class="ed__f"><span>Date</span><input type="date" name={`ev-${h.eventId}-date`} value={isoDay(h.at)} required /></label>
+            <label class="ed__f ed__f--grow"><span>{h.actor ? `What happened · ${h.actor}` : 'What happened'}</span><input name={`ev-${h.eventId}-text`} value={h.text} maxlength="300" /></label>
+            <label class="ed__del"><input type="checkbox" name={`ev-${h.eventId}-delete`} data-ed-del /> Delete</label>
+          </div>
+        ))}
+      </section>
+    )}
+
+    <div class="ed__bar">
+      <button class="pl-btn" type="submit">Save changes</button>
+      <a class="ed__cancel" href={back}>Cancel</a>
+    </div>
+  </form>
+</PipelineLayout>
+
+<script>
+  // A line marked for deletion is greyed out, and saving asks once.
+  document.querySelectorAll<HTMLInputElement>('[data-ed-del]').forEach((cb) => {
+    cb.addEventListener('change', () => cb.closest('.ed__row')?.classList.toggle('is-deleting', cb.checked));
+  });
+  document.querySelector<HTMLFormElement>('form.ed')?.addEventListener('submit', (e) => {
+    const n = document.querySelectorAll('[data-ed-del]:checked').length;
+    if (n && !confirm(`Delete ${n} history line${n === 1 ? '' : 's'}? This cannot be undone.`)) e.preventDefault();
+  });
+</script>
+
+<style>
+  .ed { max-width: 920px; margin: 0 auto; display: grid; gap: 28px; padding-bottom: 12px; }
+  .ed__back { font-size: 0.85rem; font-weight: 600; color: var(--cv-accent); }
+  .ed__title { margin: 10px 0 4px; font-size: clamp(1.6rem, 1.3rem + 1vw, 2.1rem); color: var(--cv-ink); line-height: 1.1; }
+  .ed__ref { margin: 0; font-size: 0.88rem; color: var(--text-muted); }
+  .ed__sec { display: grid; gap: 12px; padding: 22px 24px; background: var(--cv-soft); border-radius: 14px; }
+  .ed__sec h2 { margin: 0; font-size: 1.02rem; color: var(--cv-ink); }
+  .ed__hint { margin: -4px 0 0; font-size: 0.82rem; color: var(--text-muted); }
+  .ed__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 16px; }
+  .ed__f--wide { grid-column: 1 / -1; }
+  .ed__f { display: grid; gap: 5px; min-width: 0; }
+  .ed__f > span { font-size: 0.76rem; font-weight: 600; color: var(--text-muted); }
+  .ed__f input, .ed__f select, .ed__f textarea {
+    width: 100%; padding: 9px 11px; font: inherit; font-size: 0.9rem; color: var(--cv-ink);
+    background: var(--cv-bg); border: 1px solid var(--cv-line); border-radius: 8px;
+  }
+  .ed__f input:disabled { color: var(--text-muted); }
+  .ed__f input:focus, .ed__f select:focus, .ed__f textarea:focus { outline: 2px solid var(--cv-accent); outline-offset: 0; border-color: transparent; }
+  .ed__people :global(.pl-field input) { border-radius: 8px; }
+  .ed__chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ed__chip { position: relative; cursor: pointer; }
+  .ed__chip input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+  .ed__chip span { display: inline-block; padding: 7px 13px; border-radius: 999px; background: var(--cv-tint); font-size: 0.85rem; font-weight: 600; color: var(--text); }
+  .ed__chip input:checked + span { background: var(--cv-accent); color: #fff; }
+  .ed__chip input:focus-visible + span { outline: 2px solid var(--cv-accent); outline-offset: 2px; }
+  .ed__row { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 12px; padding: 12px 14px; background: var(--cv-tint); border-radius: 10px; }
+  .ed__row .ed__f { flex: 0 1 160px; }
+  .ed__row .ed__f--grow { flex: 1 1 240px; }
+  .ed__row .ed__f--num { flex: 0 1 90px; }
+  .ed__state { align-self: center; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: capitalize; padding-top: 18px; }
+  .ed__del { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 600; color: var(--red); padding-bottom: 9px; cursor: pointer; }
+  .ed__row.is-deleting .ed__f { opacity: 0.45; }
+  .ed__bar {
+    position: sticky; bottom: 0; z-index: 5; display: flex; align-items: center; gap: 16px;
+    padding: 14px 0; background: var(--cv-bg);
+  }
+  .ed__cancel { font-size: 0.88rem; color: var(--text-muted); }
+  .ed .pl-btn {
+    display: inline-flex; align-items: center; padding: 10px 22px; border: 1px solid var(--cv-accent); border-radius: 8px;
+    background: var(--cv-accent); color: #fff; font: inherit; font-size: 0.9375rem; font-weight: 600; text-transform: none; letter-spacing: 0; cursor: pointer;
+  }
+  .ed .pl-btn:hover { opacity: 0.9; }
+  .ed__row { background: var(--cv-bg); }
+  @media (max-width: 640px) {
+    .ed__grid { grid-template-columns: 1fr; }
+    .ed__sec { padding: 18px 16px; }
+    .ed__row .ed__f, .ed__row .ed__f--grow { flex: 1 1 100%; }
+  }
+</style>

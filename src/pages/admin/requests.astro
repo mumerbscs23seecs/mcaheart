@@ -140,10 +140,13 @@ const detailRows = (r: RequestRecord) => intentRows(r);
 
             {(replies.get(r.id) ?? []).length > 0 && (
               <div class="rp-sent">
-                <p class="rp-sent__title">Replies sent</p>
                 {(replies.get(r.id) ?? []).map((x: any) => (
                   <details class="rp-sent__item">
-                    <summary><b>{x.subject}</b> <span>by {x.sent_by} · {fmtDate(new Date(x.sent_at).getTime())}</span></summary>
+                    <summary>
+                      <span class="rp-sent__dot" aria-hidden="true"></span>
+                      <span><b>Replied</b> by {x.sent_by} · {fmtDate(new Date(x.sent_at).getTime())}</span>
+                      <span class="rp-sent__subj">{x.subject}</span>
+                    </summary>
                     <p class="rp-sent__body">{x.body}</p>
                   </details>
                 ))}
@@ -153,38 +156,40 @@ const detailRows = (r: RequestRecord) => intentRows(r);
             {repliesReady && (() => {
               const options = templatesFor(r).map((tpl) => ({ key: tpl.key, label: tpl.label, subject: fillTemplate(tpl.subject, r), body: fillTemplate(tpl.body, r) }));
               const first = options[0];
+              const replied = (replies.get(r.id) ?? []).length > 0;
               return (
-                <details class="rp" open={r.id === openId && !!flashErr}>
-                  <summary class="rp__toggle">Reply by email</summary>
+                <details class="rp" open={!replied || (r.id === openId && !!flashErr)}>
+                  <summary class="rp__toggle">{replied ? 'Reply again' : `Reply to ${r.fullName.split(/\s+/)[0] || 'them'}`}</summary>
                   <form method="post" class="rp__form" data-rp>
                     <input type="hidden" name="requestId" value={r.id} />
                     <input type="hidden" name="type" value={active ?? ''} />
+                    <input type="hidden" name="template" value={first.key} data-rp-template />
                     <script type="application/json" data-rp-templates set:html={JSON.stringify(options).replace(/</g, '\\u003c')} />
-                    <div class="rp__controls">
-                      <label class="rp__field">
-                        <span>Start from</span>
-                        <select name="template" data-rp-template>
-                          {options.map((o) => <option value={o.key}>{o.label}</option>)}
-                        </select>
-                      </label>
-                      <label class="rp__field">
-                        <span>To</span>
-                        <input value={r.email} disabled />
-                      </label>
-                      <label class="rp__field">
-                        <span>Subject</span>
-                        <input name="subject" required maxlength="300" value={first.subject} data-rp-subject />
-                      </label>
-                      <label class="rp__field">
-                        <span>Message</span>
-                        <textarea name="body" required rows="14" maxlength="20000" data-rp-body>{first.body}</textarea>
-                      </label>
-                      <p class="rp__note">Sent from researchlab@mcaheart.com. Their reply comes back to that inbox. Edit anything before sending.</p>
-                      <button class="btn rp__send" type="submit">Send reply</button>
+
+                    <div class="rp__picks" role="group" aria-label="Start from">
+                      {options.map((o, n) => (
+                        <button type="button" class:list={['rp__pick', n === 0 && 'is-on']} data-rp-pick={o.key} aria-pressed={n === 0 ? 'true' : 'false'}>{o.label}</button>
+                      ))}
                     </div>
-                    <div class="rp__preview">
-                      <p class="rp__preview-label">Preview</p>
-                      <iframe class="rp__frame" title="Email preview" sandbox="" srcdoc={renderReplyEmail(first.body)} data-rp-frame></iframe>
+
+                    <div class="rp__card">
+                      <div class="rp__meta">
+                        <span class="rp__k">To</span><span class="rp__v">{r.fullName} &lt;{r.email}&gt;</span>
+                        <label class="rp__k" for={`rs-${r.id}`}>Subject</label>
+                        <input class="rp__subject" id={`rs-${r.id}`} name="subject" required maxlength="300" value={first.subject} data-rp-subject />
+                      </div>
+                      <div class="rp__tabs" role="tablist">
+                        <button type="button" class="rp__tab is-on" role="tab" aria-selected="true" data-rp-tab="write">Write</button>
+                        <button type="button" class="rp__tab" role="tab" aria-selected="false" data-rp-tab="preview">Preview</button>
+                      </div>
+                      <textarea class="rp__body" name="body" required rows="13" maxlength="20000" aria-label="Message" data-rp-body>{first.body}</textarea>
+                      <iframe class="rp__frame" title="Email preview" sandbox="" data-rp-frame hidden></iframe>
+                      <p class="rp__tip">A blank line starts a new paragraph. Start a line with "- " for a bullet. Your signature is added for you.</p>
+                    </div>
+
+                    <div class="rp__foot">
+                      <button class="btn rp__send" type="submit">Send reply</button>
+                      <span class="rp__note">Sent from researchlab@mcaheart.com. Replies come back to that inbox.</span>
                     </div>
                   </form>
                 </details>
@@ -199,51 +204,58 @@ const detailRows = (r: RequestRecord) => intentRows(r);
 </AppLayout>
 
 <script>
-  // Reply boxes: switching template refills subject + message (after asking,
-  // if the text was already edited); the preview follows the typing.
+  // Reply boxes: pick a starting point, edit, preview, send.
   document.querySelectorAll<HTMLFormElement>('[data-rp]').forEach((form) => {
-    const raw = form.querySelector('[data-rp-templates]')?.textContent ?? '[]';
-    const options: { key: string; subject: string; body: string }[] = JSON.parse(raw);
-    const sel = form.querySelector<HTMLSelectElement>('[data-rp-template]')!;
+    const options: { key: string; label: string; subject: string; body: string }[] =
+      JSON.parse(form.querySelector('[data-rp-templates]')?.textContent ?? '[]');
+    const picks = [...form.querySelectorAll<HTMLButtonElement>('[data-rp-pick]')];
+    const tmpl = form.querySelector<HTMLInputElement>('[data-rp-template]')!;
     const subject = form.querySelector<HTMLInputElement>('[data-rp-subject]')!;
     const body = form.querySelector<HTMLTextAreaElement>('[data-rp-body]')!;
     const frame = form.querySelector<HTMLIFrameElement>('[data-rp-frame]')!;
+    const tabs = [...form.querySelectorAll<HTMLButtonElement>('[data-rp-tab]')];
     let current = options[0];
-    let timer = 0;
-    let seq = 0;
 
-    async function refresh() {
-      const mine = ++seq;
-      const fd = new FormData();
-      fd.set('body', body.value);
-      try {
-        const res = await fetch('/admin/requests/preview', { method: 'POST', body: fd });
-        if (!res.ok || mine !== seq) return;
-        frame.srcdoc = await res.text();
-      } catch { /* keep the last preview */ }
-    }
-    body.addEventListener('input', () => { clearTimeout(timer); timer = window.setTimeout(refresh, 450); });
-
-    sel.addEventListener('change', () => {
-      const next = options.find((o) => o.key === sel.value);
-      if (!next) return;
+    picks.forEach((b) => b.addEventListener('click', () => {
+      const next = options.find((o) => o.key === b.dataset.rpPick);
+      if (!next || next === current) return;
       const edited = body.value !== current.body || subject.value !== current.subject;
-      if (edited && !confirm('Replace what you have typed with this template?')) { sel.value = current.key; return; }
+      if (edited && !confirm(`Replace what you have written with "${next.label}"?`)) return;
       current = next;
+      tmpl.value = next.key;
       subject.value = next.subject;
       body.value = next.body;
-      refresh();
-    });
+      picks.forEach((x) => { const on = x === b; x.classList.toggle('is-on', on); x.setAttribute('aria-pressed', String(on)); });
+      showTab('write');
+      body.focus();
+    }));
+
+    async function showTab(which: string) {
+      tabs.forEach((t) => { const on = t.dataset.rpTab === which; t.classList.toggle('is-on', on); t.setAttribute('aria-selected', String(on)); });
+      const preview = which === 'preview';
+      body.hidden = preview;
+      frame.hidden = !preview;
+      if (preview) {
+        const fd = new FormData();
+        fd.set('body', body.value);
+        try {
+          const res = await fetch('/admin/requests/preview', { method: 'POST', body: fd });
+          if (res.ok) frame.srcdoc = await res.text();
+        } catch { /* keep the last preview */ }
+      }
+    }
+    tabs.forEach((t) => t.addEventListener('click', () => showTab(t.dataset.rpTab ?? 'write')));
 
     form.addEventListener('submit', (e) => {
       if (body.value.includes('[Write your reply here.]')) {
         e.preventDefault();
+        showTab('write');
         alert('Replace "[Write your reply here.]" with your reply before sending.');
         return;
       }
-      const to = form.querySelector<HTMLInputElement>('input[disabled]')?.value ?? 'this person';
-      if (!confirm(`Send this reply to ${to}?`)) { e.preventDefault(); return; }
-      form.querySelector<HTMLButtonElement>('.rp__send')!.disabled = true;
+      if (!confirm(`Send this reply now?`)) { e.preventDefault(); return; }
+      const btn = form.querySelector<HTMLButtonElement>('.rp__send')!;
+      setTimeout(() => { btn.disabled = true; btn.textContent = 'Sending…'; }, 0);
     });
   });
 </script>
@@ -252,32 +264,43 @@ const detailRows = (r: RequestRecord) => intentRows(r);
   .idea__pill--ok { color: var(--ok); background: var(--ok-bg); grid-area: auto; }
   .idea__summary:has(.idea__pill--ok) { grid-template-columns: auto auto 1fr auto; grid-template-areas: 'pill ok title chev' 'pill ok meta chev'; }
   .idea__summary .idea__pill--ok { grid-area: ok; align-self: start; margin-top: 0.1rem; }
-  .rp-sent { margin-top: 1rem; }
-  .rp-sent__title { margin: 0 0 0.4rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
-  .rp-sent__item { border: 1px solid var(--border-soft); padding: 0.5rem 0.75rem; margin-bottom: 0.4rem; }
-  .rp-sent__item summary { cursor: pointer; font-size: 0.85rem; color: var(--text-strong); }
-  .rp-sent__item summary span { color: var(--text-muted); font-size: 0.78rem; margin-left: 0.4rem; }
-  .rp-sent__body { margin: 0.6rem 0 0; font-size: 0.85rem; line-height: 1.6; color: var(--text); white-space: pre-wrap; }
-  .rp { margin-top: 1rem; border-top: 1px solid var(--border-soft); padding-top: 0.9rem; }
-  .rp__toggle { cursor: pointer; display: inline-block; padding: 0.5rem 0.9rem; background: var(--ink); color: var(--bg); font-size: 0.82rem; font-weight: 700; list-style: none; }
-  .rp__toggle::-webkit-details-marker { display: none; }
-  .rp[open] .rp__toggle { background: transparent; color: var(--text-strong); padding-left: 0; }
-  .rp__form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.2rem; margin-top: 0.8rem; }
-  .rp__controls { display: grid; gap: 0.7rem; align-content: start; }
-  .rp__field { display: grid; gap: 0.3rem; }
-  .rp__field span { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
-  .rp__field input, .rp__field select, .rp__field textarea {
-    width: 100%; padding: 0.6rem 0.75rem; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 0;
-    font: inherit; font-size: 0.88rem; color: var(--text-strong);
+  .rp-sent { margin-top: 1.1rem; display: grid; gap: 0.4rem; }
+  .rp-sent__item { background: var(--ok-bg); padding: 0.6rem 0.85rem; }
+  .rp-sent__item summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 0.6rem; font-size: 0.84rem; color: var(--text-strong); list-style: none; }
+  .rp-sent__item summary::-webkit-details-marker { display: none; }
+  .rp-sent__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .rp-sent__subj { color: var(--text-muted); }
+  .rp-sent__body { margin: 0.6rem 0 0.2rem; font-size: 0.86rem; line-height: 1.6; color: var(--text); white-space: pre-wrap; }
+  .rp { margin-top: 1.2rem; }
+  .rp__toggle {
+    cursor: pointer; display: inline-flex; align-items: center; gap: 0.4rem; list-style: none;
+    padding: 0.55rem 1rem; background: var(--ink); color: var(--bg); font-size: 0.84rem; font-weight: 700;
   }
-  .rp__field input:disabled { color: var(--text-muted); }
-  .rp__field textarea { line-height: 1.55; resize: vertical; }
-  .rp__note { margin: 0; font-size: 0.76rem; color: var(--text-muted); }
-  .rp__send { justify-self: start; }
-  .rp__preview { display: grid; gap: 0.3rem; align-content: start; }
-  .rp__preview-label { margin: 0; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
-  .rp__frame { width: 100%; height: 560px; border: 1px solid var(--border-soft); background: #f3f3f3; }
-  @media (max-width: 900px) { .rp__form { grid-template-columns: 1fr; } .rp__frame { height: 420px; } }
+  .rp__toggle::-webkit-details-marker { display: none; }
+  .rp[open] .rp__toggle { background: none; color: var(--text-strong); padding: 0; font-size: 1rem; }
+  .rp__form { display: grid; gap: 0.9rem; margin-top: 0.8rem; max-width: 820px; }
+  .rp__picks { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .rp__pick {
+    border: 0; padding: 0.45rem 0.85rem; background: var(--bg-tint); color: var(--text);
+    font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  }
+  .rp__pick:hover { color: var(--text-strong); }
+  .rp__pick.is-on { background: var(--blue); color: #fff; }
+  .rp__card { background: var(--bg); box-shadow: inset 0 0 0 1px var(--border-soft); }
+  .rp__meta { display: grid; grid-template-columns: 4.5rem 1fr; align-items: center; gap: 0.5rem 0.8rem; padding: 0.8rem 1rem 0.4rem; }
+  .rp__k { font-size: 0.78rem; font-weight: 700; color: var(--text-muted); }
+  .rp__v { font-size: 0.88rem; color: var(--text-strong); overflow-wrap: anywhere; }
+  .rp__subject { width: 100%; padding: 0.5rem 0.6rem; border: 0; background: var(--bg-tint); font: inherit; font-size: 0.9rem; font-weight: 600; color: var(--text-strong); }
+  .rp__subject:focus, .rp__body:focus { outline: 2px solid var(--blue); outline-offset: -2px; }
+  .rp__tabs { display: flex; gap: 1.1rem; padding: 0.6rem 1rem 0; }
+  .rp__tab { border: 0; background: none; padding: 0.3rem 0; font: inherit; font-size: 0.82rem; font-weight: 700; color: var(--text-muted); cursor: pointer; box-shadow: inset 0 -2px 0 transparent; }
+  .rp__tab.is-on { color: var(--text-strong); box-shadow: inset 0 -2px 0 var(--blue); }
+  .rp__body { display: block; width: 100%; min-height: 300px; padding: 0.9rem 1rem; border: 0; background: var(--bg); font: inherit; font-size: 0.92rem; line-height: 1.6; color: var(--text-strong); resize: vertical; }
+  .rp__body[hidden], .rp__frame[hidden] { display: none; }
+  .rp__frame { display: block; width: 100%; height: 560px; border: 0; background: #f3f3f3; }
+  .rp__tip { margin: 0; padding: 0.55rem 1rem 0.75rem; font-size: 0.74rem; color: var(--text-muted); }
+  .rp__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1rem; }
+  .rp__note { font-size: 0.78rem; color: var(--text-muted); }
 
   .reqs__filter { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: var(--space-m); }
   .reqs__chip {

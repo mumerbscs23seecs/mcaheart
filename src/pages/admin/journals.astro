@@ -86,7 +86,7 @@ const { list, fromDb } = await listJournals();
           <span>Submission link</span>
           <input name="url" type="url" maxlength="2000" value={draft.url} placeholder="https://… (optional)" />
         </label>
-        <button class="adm-btn adm-btn--on jr__go" type="submit">Add journal</button>
+        <button class="btn jr__go" type="submit">Add journal</button>
       </form>
     )}
 
@@ -180,7 +180,7 @@ const { list, fromDb } = await listJournals();
   .jr__add { margin-bottom: var(--space-m); }
   .jr__name { flex: 2 1 260px; }
   .jr__url { flex: 3 1 300px; }
-  .jr__go { padding: 0.68rem 1rem; font-size: 0.82rem; }
+  .jr__go { align-self: end; }
   .jr__bar { display: flex; align-items: center; gap: var(--space-s); margin-bottom: var(--space-s); }
   .jr__search {
     flex: 1 1 auto; max-width: 420px; padding: 0.6rem 0.8rem; background: var(--bg);

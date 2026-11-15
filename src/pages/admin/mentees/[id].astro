@@ -9,7 +9,6 @@ import '../../../styles/admin.css';
 import { currentUser } from '../../../lib/auth';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { listReviews, average, SCORE_FIELDS, fmtReviewDate } from '../../../lib/mentee-reviews';
-import { photoVersions, photoUrl } from '../../../lib/profile';
 
 export const prerender = false;
 
@@ -31,7 +30,6 @@ if (!m) return Astro.redirect('/admin/mentees', 302);
 // Affiliation only exists once add-profiles.sql has been run.
 const { data: extra } = await supabaseAdmin().from('people').select('affiliation').eq('id', id).maybeSingle();
 const affiliation: string | null = (extra as any)?.affiliation ?? null;
-const photoV = (await photoVersions([id])).get(id);
 
 const { data: pmRows } = await supabase
   .from('project_mentees')
@@ -65,9 +63,7 @@ const here = `/admin/mentees/${id}`;
     <a class="mp__back" href="/admin/mentees">&larr; All mentees</a>
 
     <header class="mp__head">
-      {photoV
-        ? <img class="mp__photo" src={photoUrl(id, photoV)} alt="" width="84" height="84" />
-        : <span class="mp__photo mp__photo--empty" aria-hidden="true">{initials}</span>}
+      <span class="mp__avatar" aria-hidden="true">{initials}</span>
       <div class="mp__id">
         <h1 class="mp__name">{m.full_name}</h1>
         <p class="mp__meta">
@@ -150,8 +146,7 @@ const here = `/admin/mentees/${id}`;
   .mp { max-width: 980px; }
   .mp__back { display: inline-block; margin-bottom: var(--space-s); font-size: 0.85rem; color: var(--blue); }
   .mp__head { display: flex; gap: 1.1rem; align-items: center; margin-bottom: var(--space-m); }
-  .mp__photo { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-soft); }
-  .mp__photo--empty { display: grid; place-items: center; background: var(--bg-tint); color: var(--text-muted); font-weight: 700; font-size: 1.4rem; }
+  .mp__avatar { width: 72px; height: 72px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-wash); color: var(--blue); font-weight: 700; font-size: 1.3rem; }
   .mp__name { margin: 0; font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem); color: var(--text-strong); line-height: 1.1; }
   .mp__meta { margin: 6px 0 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.86rem; color: var(--text-muted); }
   .mp__meta a { color: var(--blue); }

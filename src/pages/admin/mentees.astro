@@ -4,7 +4,7 @@ import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
 import { getPipelineSession } from '../../lib/pipeline-auth';
 import { listReviews, average, type MenteeReview } from '../../lib/mentee-reviews';
-import { photoVersions, photoUrl } from '../../lib/profile';
+import { SKILLS, SKILL_SHORT, isSkill } from '../../lib/skills';
 
 export const prerender = false;
 
@@ -15,14 +15,7 @@ if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
 const session = await getPipelineSession(Astro.request, Astro.cookies);
 const supabase = session?.supabase ?? null;
 
-const EXPERTISE_TAGS = [
-  'Data extraction',
-  'Data streaming',
-  'Manuscript writing',
-  'Statistical analysis',
-  'Literature review',
-  'Conference presentation',
-] as const;
+const EXPERTISE_TAGS = SKILLS;
 
 const AVATAR_TONES = ['green', 'rose', 'amber', 'wine'] as const;
 function initials(name: string): string {
@@ -45,7 +38,7 @@ if (supabase && Astro.request.method === 'POST') {
   if (action === 'set-expertise') {
     const tags = form.getAll('expertise').map(String);
     const { error } = await supabase.rpc('set_mentee_expertise', { p_person: personId, p_expertise: tags });
-    flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Expertise tags updated.' };
+    flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Skills updated.' };
   }
 
   if (action === 'set-availability') {
@@ -149,10 +142,16 @@ const { ready: reviewsReady, reviews: allReviews } = dbReady && supabase
 const reviewsFor = (personId: string, projectId?: string) =>
   allReviews.filter((r) => r.person_id === personId && (!projectId || r.project_id === projectId));
 
-const photos = await photoVersions(mentees.map((m) => m.id));
 
-// Board: the Ongoing tab's projects (manuscript stage), with who's on each.
+// Board: the Ongoing tab's projects (manuscript stage), with who's on each
+// and the skills each one needs (add-skills.sql; none until it's run).
 const boardProjects = openProjects.filter((p) => p.phase === 'manuscript');
+const needsById = new Map<string, string[]>();
+if (supabase && boardProjects.length) {
+  const { data: needRows, error: needErr } = await supabase.from('projects').select('id,needed_skills').in('id', boardProjects.map((p) => p.id));
+  if (!needErr) for (const r of needRows ?? []) needsById.set(r.id, ((r as any).needed_skills ?? []).filter(isSkill));
+}
+const skillsOf = (m: any): string[] => (m.expertise ?? []).filter(isSkill);
 const leadIds = [...new Set(boardProjects.map((p) => p.lead_id).filter(Boolean))] as string[];
 const { data: leadRows } = supabase && leadIds.length
   ? await supabase.from('people').select('id,full_name').in('id', leadIds)
@@ -198,7 +197,7 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
             <h2 class="mnt-head__title">Mentees</h2>
             <div class="mnt-views" role="tablist" aria-label="View">
               <button type="button" class="mnt-view is-on" role="tab" aria-selected="true" data-mnt-view-btn="list">List</button>
-              <button type="button" class="mnt-view" role="tab" aria-selected="false" data-mnt-view-btn="board">Assign by dragging</button>
+              <button type="button" class="mnt-view" role="tab" aria-selected="false" data-mnt-view-btn="board">Assign to projects</button>
             </div>
           </div>
           <label class="mnt-search" data-mnt-view="list">
@@ -208,7 +207,7 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
         </div>
 
         {mentees.length === 0 && (
-          <p class="mnt-empty">No mentees yet — approve an applicant to add one.</p>
+          <p class="mnt-empty">No mentees yet. Approve an applicant to add one.</p>
         )}
 
         <div class="mnt-list" data-mnt-list data-mnt-view="list">
@@ -223,12 +222,10 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
               <article class="mnt-card" data-mnt-name={m.full_name.toLowerCase()}>
                 <details class="mnt-row">
                   <summary class="mnt-row__head">
-                    {photos.get(m.id)
-                      ? <img class="mnt-avatar mnt-avatar--photo" src={photoUrl(m.id, photos.get(m.id)!)} alt="" width="46" height="46" />
-                      : <span class="mnt-avatar" data-tone={avatarTone(m.id)}>{initials(m.full_name)}</span>}
+                    <span class="mnt-avatar" data-tone={avatarTone(m.id)}>{initials(m.full_name)}</span>
                     <span class="mnt-row__id">
                       <span class="mnt-row__name">{m.full_name}</span>
-                      <span class="mnt-row__meta">{tags.length ? tags.join(' · ') : 'No expertise tagged'} · {assigned.length} project{assigned.length === 1 ? '' : 's'}</span>
+                      <span class="mnt-row__meta">{tags.length ? tags.join(' · ') : 'No skills listed'} · {assigned.length} project{assigned.length === 1 ? '' : 's'}</span>
                       <span class="mnt-pill" data-tone={badgeTone}><i /> {badgeLabel}</span>
                     </span>
                     <svg class="mnt-row__chev" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="m5 7.5 5 5 5-5" /></svg>
@@ -239,15 +236,15 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
                       <div>
                         <p class="mnt-label">Email</p>
                         <p class="mnt-value">{m.email}</p>
-                        <a class="mnt-progress" href={`/admin/mentees/${m.id}`}>See full progress and reviews &rarr;</a>
+                        <a class="mnt-progress" href={`/admin/mentees/${m.id}`}>See progress and reviews</a>
                         {m.flag_status !== 'none' && (
                           <p class="mnt-value mnt-value--danger">{m.flag_status.replace('_', ' ')}: {m.flag_reason}</p>
                         )}
                       </div>
                       <div>
-                        <p class="mnt-label">Expertise tags</p>
+                        <p class="mnt-label">Skills</p>
                         <div class="mnt-chips mnt-chips--static">
-                          {tags.length ? tags.map((t) => <span class="mnt-chip-pill">{t}</span>) : <span class="mnt-value">None tagged</span>}
+                          {tags.length ? tags.map((t) => <span class="mnt-chip-pill">{t}</span>) : <span class="mnt-value">None listed</span>}
                         </div>
                       </div>
                     </div>
@@ -378,7 +375,7 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
                       </form>
 
                       <details class="mnt-menu__sub">
-                        <summary>Edit expertise tags</summary>
+                        <summary>Edit skills</summary>
                         <form method="post" class="mnt-menu__subform">
                           <input type="hidden" name="personId" value={m.id} />
                           <div class="mnt-chips">
@@ -389,7 +386,7 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
                               </label>
                             ))}
                           </div>
-                          <button class="mnt-btn mnt-btn--ghost" type="submit" name="action" value="set-expertise">Save tags</button>
+                          <button class="mnt-btn mnt-btn--ghost" type="submit" name="action" value="set-expertise">Save skills</button>
                         </form>
                       </details>
 
@@ -415,57 +412,80 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
         </div>
 
         <section class="mb" data-mnt-view="board" data-mb hidden aria-label="Assign mentees to ongoing projects">
-          <aside class="mb__people">
-            <label class="mb__search">
-              <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
-              <input type="search" placeholder="Type a mentee's name" aria-label="Find a mentee" data-mb-psearch autocomplete="off" />
-            </label>
-            <p class="mb__hint">Drag a name onto a project. On a phone, or with the keyboard, tap a name, then <b>Add here</b> on the project.</p>
-            <ul class="mb__chips" data-mb-chips>
-              {boardMentees.map((m) => {
-                const count = (assignmentsByPerson.get(m.id) ?? []).length;
-                return (
-                  <li data-mb-chip-row data-name={m.full_name.toLowerCase()}>
-                    <button type="button" class:list={['mb-chip', !m.open_to_assignment && 'is-unavail', m.flag_status === 'red_flag' && 'is-flag']}
-                      data-mb-chip data-id={m.id} data-label={m.full_name} aria-pressed="false">
-                      <span class="mb-chip__name">{m.full_name}</span>
-                      <span class="mb-chip__meta" data-mb-count={count}>{count} project{count === 1 ? '' : 's'}{!m.open_to_assignment ? ' · unavailable' : ''}{m.flag_status === 'red_flag' ? ' · red flag' : ''}</span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-            <p class="mb__empty" data-mb-pempty hidden>No mentee matches that name.</p>
-          </aside>
+          <div class="mb__skills" role="group" aria-label="Show by skill">
+            <button type="button" class="mb-skill is-on" data-mb-skill="" aria-pressed="true">All skills</button>
+            {SKILLS.map((sk) => (
+              <button type="button" class="mb-skill" data-mb-skill={sk} aria-pressed="false">{sk}</button>
+            ))}
+          </div>
 
-          <div class="mb__projects">
-            <div class="mb__bar">
+          <div class="mb__cols">
+            <aside class="mb__people">
+              <label class="mb__search">
+                <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
+                <input type="search" placeholder="Find a mentee" aria-label="Find a mentee" data-mb-psearch autocomplete="off" />
+              </label>
+              <p class="mb__hint">Move a name onto a project to add them. On a phone, tap a name, then <b>Add here</b>.</p>
+              <ul class="mb__chips" data-mb-chips>
+                {boardMentees.map((m) => {
+                  const count = (assignmentsByPerson.get(m.id) ?? []).length;
+                  const sk = skillsOf(m);
+                  return (
+                    <li data-mb-chip-row data-name={m.full_name.toLowerCase()} data-skills={sk.join('|')}>
+                      <button type="button" class:list={['mb-chip', !m.open_to_assignment && 'is-unavail', m.flag_status === 'red_flag' && 'is-flag']}
+                        data-mb-chip data-id={m.id} data-label={m.full_name} data-skills={sk.join('|')} aria-pressed="false">
+                        <span class="mb-chip__top">
+                          <span class="mb-chip__name">{m.full_name}</span>
+                          <span class="mb-chip__count" data-mb-count={count} title="Projects they're on">{count}</span>
+                        </span>
+                        {sk.length > 0 && <span class="mb-chip__skills">{sk.map((x) => SKILL_SHORT[x as keyof typeof SKILL_SHORT]).join(' · ')}</span>}
+                        {(!m.open_to_assignment || m.flag_status === 'red_flag') && (
+                          <span class="mb-chip__warn">{!m.open_to_assignment ? 'Unavailable' : 'Red flag'}</span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p class="mb__empty" data-mb-pempty hidden>No mentee matches.</p>
+            </aside>
+
+            <div class="mb__projects">
               <label class="mb__search mb__search--wide">
                 <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
-                <input type="search" placeholder={`Search ${boardProjects.length} ongoing projects`} aria-label="Find a project" data-mb-jsearch autocomplete="off" />
+                <input type="search" placeholder={`Find one of ${boardProjects.length} ongoing projects`} aria-label="Find a project" data-mb-jsearch autocomplete="off" />
               </label>
+              {boardProjects.length === 0 && <p class="mb__empty">No ongoing projects right now.</p>}
+              <div class="mb__grid" data-mb-grid>
+                {boardProjects.map((p) => {
+                  const needs = needsById.get(p.id) ?? [];
+                  return (
+                    <article class="mb-proj" data-mb-proj data-id={p.id} data-ref={p.ref} data-name={`${p.ref} ${p.title}`.toLowerCase()} data-needs={needs.join('|')}>
+                      <div class="mb-proj__head">
+                        <a class="mb-proj__title" href={`/pipeline/projects/${p.id}`} draggable="false"><b>{p.ref}</b> {p.title}</a>
+                        <span class="mb-proj__match">Good match</span>
+                      </div>
+                      {p.lead_id && leadName.get(p.lead_id) && <p class="mb-proj__lead">Lead: {leadName.get(p.lead_id)}</p>}
+                      {needs.length > 0 && (
+                        <p class="mb-proj__needs"><span>Needs</span> {needs.map((x) => <i>{SKILL_SHORT[x as keyof typeof SKILL_SHORT]}</i>)}</p>
+                      )}
+                      <ul class="mb-proj__people" data-mb-assigned>
+                        {(onProject.get(p.id) ?? []).map((pid) => (
+                          <li class="mb-tag" data-person={pid}>
+                            <span>{menteeName.get(pid) ?? 'Mentee'}</span>
+                            {!reviewedPairs.has(`${p.id}:${pid}`) && (
+                              <button type="button" class="mb-tag__x" data-mb-remove aria-label={`Remove ${menteeName.get(pid) ?? 'mentee'} from ${p.ref}`}>&times;</button>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                      <button type="button" class="mb-proj__add" data-mb-add hidden>Add <span data-mb-add-name></span> here</button>
+                    </article>
+                  );
+                })}
+              </div>
+              <p class="mb__empty" data-mb-jempty hidden>No project matches.</p>
             </div>
-            {boardProjects.length === 0 && <p class="mb__empty">No ongoing projects right now.</p>}
-            <div class="mb__grid" data-mb-grid>
-              {boardProjects.map((p) => (
-                <article class="mb-proj" data-mb-proj data-id={p.id} data-ref={p.ref} data-name={`${p.ref} ${p.title}`.toLowerCase()}>
-                  <a class="mb-proj__title" href={`/pipeline/projects/${p.id}`} draggable="false"><b>{p.ref}</b> {p.title}</a>
-                  {p.lead_id && leadName.get(p.lead_id) && <p class="mb-proj__lead">Lead: {leadName.get(p.lead_id)}</p>}
-                  <ul class="mb-proj__people" data-mb-assigned>
-                    {(onProject.get(p.id) ?? []).map((pid) => (
-                      <li class="mb-tag" data-person={pid}>
-                        <span>{menteeName.get(pid) ?? 'Mentee'}</span>
-                        {!reviewedPairs.has(`${p.id}:${pid}`) && (
-                          <button type="button" class="mb-tag__x" data-mb-remove aria-label={`Remove ${menteeName.get(pid) ?? 'mentee'} from ${p.ref}`}>&times;</button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                  <button type="button" class="mb-proj__add" data-mb-add hidden>Add <span data-mb-add-name></span> here</button>
-                </article>
-              ))}
-            </div>
-            <p class="mb__empty" data-mb-jempty hidden>No project matches that search.</p>
           </div>
 
           <div class="mb-toast" data-mb-toast role="status" aria-live="polite" hidden>
@@ -509,20 +529,47 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
     let toastTimer = 0;
     let undoAction: (() => void) | null = null;
 
-    const filter = (input: HTMLInputElement | null, rows: HTMLElement[], empty: HTMLElement | null) => {
-      input?.addEventListener('input', () => {
-        const q = input.value.trim().toLowerCase();
-        let shown = 0;
-        for (const r of rows) {
-          const hit = !q || (r.dataset.name ?? '').includes(q);
-          r.hidden = !hit;
-          if (hit) shown++;
-        }
-        if (empty) empty.hidden = shown > 0 || rows.length === 0;
-      });
-    };
-    filter(board.querySelector('[data-mb-psearch]'), [...board.querySelectorAll<HTMLElement>('[data-mb-chip-row]')], board.querySelector('[data-mb-pempty]'));
-    filter(board.querySelector('[data-mb-jsearch]'), cards, board.querySelector('[data-mb-jempty]'));
+    // Search boxes and the skill buttons work together: a skill shows the
+    // mentees who offer it and the projects that need it.
+    const chipRows = [...board.querySelectorAll<HTMLElement>('[data-mb-chip-row]')];
+    const psearch = board.querySelector<HTMLInputElement>('[data-mb-psearch]');
+    const jsearch = board.querySelector<HTMLInputElement>('[data-mb-jsearch]');
+    const pempty = board.querySelector<HTMLElement>('[data-mb-pempty]');
+    const jempty = board.querySelector<HTMLElement>('[data-mb-jempty]');
+    const skillBtns = [...board.querySelectorAll<HTMLButtonElement>('[data-mb-skill]')];
+    let skill = '';
+    const has = (el: HTMLElement, attr: string) => (el.getAttribute(attr) ?? '').split('|').includes(skill);
+    function applyFilters() {
+      const pq = psearch?.value.trim().toLowerCase() ?? '';
+      const jq = jsearch?.value.trim().toLowerCase() ?? '';
+      let ps = 0, js = 0;
+      for (const r of chipRows) {
+        const ok = (!pq || (r.dataset.name ?? '').includes(pq)) && (!skill || has(r, 'data-skills'));
+        r.hidden = !ok; if (ok) ps++;
+      }
+      for (const c of cards) {
+        const ok = (!jq || (c.dataset.name ?? '').includes(jq)) && (!skill || has(c, 'data-needs'));
+        c.hidden = !ok; if (ok) js++;
+      }
+      if (pempty) pempty.hidden = ps > 0 || chipRows.length === 0;
+      if (jempty) jempty.hidden = js > 0 || cards.length === 0;
+    }
+    psearch?.addEventListener('input', applyFilters);
+    jsearch?.addEventListener('input', applyFilters);
+    skillBtns.forEach((b) => b.addEventListener('click', () => {
+      skill = b.dataset.mbSkill ?? '';
+      skillBtns.forEach((x) => { const on = x === b; x.classList.toggle('is-on', on); x.setAttribute('aria-pressed', String(on)); });
+      applyFilters();
+    }));
+
+    // While a mentee is picked up, projects that need one of their skills say so.
+    function markMatches(chip: HTMLButtonElement | null) {
+      const mine = (chip?.dataset.skills ?? '').split('|').filter(Boolean);
+      for (const c of cards) {
+        const needs = (c.dataset.needs ?? '').split('|').filter(Boolean);
+        c.classList.toggle('is-match', !!chip && needs.some((n) => mine.includes(n)));
+      }
+    }
 
     function say(text: string, undo: (() => void) | null = null, isError = false) {
       toastText.textContent = text;
@@ -546,7 +593,7 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
       if (!meta) return;
       const n = Math.max(0, Number(meta.dataset.mbCount ?? 0) + by);
       meta.dataset.mbCount = String(n);
-      meta.textContent = meta.textContent!.replace(/^\d+ projects?/, `${n} project${n === 1 ? '' : 's'}`);
+      meta.textContent = String(n);
     }
 
     async function post(action: 'assign' | 'unassign', projectId: string, personId: string): Promise<string | null> {
@@ -624,6 +671,7 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
       selected = chip && chip !== selected ? chip : null;
       if (selected) { selected.classList.add('is-picked'); selected.setAttribute('aria-pressed', 'true'); }
       board.classList.toggle('has-pick', !!selected);
+      markMatches(selected);
       for (const card of cards) {
         const add = card.querySelector<HTMLButtonElement>('[data-mb-add]')!;
         add.hidden = !selected;
@@ -669,6 +717,7 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
       over?.classList.remove('is-over');
       board.classList.remove('is-dragging');
       chip.classList.remove('is-dragged');
+      markMatches(null);
       const started = !!ghost;
       drag = null;
       if (started) {
@@ -695,6 +744,7 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
         drag.chip.classList.add('is-dragged');
         board.classList.add('is-dragging');
         if (selected) select(null);
+        markMatches(drag.chip);
         scrollRaf = requestAnimationFrame(autoScroll);
       }
       e.preventDefault();
@@ -741,92 +791,113 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
   .mnt-view + .mnt-view { border-left: 1px solid var(--border-soft); }
   .mnt-view.is-on { background: var(--text-strong); color: var(--bg); }
   .mnt-progress { display: inline-block; margin-top: 0.5rem; font-size: 0.82rem; font-weight: 600; color: var(--blue); }
-  .mnt-avatar--photo { object-fit: cover; padding: 0; }
   .mnt-link--inline { justify-self: start; font-size: 0.8rem; font-weight: 600; color: var(--blue); }
   [data-mnt-view][hidden] { display: none !important; }
 
-  /* ---------- board ---------- */
-  .mb { display: grid; grid-template-columns: minmax(230px, 290px) 1fr; gap: 1.25rem; align-items: start; }
+  /* ---------- board (no rules or borders: shape comes from fills) ---------- */
+  .mb { display: grid; gap: 1.1rem; }
+  .mb__skills { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+  .mb-skill {
+    border: 0; border-radius: 999px; padding: 0.5rem 0.95rem; cursor: pointer;
+    background: var(--bg-tint); color: var(--text); font: inherit; font-size: 0.82rem; font-weight: 600;
+  }
+  .mb-skill:hover { color: var(--text-strong); }
+  .mb-skill.is-on { background: var(--text-strong); color: var(--bg); }
+  .mb-skill:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .mb__cols { display: grid; grid-template-columns: minmax(240px, 300px) 1fr; gap: 1.25rem; align-items: start; }
   .mb__people {
-    position: sticky; top: 1rem; display: grid; gap: 0.6rem; padding: 1rem;
-    background: var(--surface); border: 1px solid var(--border-soft); border-radius: 16px;
+    position: sticky; top: 1rem; display: grid; gap: 0.7rem; padding: 1rem;
+    background: var(--bg-tint); border-radius: 18px;
     max-height: calc(100vh - 2rem); min-height: 0; grid-template-rows: auto auto minmax(0, 1fr) auto;
   }
   .mb__search {
-    display: flex; align-items: center; gap: 0.45rem; padding: 0.55rem 0.75rem;
-    background: var(--bg-tint); border: 1px solid var(--border-soft); border-radius: 10px; color: var(--text-muted);
+    display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.8rem;
+    background: var(--surface); border-radius: 12px; color: var(--text-muted);
   }
-  .mb__search input { border: 0; background: none; outline: none; font-size: 0.88rem; color: var(--text-strong); width: 100%; min-width: 0; }
-  .mb__search:focus-within { border-color: var(--blue); }
-  .mb__search--wide { max-width: 420px; }
+  .mb__search input { border: 0; background: none; outline: none; font: inherit; font-size: 0.88rem; color: var(--text-strong); width: 100%; min-width: 0; }
+  .mb__search:focus-within { box-shadow: 0 0 0 2px var(--blue); }
+  .mb__search--wide { max-width: 460px; background: var(--bg-tint); }
   .mb__hint { margin: 0; font-size: 0.76rem; line-height: 1.5; color: var(--text-muted); }
-  .mb__chips { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; overflow-y: auto; min-height: 0; }
+  .mb__chips { list-style: none; margin: 0; padding: 0 2px 2px 0; display: grid; gap: 0.45rem; overflow-y: auto; min-height: 0; }
   .mb__chips li[hidden] { display: none; }
   .mb-chip {
-    width: 100%; display: grid; gap: 1px; text-align: left; padding: 0.55rem 0.75rem;
-    background: var(--bg); border: 1px solid var(--border-soft); border-radius: 10px;
+    width: 100%; display: grid; gap: 3px; text-align: left; padding: 0.65rem 0.8rem;
+    background: var(--surface); border: 0; border-radius: 12px;
     font: inherit; color: var(--text-strong); cursor: grab; user-select: none; -webkit-user-select: none;
+    transition: transform 0.12s, background-color 0.12s;
   }
-  .mb-chip:hover { border-color: var(--border); }
+  .mb-chip:hover { transform: translateX(2px); }
   .mb-chip:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-  .mb-chip__name { font-size: 0.88rem; font-weight: 600; }
-  .mb-chip__meta { font-size: 0.72rem; color: var(--text-muted); }
+  .mb-chip__top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+  .mb-chip__name { font-size: 0.9rem; font-weight: 700; }
+  .mb-chip__count {
+    min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center;
+    background: var(--bg-tint); font-size: 0.72rem; font-weight: 700; color: var(--text-muted); font-variant-numeric: tabular-nums;
+  }
+  .mb-chip__skills { font-size: 0.74rem; color: var(--text-muted); line-height: 1.4; }
+  .mb-chip__warn { font-size: 0.72rem; font-weight: 700; color: var(--warn); }
   .mb-chip.is-unavail .mb-chip__name { color: var(--text-muted); }
-  .mb-chip.is-flag { border-left: 3px solid var(--warn); }
-  .mb-chip.is-picked { border-color: var(--blue); background: var(--accent-wash); box-shadow: 0 0 0 1px var(--blue) inset; }
-  .mb-chip.is-dragged { opacity: 0.45; }
+  .mb-chip.is-picked { background: var(--blue); color: #fff; }
+  .mb-chip.is-picked .mb-chip__skills, .mb-chip.is-picked .mb-chip__warn { color: rgba(255, 255, 255, 0.85); }
+  .mb-chip.is-picked .mb-chip__count { background: rgba(255, 255, 255, 0.2); color: #fff; }
+  .mb-chip.is-dragged { opacity: 0.4; }
   .mb__empty { margin: 0; font-size: 0.84rem; color: var(--text-muted); }
-  .mb__projects { display: grid; gap: 0.8rem; min-width: 0; }
-  .mb__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.8rem; }
+  .mb__projects { display: grid; gap: 0.9rem; min-width: 0; }
+  .mb__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.8rem; }
   .mb-proj {
-    display: grid; gap: 0.45rem; align-content: start; padding: 0.9rem 1rem; min-height: 120px;
-    background: var(--surface); border: 1px solid var(--border-soft); border-radius: 14px;
-    transition: border-color 0.12s, background-color 0.12s;
+    display: grid; gap: 0.5rem; align-content: start; padding: 1rem 1.05rem; min-height: 128px;
+    background: var(--surface); border-radius: 16px;
+    box-shadow: 0 0 0 0 transparent; transition: box-shadow 0.12s, background-color 0.12s;
   }
   .mb-proj[hidden] { display: none; }
-  .mb.is-dragging .mb-proj { border-style: dashed; }
-  .mb.is-dragging .mb-proj.is-over { border: 2px solid var(--blue); background: var(--accent-wash); padding: calc(0.9rem - 1px) calc(1rem - 1px); }
-  .mb-proj.is-busy { opacity: 0.6; }
-  .mb-proj.is-flash { border-color: var(--ok); background: var(--ok-bg); }
-  .mb-proj__title { font-size: 0.86rem; line-height: 1.35; color: var(--text-strong); }
+  .mb-proj__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+  .mb-proj__title { font-size: 0.88rem; line-height: 1.4; color: var(--text-strong); }
   .mb-proj__title:hover { color: var(--blue); }
-  .mb-proj__lead { margin: 0; font-size: 0.74rem; color: var(--text-muted); }
+  .mb-proj__match { display: none; flex-shrink: 0; padding: 0.15rem 0.5rem; border-radius: 999px; background: var(--ok-bg); color: var(--ok); font-size: 0.68rem; font-weight: 700; }
+  .mb-proj.is-match .mb-proj__match { display: inline-block; }
+  .mb-proj__lead { margin: 0; font-size: 0.76rem; color: var(--text-muted); }
+  .mb-proj__needs { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; font-size: 0.72rem; }
+  .mb-proj__needs span { color: var(--text-muted); font-weight: 600; }
+  .mb-proj__needs i { font-style: normal; padding: 0.15rem 0.5rem; border-radius: 999px; background: var(--accent-wash); color: var(--blue); font-weight: 600; }
+  .mb.is-dragging .mb-proj { background: var(--bg-tint); }
+  .mb.is-dragging .mb-proj.is-match { background: var(--ok-bg); }
+  .mb.is-dragging .mb-proj.is-over { box-shadow: 0 0 0 3px var(--blue); background: var(--surface); }
+  .mb-proj.is-busy { opacity: 0.6; }
+  .mb-proj.is-flash { background: var(--ok-bg); }
   .mb-proj__people { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
   .mb :global(.mb-tag) {
-    display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.3rem 0.2rem 0.6rem;
-    background: var(--bg-tint); border: 1px solid var(--border-soft); border-radius: 999px; font-size: 0.76rem; color: var(--text-strong);
+    display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.25rem 0.3rem 0.25rem 0.65rem;
+    background: var(--bg-tint); border-radius: 999px; font-size: 0.78rem; font-weight: 600; color: var(--text-strong);
   }
   .mb :global(.mb-tag__x) {
     border: 0; background: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
     font-size: 0.95rem; line-height: 1; color: var(--text-muted); cursor: pointer; padding: 0;
   }
   .mb :global(.mb-tag__x:hover) { background: var(--red-wash); color: var(--red); }
-  .mb :global(.mb-tag:not(:has(.mb-tag__x))) { padding-right: 0.6rem; }
+  .mb :global(.mb-tag:not(:has(.mb-tag__x))) { padding-right: 0.65rem; }
   .mb-proj__add {
-    justify-self: start; margin-top: 0.2rem; padding: 0.4rem 0.75rem; border: 1px dashed var(--blue); border-radius: 8px;
-    background: var(--accent-wash); color: var(--blue); font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+    justify-self: start; margin-top: 0.15rem; padding: 0.45rem 0.85rem; border: 0; border-radius: 10px;
+    background: var(--blue); color: #fff; font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer;
   }
   .mb-proj__add[hidden] { display: none; }
   .mb-toast {
     position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 60;
     display: flex; align-items: center; gap: 0.9rem; max-width: calc(100vw - 2rem);
-    padding: 0.7rem 1rem; background: var(--text-strong); color: var(--bg); border-radius: 12px; font-size: 0.86rem;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.75rem 1.05rem; background: var(--text-strong); color: var(--bg); border-radius: 14px; font-size: 0.86rem;
   }
   .mb-toast[hidden] { display: none; }
   .mb-toast.is-error { background: var(--red); color: #fff; }
   .mb-toast__undo { border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; }
   :global(.mb-ghost) {
     position: fixed; left: 0; top: 0; z-index: 70; pointer-events: none;
-    padding: 0.45rem 0.8rem; background: var(--blue); color: #fff; border-radius: 10px;
-    font-size: 0.85rem; font-weight: 700; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22); white-space: nowrap;
+    padding: 0.5rem 0.85rem; background: var(--blue); color: #fff; border-radius: 12px;
+    font-size: 0.86rem; font-weight: 700; white-space: nowrap;
   }
   @media (max-width: 760px) {
-    .mb { grid-template-columns: 1fr; }
+    .mb__cols { grid-template-columns: 1fr; }
     .mb__people { position: static; max-height: none; }
-    .mb__chips { max-height: 260px; }
+    .mb__chips { max-height: 300px; }
   }
-
   .mnt-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
   .mnt-head__title { font-family: var(--font-sans); font-weight: 700; font-size: 2.3rem; color: var(--text-strong); margin: 0; }
 

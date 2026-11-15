@@ -13,6 +13,7 @@ import {
 } from '../../lib/applications';
 import { deliverApplicationDecision, renderApplicationDecisionEmail } from '../../lib/recruitment-mailer';
 import ListFilter from '../../components/ListFilter.astro';
+import { SKILLS, skillsFromApplication } from '../../lib/skills';
 
 export const prerender = false;
 
@@ -25,29 +26,10 @@ if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
 const session = await getPipelineSession(Astro.request, Astro.cookies);
 const supabase = session?.supabase ?? null;
 
-// Fixed tag set admin assigns at approval time, not free text - keeps the
-// Mentees list filterable/scannable. Pre-checked by a crude keyword match
-// against what the applicant actually wrote, but admin can change it.
-const EXPERTISE_TAGS = [
-  'Data extraction',
-  'Data streaming',
-  'Manuscript writing',
-  'Statistical analysis',
-  'Literature review',
-  'Conference presentation',
-] as const;
-
-function guessExpertiseTags(freeText: string): string[] {
-  const t = freeText.toLowerCase();
-  const hits: string[] = [];
-  if (/extract|screen/.test(t)) hits.push('Data extraction');
-  if (/stream/.test(t)) hits.push('Data streaming');
-  if (/manuscript|writ/.test(t)) hits.push('Manuscript writing');
-  if (/stat|analys/.test(t)) hits.push('Statistical analysis');
-  if (/literature|review/.test(t)) hits.push('Literature review');
-  if (/present|conference|poster|abstract/.test(t)) hits.push('Conference presentation');
-  return hits;
-}
+// The skills a new mentee starts with (they can change them later in their
+// profile). Pre-ticked from what the applicant picked on the Join form.
+const EXPERTISE_TAGS = SKILLS;
+const guessExpertiseTags = (freeText: string): string[] => skillsFromApplication(freeText);
 
 type Flash = { tone: 'ok' | 'error'; text: string };
 type Decision = 'approved' | 'withheld' | 'declined';
@@ -356,7 +338,7 @@ const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.end
               <textarea class="idea__note" id={`bn-${it.appId}`} name={`note-${it.appId}`} rows="2">{it.note}</textarea>
               {it.decision === 'approved' && (
                 <fieldset class="mentee-tags">
-                  <legend class="idea__notelabel">Mentee expertise</legend>
+                  <legend class="idea__notelabel">Skills (they can change these later)</legend>
                   <div class="mentee-tags__grid">
                     {EXPERTISE_TAGS.map((tag) => (
                       <label class="mentee-tags__item">
@@ -410,7 +392,7 @@ const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.end
 
           {preview.decision === 'approved' && (
             <fieldset class="mentee-tags">
-              <legend class="idea__notelabel">Mentee expertise (for the Mentees list)</legend>
+              <legend class="idea__notelabel">Skills (they can change these later)</legend>
               <div class="mentee-tags__grid">
                 {EXPERTISE_TAGS.map((tag) => (
                   <label class="mentee-tags__item">
