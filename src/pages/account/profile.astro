@@ -1,0 +1,161 @@
+---
+/**
+ * Every member edits their own profile here: photo, full name, affiliation
+ * and sign-in email. Needs mca-pipeline/add-profiles.sql.
+ */
+import AuthShell from '../../components/AuthShell.astro';
+import { supabaseAdmin } from '../../lib/supabase';
+import { forgetPerson } from '../../lib/pipeline-auth';
+import { processPhoto, savePhoto, removePhoto, photoVersions, photoUrl, changeEmail, PHOTO_EXTENSIONS } from '../../lib/profile';
+
+export const prerender = false;
+
+// The middleware guarantees a signed-in member here.
+const { supabase, person } = Astro.locals as any;
+const home = person.role === 'admin' ? '/admin' : '/pipeline';
+
+let error: string | null = null;
+let saved: string | null = Astro.url.searchParams.get('saved') ? 'Your profile is saved.' : null;
+
+// Affiliation exists only once add-profiles.sql has been run.
+const { data: extra, error: extraErr } = await supabaseAdmin().from('people').select('affiliation').eq('id', person.id).maybeSingle();
+const ready = !extraErr;
+
+let form = { full_name: person.full_name as string, email: person.email as string, affiliation: (extra?.affiliation as string | null) ?? '' };
+
+if (ready && Astro.request.method === 'POST') {
+  const data = await Astro.request.formData();
+  form = {
+    full_name: String(data.get('full_name') ?? '').trim(),
+    email: String(data.get('email') ?? '').trim(),
+    affiliation: String(data.get('affiliation') ?? '').trim(),
+  };
+  const password = String(data.get('password') ?? '');
+  const photo = data.get('photo');
+  const dropPhoto = data.get('remove_photo') === 'on';
+
+  // Check the photo first, so a bad file doesn't leave half the form saved.
+  let photoBytes: Buffer | null = null;
+  if (photo instanceof File && photo.size > 0) {
+    const r = await processPhoto(photo);
+    if ('error' in r) error = r.error;
+    else photoBytes = r.bytes;
+  }
+
+  if (!error) {
+    const { error: e } = await supabase.rpc('update_my_profile', { p_full_name: form.full_name, p_affiliation: form.affiliation });
+    if (e) error = e.message;
+  }
+  if (!error && form.email.toLowerCase() !== String(person.email).toLowerCase()) {
+    error = await changeEmail({ personId: person.id, authId: person.auth_id, currentEmail: person.email, newEmail: form.email, password });
+  }
+  if (!error && photoBytes) error = await savePhoto(person.id, photoBytes);
+  else if (!error && dropPhoto) error = await removePhoto(person.id);
+
+  forgetPerson(person.auth_id);
+  if (!error) return Astro.redirect('/account/profile?saved=1', 303);
+  saved = null;
+}
+
+const versions = ready ? await photoVersions([person.id]) : new Map<string, string>();
+const v = versions.get(person.id);
+const initials = form.full_name.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join('').toUpperCase();
+---
+
+<AuthShell title="Your profile" description="Edit your MCA Heart profile.">
+  <form class="auth-card prof" method="post" enctype="multipart/form-data" novalidate>
+    <h1 class="auth-card__title">Your profile</h1>
+    <p class="auth-card__sub">Coordinators and your project leads see these details.</p>
+
+    {!ready && (
+      <p class="auth-alert" role="alert">Profile editing isn't switched on yet. A coordinator needs to run add-profiles.sql.</p>
+    )}
+    {error && <p class="auth-alert" role="alert">{error}</p>}
+    {saved && <p class="auth-ok-box" role="status">{saved}</p>}
+
+    {ready && (
+      <>
+        <div class="prof__photo">
+          {v
+            ? <img class="prof__img" src={photoUrl(person.id, v)} alt="Your photo" width="88" height="88" data-prof-img />
+            : <span class="prof__img prof__img--empty" data-prof-img>{initials}</span>}
+          <div class="prof__photo-ctl">
+            <label class="prof__pick">
+              <span>{v ? 'Change photo' : 'Add a photo'}</span>
+              <input type="file" name="photo" accept={PHOTO_EXTENSIONS.join(',')} data-prof-file />
+            </label>
+            <small>JPG, PNG or WebP, up to 5 MB. Cropped to a square.</small>
+            {v && (
+              <label class="prof__remove"><input type="checkbox" name="remove_photo" /> Remove my photo</label>
+            )}
+          </div>
+        </div>
+
+        <div class="auth-field">
+          <label for="full_name">Full name</label>
+          <input id="full_name" name="full_name" required maxlength="120" value={form.full_name} autocomplete="name" />
+        </div>
+        <div class="auth-field">
+          <label for="affiliation">Affiliation</label>
+          <input id="affiliation" name="affiliation" maxlength="200" value={form.affiliation} placeholder="Hospital, university or institution" autocomplete="organization" />
+        </div>
+        <div class="auth-field">
+          <label for="email">Email (you sign in with this)</label>
+          <input id="email" name="email" type="email" required maxlength="254" value={form.email} autocomplete="email" data-prof-email data-current={person.email} />
+        </div>
+        <div class="auth-field" data-prof-pw hidden>
+          <label for="password">Current password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" />
+          <small class="prof__hint">Needed to change your email. You'll sign in with the new email from now on.</small>
+        </div>
+
+        <button class="btn" type="submit">Save profile</button>
+      </>
+    )}
+    <a class="auth-card__link" href={home}>&larr; Back</a>
+  </form>
+</AuthShell>
+
+<script>
+  // Ask for the current password only once the email is actually changed.
+  const email = document.querySelector<HTMLInputElement>('[data-prof-email]');
+  const pw = document.querySelector<HTMLElement>('[data-prof-pw]');
+  const sync = () => {
+    if (!email || !pw) return;
+    const changed = email.value.trim().toLowerCase() !== (email.dataset.current ?? '').toLowerCase();
+    pw.hidden = !changed;
+  };
+  email?.addEventListener('input', sync);
+  sync();
+
+  // Show the chosen photo straight away.
+  const file = document.querySelector<HTMLInputElement>('[data-prof-file]');
+  file?.addEventListener('change', () => {
+    const f = file.files?.[0];
+    const slot = document.querySelector<HTMLElement>('[data-prof-img]');
+    if (!f || !slot) return;
+    const img = document.createElement('img');
+    img.className = 'prof__img';
+    img.alt = 'Your new photo';
+    img.width = 88; img.height = 88;
+    img.dataset.profImg = '';
+    img.src = URL.createObjectURL(f);
+    slot.replaceWith(img);
+  });
+</script>
+
+<style>
+  .prof__photo { display: flex; align-items: center; gap: 1rem; }
+  .prof__img { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-soft); }
+  .prof__img--empty {
+    display: grid; place-items: center; background: var(--bg-tint); color: var(--text-muted);
+    font-weight: 700; font-size: 1.5rem;
+  }
+  .prof__photo-ctl { display: grid; gap: 0.3rem; }
+  .prof__photo-ctl small, .prof__hint { font-size: 0.76rem; color: var(--text-muted); }
+  .prof__pick { position: relative; justify-self: start; cursor: pointer; font-size: 0.86rem; font-weight: 600; color: var(--blue); }
+  .prof__pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+  .prof__pick:focus-within span { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .prof__remove { display: flex; gap: 0.4rem; align-items: center; font-size: 0.8rem; color: var(--text); }
+  [data-prof-pw][hidden] { display: none; }
+</style>

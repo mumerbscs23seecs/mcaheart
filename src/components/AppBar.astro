@@ -134,6 +134,7 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
             <span>Dark mode</span>
             <ThemeToggle />
           </div>
+          <a class="appbar__navrow" href="/account/profile">Edit profile</a>
           <a class="appbar__navrow" href="/account/password">Change password</a>
           <form method="post" action="/logout">
             <button class="appbar__navrow appbar__navrow--out" type="submit">Sign out</button>
@@ -180,6 +181,7 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
             <p class="acct__name">{name}</p>
             {email && <p class="acct__email">{email}</p>}
           </div>
+          <a class="acct__row" href="/account/profile">Edit profile</a>
           <a class="acct__row" href="/account/password">Change password</a>
           <form method="post" action="/logout">
             <button class="acct__row acct__row--out" type="submit">Sign out</button>

@@ -79,3 +79,8 @@ export async function getPipelineSession(
   if (!person || !person.active) return null;
   return { supabase, person: person as Person, mustChangePassword: user.app_metadata?.must_change_password === true };
 }
+
+/** Drop a cached people row (after a profile change), so the next page shows it. */
+export function forgetPerson(authId: string | null | undefined) {
+  if (authId) personCache.delete(authId);
+}
