@@ -1,0 +1,83 @@
+---
+/** The private review form for one mentee on one project. */
+import { SCORE_FIELDS } from '../lib/mentee-reviews';
+
+interface Props { projectId: string; personId: string; name: string; returnTo?: string }
+const { projectId, personId, name, returnTo } = Astro.props;
+const uid = `mr-${projectId.slice(0, 8)}-${personId.slice(0, 8)}`;
+---
+<form method="post" action={`/pipeline/projects/${projectId}/review-mentee`} class="mrev">
+  <input type="hidden" name="personId" value={personId} />
+  {returnTo && <input type="hidden" name="return" value={returnTo} />}
+  <fieldset class="mrev__overall">
+    <legend>Overall <span class="mrev__req">required</span></legend>
+    <div class="mrev__stars">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <label class="mrev__star">
+          <input type="radio" name="overall" value={n} required />
+          <span>{n}</span>
+        </label>
+      ))}
+    </div>
+    <small class="mrev__scale">1 poor · 5 excellent</small>
+  </fieldset>
+  <div class="mrev__grid">
+    {SCORE_FIELDS.map(([field, label]) => (
+      <label class="mrev__field">
+        <span>{label}</span>
+        <select name={field} aria-label={`${label} for ${name}`}>
+          <option value="">Not rated</option>
+          {[5, 4, 3, 2, 1].map((n) => <option value={n}>{n} / 5</option>)}
+        </select>
+      </label>
+    ))}
+  </div>
+  <fieldset class="mrev__again">
+    <legend>Would you work with {name} again?</legend>
+    {[['yes', 'Yes'], ['maybe', 'Maybe'], ['no', 'No']].map(([v, l]) => (
+      <label><input type="radio" name="work_again" value={v} /> {l}</label>
+    ))}
+  </fieldset>
+  <label class="mrev__field mrev__field--wide">
+    <span>What they did well</span>
+    <textarea name="strengths" rows="2" maxlength="4000" id={`${uid}-s`}></textarea>
+  </label>
+  <label class="mrev__field mrev__field--wide">
+    <span>What they should work on</span>
+    <textarea name="improve" rows="2" maxlength="4000" id={`${uid}-i`}></textarea>
+  </label>
+  <div class="mrev__foot">
+    <button class="pl-btn" type="submit">Save review</button>
+    <small>Private: coordinators and this paper's lead and co-lead only.</small>
+  </div>
+</form>
+
+<style>
+  .mrev { display: grid; gap: 12px; margin-top: 10px; padding: 14px; border: 1px solid var(--border-soft); background: var(--bg); }
+  .mrev fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+  .mrev legend { font-size: 0.78rem; font-weight: 700; color: var(--text-strong); margin-bottom: 6px; padding: 0; }
+  .mrev__req { font-weight: 500; color: var(--text-muted); margin-left: 4px; }
+  .mrev__stars { display: flex; gap: 6px; }
+  .mrev__star { position: relative; }
+  .mrev__star input { position: absolute; opacity: 0; inset: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .mrev__star span {
+    display: grid; place-items: center; width: 38px; height: 38px;
+    border: 1px solid var(--border); font-weight: 700; font-size: 0.9rem; color: var(--text);
+    background: var(--surface);
+  }
+  .mrev__star input:checked + span { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .mrev__star input:focus-visible + span { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .mrev__scale { display: block; margin-top: 4px; font-size: 0.72rem; color: var(--text-muted); }
+  .mrev__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .mrev__field { display: grid; gap: 4px; }
+  .mrev__field > span { font-size: 0.74rem; font-weight: 600; color: var(--text); }
+  .mrev__field select, .mrev__field textarea {
+    width: 100%; padding: 7px 8px; font: inherit; font-size: 0.85rem;
+    border: 1px solid var(--border-soft); background: var(--surface); color: var(--text-strong); border-radius: 0;
+  }
+  .mrev__again { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+  .mrev__again legend { width: 100%; }
+  .mrev__again label { display: inline-flex; gap: 5px; align-items: center; font-size: 0.85rem; }
+  .mrev__foot { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .mrev__foot small { font-size: 0.74rem; color: var(--text-muted); }
+</style>

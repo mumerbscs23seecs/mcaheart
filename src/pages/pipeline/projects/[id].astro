@@ -2,6 +2,9 @@
 import PipelineLayout from '../../../layouts/PipelineLayout.astro';
 import PeoplePicker from '../../../components/PeoplePicker.astro';
 import TeamPicker from '../../../components/TeamPicker.astro';
+import MenteeReviewForm from '../../../components/MenteeReviewForm.astro';
+import MenteeReviewList from '../../../components/MenteeReviewList.astro';
+import { listReviews, average } from '../../../lib/mentee-reviews';
 import { stagesFor } from '../../../lib/lifecycle.mjs';
 import { personOnProject } from '../../../lib/pipeline-scope';
 import { supabaseAdmin } from '../../../lib/supabase';
@@ -69,6 +72,20 @@ const { data: projectMentees } = await supabase
   .order('assigned_at');
 const projectComplete = Boolean(p.archived_at) || (p.phase === 'journal' && p.stage === 'published');
 const canRateMentees = (person.id === p.lead_id || person.id === p.colead_id || isAdmin) && projectComplete;
+
+// Private mentee reviews (add-mentee-reviews.sql). The database only returns
+// them to admins and this paper's lead / co-lead; everyone else gets none.
+// `reviewsReady` is false until that SQL has been run - the old one-number
+// rating below stays in use until then.
+const canReview = isAdmin || person.id === p.lead_id || person.id === p.colead_id;
+const { ready: reviewsReady, reviews: projectReviews } = (projectMentees ?? []).length
+  ? await listReviews(supabase, { projectId: id })
+  : { ready: false, reviews: [] };
+const reviewerIds = [...new Set(projectReviews.map((r) => r.reviewer_id).filter(Boolean))] as string[];
+const { data: reviewerRows } = reviewerIds.length
+  ? await supabaseAdmin().from('people').select('id,full_name').in('id', reviewerIds)
+  : { data: [] };
+const reviewerNames = new Map<string, string>((reviewerRows ?? []).map((r: any) => [r.id, r.full_name]));
 
 const { data: history } = await supabase
   .from('project_history')
@@ -255,7 +272,45 @@ const peopleRows2: { label: string; name: string | null }[] = [
 
   <div class="pd-cols">
   <div class="pd-main">
-  {(projectMentees ?? []).length > 0 && (
+  {(projectMentees ?? []).length > 0 && reviewsReady && (
+    <section class="pd-card pl-actions" id="mentees">
+      <h2>Mentees</h2>
+      {canReview && (
+        <p class="pl-muted pl-small">Reviews are private: only coordinators and this paper's lead and co-lead see them, never the mentee.</p>
+      )}
+      <div class="pl-mentees">
+        {(projectMentees ?? []).map((pm: any) => {
+          const theirs = projectReviews.filter((r) => r.person_id === pm.person_id);
+          const name = pm.person?.full_name ?? 'Mentee';
+          return (
+            <div class="pl-mentee">
+              <p class="pl-mentee__name">
+                <b>{name}</b>
+                {isAdmin && <a class="pl-mentee__link" href={`/admin/mentees/${pm.person_id}`}>See progress</a>}
+                {canReview && (theirs.length
+                  ? <span class="pl-mentee__rating">Overall {average(theirs, 'overall')}/5 · {theirs.length} review{theirs.length === 1 ? '' : 's'}</span>
+                  : <span class="pl-muted pl-small"> · no reviews yet</span>)}
+              </p>
+              {canReview && theirs.length > 0 && (
+                <details class="pl-mentee__edit">
+                  <summary>Show reviews ({theirs.length})</summary>
+                  <MenteeReviewList reviews={theirs} names={reviewerNames} viewerId={person.id} isAdmin={isAdmin} returnTo={`/pipeline/projects/${id}`} />
+                </details>
+              )}
+              {canReview && pm.person_id !== person.id && (
+                <details class="pl-mentee__edit">
+                  <summary>+ Add a review</summary>
+                  <MenteeReviewForm projectId={id!} personId={pm.person_id} name={name} />
+                </details>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  )}
+
+  {(projectMentees ?? []).length > 0 && !reviewsReady && (
     <section class="pd-card pl-actions">
       <h2>Mentees</h2>
       <div class="pl-mentees">

@@ -1,0 +1,191 @@
+---
+/**
+ * One mentee's whole progress, for admins: their details, every project
+ * they've been on, and every private review leads and coordinators wrote.
+ */
+import AppLayout from '../../../layouts/AppLayout.astro';
+import MenteeReviewList from '../../../components/MenteeReviewList.astro';
+import '../../../styles/admin.css';
+import { currentUser } from '../../../lib/auth';
+import { supabaseAdmin } from '../../../lib/supabase';
+import { listReviews, average, SCORE_FIELDS, fmtReviewDate } from '../../../lib/mentee-reviews';
+import { photoVersions, photoUrl } from '../../../lib/profile';
+
+export const prerender = false;
+
+const me = currentUser(Astro.cookies);
+if (!me) return Astro.redirect('/login', 302);
+if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+const { supabase } = Astro.locals as any;
+const id = String(Astro.params.id ?? '');
+if (!/^[0-9a-f-]{36}$/i.test(id)) return Astro.redirect('/admin/mentees', 302);
+
+const { data: m } = await supabase
+  .from('people')
+  .select('id,full_name,email,expertise,open_to_assignment,flag_status,flag_reason,is_mentee')
+  .eq('id', id)
+  .maybeSingle();
+if (!m) return Astro.redirect('/admin/mentees', 302);
+
+// Affiliation only exists once add-profiles.sql has been run.
+const { data: extra } = await supabaseAdmin().from('people').select('affiliation').eq('id', id).maybeSingle();
+const affiliation: string | null = (extra as any)?.affiliation ?? null;
+const photoV = (await photoVersions([id])).get(id);
+
+const { data: pmRows } = await supabase
+  .from('project_mentees')
+  .select('project_id,assigned_at')
+  .eq('person_id', id)
+  .order('assigned_at', { ascending: false });
+const projectIds = (pmRows ?? []).map((r: any) => r.project_id);
+const { data: projRows } = projectIds.length
+  ? await supabase.from('project_list').select('id,ref,title,phase,stage,stage_label,lead_name,archived_at,deleted_at').in('id', projectIds)
+  : { data: [] };
+const projById = new Map((projRows ?? []).map((p: any) => [p.id, p]));
+
+const { ready, reviews } = await listReviews(supabase, { personId: id });
+const reviewerIds = [...new Set(reviews.map((r) => r.reviewer_id).filter(Boolean))] as string[];
+const { data: reviewerRows } = reviewerIds.length
+  ? await supabase.from('people').select('id,full_name').in('id', reviewerIds)
+  : { data: [] };
+const names = new Map<string, string>((reviewerRows ?? []).map((r: any) => [r.id, r.full_name]));
+
+const done = (p: any) => Boolean(p?.archived_at) || (p?.phase === 'journal' && p?.stage === 'published');
+const overall = average(reviews, 'overall');
+const againCount = { yes: 0, maybe: 0, no: 0 };
+for (const r of reviews) if (r.work_again) againCount[r.work_again]++;
+const initials = m.full_name.split(/\s+/).filter(Boolean).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
+const status = m.flag_status !== 'none' ? m.flag_status.replace('_', ' ') : m.open_to_assignment ? 'Available' : 'Unavailable';
+const here = `/admin/mentees/${id}`;
+---
+
+<AppLayout title={`${m.full_name} - progress`} user={me} active="mentees">
+  <div class="adm mp">
+    <a class="mp__back" href="/admin/mentees">&larr; All mentees</a>
+
+    <header class="mp__head">
+      {photoV
+        ? <img class="mp__photo" src={photoUrl(id, photoV)} alt="" width="84" height="84" />
+        : <span class="mp__photo mp__photo--empty" aria-hidden="true">{initials}</span>}
+      <div class="mp__id">
+        <h1 class="mp__name">{m.full_name}</h1>
+        <p class="mp__meta">
+          <a href={`mailto:${m.email}`}>{m.email}</a>
+          {affiliation && <span>{affiliation}</span>}
+        </p>
+        <p class="mp__meta">
+          <span class:list={['mp__status', m.flag_status !== 'none' && 'is-flag']}>{status}</span>
+          {(m.expertise ?? []).length > 0 && <span>{(m.expertise ?? []).join(', ')}</span>}
+        </p>
+        {m.flag_status !== 'none' && m.flag_reason && <p class="mp__flag">Reason: {m.flag_reason}</p>}
+      </div>
+    </header>
+
+    {!ready && (
+      <div class="adm-flash adm-flash--error">
+        <p>Reviews aren't switched on yet. Run <code>mca-pipeline/add-mentee-reviews.sql</code> in the Supabase SQL editor, then reload.</p>
+      </div>
+    )}
+
+    <section class="mp__stats" aria-label="Summary">
+      <div class="mp__stat"><b>{projectIds.length}</b><span>project{projectIds.length === 1 ? '' : 's'}</span></div>
+      <div class="mp__stat"><b>{(projRows ?? []).filter(done).length}</b><span>completed</span></div>
+      <div class="mp__stat"><b>{reviews.length}</b><span>review{reviews.length === 1 ? '' : 's'}</span></div>
+      <div class="mp__stat"><b>{overall ?? '-'}</b><span>average overall</span></div>
+    </section>
+
+    {reviews.length > 0 && (
+      <section class="adm-panel mp__scores">
+        <h2 class="adm-panel__title">Scores across all reviews</h2>
+        <dl class="mp__bars">
+          {([['overall', 'Overall'], ...SCORE_FIELDS] as const).map(([f, label]) => {
+            const a = average(reviews, f as any);
+            return (
+              <div class="mp__bar">
+                <dt>{label}</dt>
+                <dd>
+                  <span class="mp__track"><span class="mp__fill" style={`width:${a ? (a / 5) * 100 : 0}%`}></span></span>
+                  <b>{a ?? 'Not rated'}{a ? ' / 5' : ''}</b>
+                </dd>
+              </div>
+            );
+          })}
+        </dl>
+        <p class="mp__again">
+          Would work with them again: <b>{againCount.yes}</b> yes · <b>{againCount.maybe}</b> maybe · <b>{againCount.no}</b> no
+          <span class="mp__latest">Latest review {fmtReviewDate(reviews[0].created_at)}</span>
+        </p>
+      </section>
+    )}
+
+    <section class="mp__projects">
+      <h2 class="mp__h2">Projects</h2>
+      {projectIds.length === 0 && <p class="adm-hint">Not on any project yet. Assign one from the Mentees page.</p>}
+      {(pmRows ?? []).map((pm: any) => {
+        const p: any = projById.get(pm.project_id);
+        const theirs = reviews.filter((r) => r.project_id === pm.project_id);
+        return (
+          <article class="mp__proj">
+            <div class="mp__proj-head">
+              <a class="mp__proj-title" href={`/pipeline/projects/${pm.project_id}`}>{p ? `${p.ref} - ${p.title}` : 'Project no longer available'}</a>
+              <span class="mp__proj-meta">
+                {p?.stage_label && <span>{p.stage_label}</span>}
+                {p?.lead_name && <span>Lead: {p.lead_name}</span>}
+                <span>Assigned {fmtReviewDate(pm.assigned_at)}</span>
+                {done(p) && <span class="mp__done">Completed</span>}
+              </span>
+            </div>
+            {theirs.length
+              ? <MenteeReviewList reviews={theirs} names={names} viewerId={me.id} isAdmin={true} returnTo={here} />
+              : <p class="adm-hint mp__none">No reviews on this project yet. <a href={`/pipeline/projects/${pm.project_id}#mentees`}>Add one on the paper's page</a>.</p>}
+          </article>
+        );
+      })}
+    </section>
+  </div>
+</AppLayout>
+
+<style>
+  .mp { max-width: 980px; }
+  .mp__back { display: inline-block; margin-bottom: var(--space-s); font-size: 0.85rem; color: var(--blue); }
+  .mp__head { display: flex; gap: 1.1rem; align-items: center; margin-bottom: var(--space-m); }
+  .mp__photo { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid var(--border-soft); }
+  .mp__photo--empty { display: grid; place-items: center; background: var(--bg-tint); color: var(--text-muted); font-weight: 700; font-size: 1.4rem; }
+  .mp__name { margin: 0; font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem); color: var(--text-strong); line-height: 1.1; }
+  .mp__meta { margin: 6px 0 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.86rem; color: var(--text-muted); }
+  .mp__meta a { color: var(--blue); }
+  .mp__status { font-weight: 700; color: var(--ok); text-transform: capitalize; }
+  .mp__status.is-flag { color: var(--red); }
+  .mp__flag { margin: 6px 0 0; font-size: 0.84rem; color: var(--red); }
+  .mp__stats { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--border-soft); margin-bottom: var(--space-m); }
+  .mp__stat { padding: 0.9rem 1rem; display: grid; gap: 2px; }
+  .mp__stat + .mp__stat { border-left: 1px solid var(--border-soft); }
+  .mp__stat b { font-size: 1.6rem; color: var(--text-strong); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .mp__stat span { font-size: 0.78rem; color: var(--text-muted); }
+  .mp__scores { margin-bottom: var(--space-m); }
+  .mp__bars { display: grid; gap: 8px; margin: 0; }
+  .mp__bar { display: grid; grid-template-columns: 150px 1fr; gap: 12px; align-items: center; }
+  .mp__bar dt { font-size: 0.84rem; color: var(--text); }
+  .mp__bar dd { margin: 0; display: flex; align-items: center; gap: 10px; }
+  .mp__bar dd b { font-size: 0.82rem; color: var(--text-strong); min-width: 64px; font-variant-numeric: tabular-nums; }
+  .mp__track { flex: 1; height: 8px; background: var(--bg-tint); border: 1px solid var(--border-soft); }
+  .mp__fill { display: block; height: 100%; background: var(--blue); }
+  .mp__again { margin: 14px 0 0; font-size: 0.84rem; color: var(--text); display: flex; flex-wrap: wrap; gap: 4px 16px; }
+  .mp__latest { color: var(--text-muted); }
+  .mp__h2 { font-size: var(--step-1); color: var(--text-strong); margin: 0 0 var(--space-s); }
+  .mp__proj { padding: 0.9rem 0; border-top: 1px solid var(--border-soft); }
+  .mp__proj-head { display: grid; gap: 4px; }
+  .mp__proj-title { font-weight: 700; color: var(--text-strong); font-size: 0.95rem; }
+  .mp__proj-title:hover { color: var(--blue); }
+  .mp__proj-meta { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 0.78rem; color: var(--text-muted); }
+  .mp__done { color: var(--ok); font-weight: 700; }
+  .mp__none { margin-top: 6px; }
+  .mp__none a { color: var(--blue); }
+  @media (max-width: 640px) {
+    .mp__stats { grid-template-columns: repeat(2, 1fr); }
+    .mp__stat:nth-child(3) { border-left: 0; }
+    .mp__stat:nth-child(n+3) { border-top: 1px solid var(--border-soft); }
+    .mp__bar { grid-template-columns: 1fr; gap: 4px; }
+  }
+</style>

@@ -916,3 +916,5 @@ select.pl-status:focus-visible { outline: 2px solid var(--pl-accent); outline-of
   letter-spacing: 0.16em;
 }
 .pl-authcard .pl-btn { width: 100%; text-align: center; }
+.pl-mentee__link { margin-left: 8px; font-size: 0.76rem; font-weight: 600; color: var(--blue); }
+.pl-mentee__edit + .pl-mentee__edit { margin-top: 4px; }

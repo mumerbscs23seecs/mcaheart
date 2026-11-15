@@ -3,6 +3,8 @@ import AppLayout from '../../layouts/AppLayout.astro';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
 import { getPipelineSession } from '../../lib/pipeline-auth';
+import { listReviews, average, type MenteeReview } from '../../lib/mentee-reviews';
+import { photoVersions, photoUrl } from '../../lib/profile';
 
 export const prerender = false;
 
@@ -98,7 +100,7 @@ if (supabase && Astro.request.method === 'POST') {
 }
 
 let mentees: any[] = [];
-let openProjects: { id: string; ref: string; title: string }[] = [];
+let openProjects: { id: string; ref: string; title: string; phase: string; lead_id: string | null }[] = [];
 let assignmentsByPerson = new Map<string, any[]>();
 let dbReady = false;
 let dbError = '';
@@ -115,9 +117,10 @@ if (supabase) {
 
     const { data: projRows, error: pErr } = await supabase
       .from('projects')
-      .select('id,ref,title')
+      .select('id,ref,title,phase,lead_id')
       .is('archived_at', null)
       .is('hidden_at', null)
+      .is('deleted_at', null)
       .order('ref');
     if (pErr) throw pErr;
     openProjects = projRows ?? [];
@@ -137,6 +140,31 @@ if (supabase) {
     dbError = err instanceof Error ? err.message : 'Could not load mentees.';
   }
 }
+
+// Private reviews (add-mentee-reviews.sql); until that's run, the old
+// one-number rating stays in use below.
+const { ready: reviewsReady, reviews: allReviews } = dbReady && supabase
+  ? await listReviews(supabase, {})
+  : { ready: false, reviews: [] as MenteeReview[] };
+const reviewsFor = (personId: string, projectId?: string) =>
+  allReviews.filter((r) => r.person_id === personId && (!projectId || r.project_id === projectId));
+
+const photos = await photoVersions(mentees.map((m) => m.id));
+
+// Board: the Ongoing tab's projects (manuscript stage), with who's on each.
+const boardProjects = openProjects.filter((p) => p.phase === 'manuscript');
+const leadIds = [...new Set(boardProjects.map((p) => p.lead_id).filter(Boolean))] as string[];
+const { data: leadRows } = supabase && leadIds.length
+  ? await supabase.from('people').select('id,full_name').in('id', leadIds)
+  : { data: [] };
+const leadName = new Map<string, string>((leadRows ?? []).map((r: any) => [r.id, r.full_name]));
+const menteeName = new Map<string, string>(mentees.map((m) => [m.id, m.full_name]));
+const onProject = new Map<string, string[]>();
+for (const [personId, list] of assignmentsByPerson) {
+  for (const a of list) onProject.set(a.project_id, [...(onProject.get(a.project_id) ?? []), personId]);
+}
+const boardMentees = mentees.filter((m) => m.flag_status !== 'blacklisted');
+const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_id}`));
 ---
 
 <AppLayout title="Mentees" heading="Mentees" user={me} active="mentees">
@@ -168,8 +196,12 @@ if (supabase) {
         <div class="mnt-head">
           <div>
             <h2 class="mnt-head__title">Mentees</h2>
+            <div class="mnt-views" role="tablist" aria-label="View">
+              <button type="button" class="mnt-view is-on" role="tab" aria-selected="true" data-mnt-view-btn="list">List</button>
+              <button type="button" class="mnt-view" role="tab" aria-selected="false" data-mnt-view-btn="board">Assign by dragging</button>
+            </div>
           </div>
-          <label class="mnt-search">
+          <label class="mnt-search" data-mnt-view="list">
             <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
             <input type="search" data-mnt-search placeholder="Search mentees…" aria-label="Search mentees" />
           </label>
@@ -179,7 +211,7 @@ if (supabase) {
           <p class="mnt-empty">No mentees yet — approve an applicant to add one.</p>
         )}
 
-        <div class="mnt-list" data-mnt-list>
+        <div class="mnt-list" data-mnt-list data-mnt-view="list">
           {mentees.map((m) => {
             const tags: string[] = m.expertise ?? [];
             const assigned = assignmentsByPerson.get(m.id) ?? [];
@@ -191,7 +223,9 @@ if (supabase) {
               <article class="mnt-card" data-mnt-name={m.full_name.toLowerCase()}>
                 <details class="mnt-row">
                   <summary class="mnt-row__head">
-                    <span class="mnt-avatar" data-tone={avatarTone(m.id)}>{initials(m.full_name)}</span>
+                    {photos.get(m.id)
+                      ? <img class="mnt-avatar mnt-avatar--photo" src={photoUrl(m.id, photos.get(m.id)!)} alt="" width="46" height="46" />
+                      : <span class="mnt-avatar" data-tone={avatarTone(m.id)}>{initials(m.full_name)}</span>}
                     <span class="mnt-row__id">
                       <span class="mnt-row__name">{m.full_name}</span>
                       <span class="mnt-row__meta">{tags.length ? tags.join(' · ') : 'No expertise tagged'} · {assigned.length} project{assigned.length === 1 ? '' : 's'}</span>
@@ -205,6 +239,7 @@ if (supabase) {
                       <div>
                         <p class="mnt-label">Email</p>
                         <p class="mnt-value">{m.email}</p>
+                        <a class="mnt-progress" href={`/admin/mentees/${m.id}`}>See full progress and reviews &rarr;</a>
                         {m.flag_status !== 'none' && (
                           <p class="mnt-value mnt-value--danger">{m.flag_status.replace('_', ' ')}: {m.flag_reason}</p>
                         )}
@@ -238,6 +273,7 @@ if (supabase) {
                       {assigned.map((a: any) => {
                         const proj = a.project ?? {};
                         const complete = Boolean(proj.archived_at) || (proj.phase === 'journal' && proj.stage === 'published');
+                        const theirs = reviewsFor(m.id, a.project_id);
                         return (
                           <div class="pcard">
                             <span class="pcard__icon">
@@ -245,49 +281,75 @@ if (supabase) {
                             </span>
                             <div class="pcard__body">
                               <p class="pcard__title"><b>{proj.ref}</b> - {proj.title}</p>
-                              {a.rating ? (
-                                a.rating_note && <p class="pcard__note">“{a.rating_note}”</p>
+                              {reviewsReady ? (
+                                <>
+                                  <p class="pcard__note">
+                                    {theirs.length
+                                      ? `${theirs.length} review${theirs.length === 1 ? '' : 's'} · overall ${average(theirs, 'overall')}/5`
+                                      : complete ? 'Project complete - waiting for a review.' : 'No reviews yet.'}
+                                  </p>
+                                  <a class="mnt-link mnt-link--inline" href={`/pipeline/projects/${a.project_id}#mentees`}>{theirs.length ? 'Add another review' : 'Add a review'}</a>
+                                  {theirs.length === 0 && (
+                                    <form method="post" class="mnt-unassign">
+                                      <input type="hidden" name="personId" value={m.id} />
+                                      <input type="hidden" name="projectId" value={a.project_id} />
+                                      <button class="mnt-link" type="submit" name="action" value="unassign">Unassign</button>
+                                    </form>
+                                  )}
+                                </>
                               ) : (
-                                <p class="pcard__note">{complete ? 'Ready to rate.' : 'Rating opens once this project is published or archived.'}</p>
-                              )}
+                                <>
+                                  {a.rating ? (
+                                    a.rating_note && <p class="pcard__note">“{a.rating_note}”</p>
+                                  ) : (
+                                    <p class="pcard__note">{complete ? 'Ready to rate.' : 'Rating opens once this project is published or archived.'}</p>
+                                  )}
 
-                              {!a.rating && complete && (
-                                <form method="post" class="mnt-rate">
-                                  <input type="hidden" name="personId" value={m.id} />
-                                  <input type="hidden" name="projectId" value={a.project_id} />
-                                  <select class="mnt-select" name="rating" required>
-                                    <option value="">Rate…</option>
-                                    {[5, 4, 3, 2, 1].map((n) => <option value={n}>{n} / 5</option>)}
-                                  </select>
-                                  <input class="mnt-input mnt-rate__note" type="text" name="note" placeholder="Comment (optional)" />
-                                  <button class="mnt-btn mnt-btn--primary" type="submit" name="action" value="rate">Submit rating</button>
-                                </form>
-                              )}
-                              {a.rating && (
-                                <details class="mnt-edit-rating">
-                                  <summary>Edit rating</summary>
-                                  <form method="post" class="mnt-rate">
-                                    <input type="hidden" name="personId" value={m.id} />
-                                    <input type="hidden" name="projectId" value={a.project_id} />
-                                    <select class="mnt-select" name="rating" required>
-                                      {[5, 4, 3, 2, 1].map((n) => <option value={n} selected={n === a.rating}>{n} / 5</option>)}
-                                    </select>
-                                    <input class="mnt-input mnt-rate__note" type="text" name="note" placeholder="Comment (optional)" value={a.rating_note ?? ''} />
-                                    <button class="mnt-btn mnt-btn--primary" type="submit" name="action" value="rate">Update rating</button>
-                                  </form>
-                                </details>
-                              )}
-                              {!a.rating && (
-                                <form method="post" class="mnt-unassign">
-                                  <input type="hidden" name="personId" value={m.id} />
-                                  <input type="hidden" name="projectId" value={a.project_id} />
-                                  <button class="mnt-link" type="submit" name="action" value="unassign">Unassign</button>
-                                </form>
+                                  {!a.rating && complete && (
+                                    <form method="post" class="mnt-rate">
+                                      <input type="hidden" name="personId" value={m.id} />
+                                      <input type="hidden" name="projectId" value={a.project_id} />
+                                      <select class="mnt-select" name="rating" required>
+                                        <option value="">Rate…</option>
+                                        {[5, 4, 3, 2, 1].map((n) => <option value={n}>{n} / 5</option>)}
+                                      </select>
+                                      <input class="mnt-input mnt-rate__note" type="text" name="note" placeholder="Comment (optional)" />
+                                      <button class="mnt-btn mnt-btn--primary" type="submit" name="action" value="rate">Submit rating</button>
+                                    </form>
+                                  )}
+                                  {a.rating && (
+                                    <details class="mnt-edit-rating">
+                                      <summary>Edit rating</summary>
+                                      <form method="post" class="mnt-rate">
+                                        <input type="hidden" name="personId" value={m.id} />
+                                        <input type="hidden" name="projectId" value={a.project_id} />
+                                        <select class="mnt-select" name="rating" required>
+                                          {[5, 4, 3, 2, 1].map((n) => <option value={n} selected={n === a.rating}>{n} / 5</option>)}
+                                        </select>
+                                        <input class="mnt-input mnt-rate__note" type="text" name="note" placeholder="Comment (optional)" value={a.rating_note ?? ''} />
+                                        <button class="mnt-btn mnt-btn--primary" type="submit" name="action" value="rate">Update rating</button>
+                                      </form>
+                                    </details>
+                                  )}
+                                  {!a.rating && (
+                                    <form method="post" class="mnt-unassign">
+                                      <input type="hidden" name="personId" value={m.id} />
+                                      <input type="hidden" name="projectId" value={a.project_id} />
+                                      <button class="mnt-link" type="submit" name="action" value="unassign">Unassign</button>
+                                    </form>
+                                  )}
+                                </>
                               )}
                             </div>
-                            <span class="mnt-pill" data-tone={a.rating ? 'available' : complete ? 'red_flag' : 'unavailable'}>
-                              {a.rating ? `Rated ${a.rating}/5` : complete ? 'Needs rating' : 'Not complete yet'}
-                            </span>
+                            {reviewsReady ? (
+                              <span class="mnt-pill" data-tone={theirs.length ? 'available' : complete ? 'red_flag' : 'unavailable'}>
+                                {theirs.length ? `Overall ${average(theirs, 'overall')}/5` : complete ? 'Needs review' : 'In progress'}
+                              </span>
+                            ) : (
+                              <span class="mnt-pill" data-tone={a.rating ? 'available' : complete ? 'red_flag' : 'unavailable'}>
+                                {a.rating ? `Rated ${a.rating}/5` : complete ? 'Needs rating' : 'Not complete yet'}
+                              </span>
+                            )}
                             <a class="pcard__chev" href={`/pipeline/projects/${a.project_id}`} title="Open project" aria-label="Open project">
                               <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="m7.5 5 5 5-5 5" /></svg>
                             </a>
@@ -351,10 +413,306 @@ if (supabase) {
             );
           })}
         </div>
+
+        <section class="mb" data-mnt-view="board" data-mb hidden aria-label="Assign mentees to ongoing projects">
+          <aside class="mb__people">
+            <label class="mb__search">
+              <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
+              <input type="search" placeholder="Type a mentee's name" aria-label="Find a mentee" data-mb-psearch autocomplete="off" />
+            </label>
+            <p class="mb__hint">Drag a name onto a project. On a phone, or with the keyboard, tap a name, then <b>Add here</b> on the project.</p>
+            <ul class="mb__chips" data-mb-chips>
+              {boardMentees.map((m) => {
+                const count = (assignmentsByPerson.get(m.id) ?? []).length;
+                return (
+                  <li data-mb-chip-row data-name={m.full_name.toLowerCase()}>
+                    <button type="button" class:list={['mb-chip', !m.open_to_assignment && 'is-unavail', m.flag_status === 'red_flag' && 'is-flag']}
+                      data-mb-chip data-id={m.id} data-label={m.full_name} aria-pressed="false">
+                      <span class="mb-chip__name">{m.full_name}</span>
+                      <span class="mb-chip__meta" data-mb-count={count}>{count} project{count === 1 ? '' : 's'}{!m.open_to_assignment ? ' · unavailable' : ''}{m.flag_status === 'red_flag' ? ' · red flag' : ''}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+            <p class="mb__empty" data-mb-pempty hidden>No mentee matches that name.</p>
+          </aside>
+
+          <div class="mb__projects">
+            <div class="mb__bar">
+              <label class="mb__search mb__search--wide">
+                <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
+                <input type="search" placeholder={`Search ${boardProjects.length} ongoing projects`} aria-label="Find a project" data-mb-jsearch autocomplete="off" />
+              </label>
+            </div>
+            {boardProjects.length === 0 && <p class="mb__empty">No ongoing projects right now.</p>}
+            <div class="mb__grid" data-mb-grid>
+              {boardProjects.map((p) => (
+                <article class="mb-proj" data-mb-proj data-id={p.id} data-ref={p.ref} data-name={`${p.ref} ${p.title}`.toLowerCase()}>
+                  <a class="mb-proj__title" href={`/pipeline/projects/${p.id}`} draggable="false"><b>{p.ref}</b> {p.title}</a>
+                  {p.lead_id && leadName.get(p.lead_id) && <p class="mb-proj__lead">Lead: {leadName.get(p.lead_id)}</p>}
+                  <ul class="mb-proj__people" data-mb-assigned>
+                    {(onProject.get(p.id) ?? []).map((pid) => (
+                      <li class="mb-tag" data-person={pid}>
+                        <span>{menteeName.get(pid) ?? 'Mentee'}</span>
+                        {!reviewedPairs.has(`${p.id}:${pid}`) && (
+                          <button type="button" class="mb-tag__x" data-mb-remove aria-label={`Remove ${menteeName.get(pid) ?? 'mentee'} from ${p.ref}`}>&times;</button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <button type="button" class="mb-proj__add" data-mb-add hidden>Add <span data-mb-add-name></span> here</button>
+                </article>
+              ))}
+            </div>
+            <p class="mb__empty" data-mb-jempty hidden>No project matches that search.</p>
+          </div>
+
+          <div class="mb-toast" data-mb-toast role="status" aria-live="polite" hidden>
+            <span data-mb-toast-text></span>
+            <button type="button" class="mb-toast__undo" data-mb-undo hidden>Undo</button>
+          </div>
+        </section>
       </>
     )}
   </div>
 </AppLayout>
+
+<script>
+  // ---------- List / board switch (remembered for this browser) ----------
+  const views = document.querySelectorAll<HTMLElement>('[data-mnt-view]');
+  const viewBtns = document.querySelectorAll<HTMLButtonElement>('[data-mnt-view-btn]');
+  function showView(v: string) {
+    views.forEach((el) => { el.hidden = el.dataset.mntView !== v; });
+    viewBtns.forEach((b) => {
+      const on = b.dataset.mntViewBtn === v;
+      b.classList.toggle('is-on', on);
+      b.setAttribute('aria-selected', String(on));
+    });
+    try { localStorage.setItem('mnt-view', v); } catch { /* storage blocked */ }
+  }
+  viewBtns.forEach((b) => b.addEventListener('click', () => showView(b.dataset.mntViewBtn ?? 'list')));
+  let saved = 'list';
+  try { saved = localStorage.getItem('mnt-view') ?? 'list'; } catch { /* storage blocked */ }
+  if (new URLSearchParams(location.search).get('view') === 'board') saved = 'board';
+  if (saved === 'board' && document.querySelector('[data-mb]')) showView('board');
+
+  // ---------- Board ----------
+  const board = document.querySelector<HTMLElement>('[data-mb]');
+  if (board) {
+    const chips = [...board.querySelectorAll<HTMLButtonElement>('[data-mb-chip]')];
+    const cards = [...board.querySelectorAll<HTMLElement>('[data-mb-proj]')];
+    const toast = board.querySelector<HTMLElement>('[data-mb-toast]')!;
+    const toastText = board.querySelector<HTMLElement>('[data-mb-toast-text]')!;
+    const undoBtn = board.querySelector<HTMLButtonElement>('[data-mb-undo]')!;
+    let selected: HTMLButtonElement | null = null;
+    let toastTimer = 0;
+    let undoAction: (() => void) | null = null;
+
+    const filter = (input: HTMLInputElement | null, rows: HTMLElement[], empty: HTMLElement | null) => {
+      input?.addEventListener('input', () => {
+        const q = input.value.trim().toLowerCase();
+        let shown = 0;
+        for (const r of rows) {
+          const hit = !q || (r.dataset.name ?? '').includes(q);
+          r.hidden = !hit;
+          if (hit) shown++;
+        }
+        if (empty) empty.hidden = shown > 0 || rows.length === 0;
+      });
+    };
+    filter(board.querySelector('[data-mb-psearch]'), [...board.querySelectorAll<HTMLElement>('[data-mb-chip-row]')], board.querySelector('[data-mb-pempty]'));
+    filter(board.querySelector('[data-mb-jsearch]'), cards, board.querySelector('[data-mb-jempty]'));
+
+    function say(text: string, undo: (() => void) | null = null, isError = false) {
+      toastText.textContent = text;
+      toast.classList.toggle('is-error', isError);
+      undoAction = undo;
+      undoBtn.hidden = !undo;
+      toast.hidden = false;
+      clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => { toast.hidden = true; undoAction = null; }, undo ? 8000 : 5000);
+    }
+    undoBtn.addEventListener('click', () => {
+      const fn = undoAction;
+      toast.hidden = true;
+      undoAction = null;
+      fn?.();
+    });
+
+    const chipFor = (personId: string) => chips.find((c) => c.dataset.id === personId) ?? null;
+    function bumpCount(personId: string, by: number) {
+      const meta = chipFor(personId)?.querySelector<HTMLElement>('[data-mb-count]');
+      if (!meta) return;
+      const n = Math.max(0, Number(meta.dataset.mbCount ?? 0) + by);
+      meta.dataset.mbCount = String(n);
+      meta.textContent = meta.textContent!.replace(/^\d+ projects?/, `${n} project${n === 1 ? '' : 's'}`);
+    }
+
+    async function post(action: 'assign' | 'unassign', projectId: string, personId: string): Promise<string | null> {
+      const body = new FormData();
+      body.set('action', action);
+      body.set('projectId', projectId);
+      body.set('personId', personId);
+      try {
+        const res = await fetch('/admin/mentees/assign', { method: 'POST', body, headers: { accept: 'application/json' } });
+        const out = await res.json().catch(() => ({ ok: false, error: 'Something went wrong. Reload the page and try again.' }));
+        return res.ok && out.ok ? null : out.error || 'Something went wrong.';
+      } catch {
+        return 'Could not reach the server. Check your connection and try again.';
+      }
+    }
+
+    function addTag(card: HTMLElement, personId: string, name: string) {
+      const li = document.createElement('li');
+      li.className = 'mb-tag';
+      li.dataset.person = personId;
+      const span = document.createElement('span');
+      span.textContent = name;
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'mb-tag__x';
+      x.dataset.mbRemove = '';
+      x.setAttribute('aria-label', `Remove ${name} from ${card.dataset.ref}`);
+      x.textContent = '×';
+      li.append(span, x);
+      card.querySelector('[data-mb-assigned]')?.append(li);
+    }
+
+    async function assign(card: HTMLElement, personId: string, name: string, fromUndo = false) {
+      const ref = card.dataset.ref ?? 'the project';
+      if (card.querySelector(`[data-person="${personId}"]`)) {
+        say(`${name} is already on ${ref}.`, null, true);
+        return;
+      }
+      card.classList.add('is-busy');
+      const err = await post('assign', card.dataset.id!, personId);
+      card.classList.remove('is-busy');
+      if (err) { say(err, null, true); return; }
+      addTag(card, personId, name);
+      bumpCount(personId, 1);
+      card.classList.add('is-flash');
+      setTimeout(() => card.classList.remove('is-flash'), 900);
+      say(fromUndo ? `${name} is back on ${ref}.` : `Added ${name} to ${ref}. They've been notified.`, fromUndo ? null : () => unassign(card, personId, name, true));
+    }
+
+    async function unassign(card: HTMLElement, personId: string, name: string, fromUndo = false) {
+      const ref = card.dataset.ref ?? 'the project';
+      card.classList.add('is-busy');
+      const err = await post('unassign', card.dataset.id!, personId);
+      card.classList.remove('is-busy');
+      if (err) { say(err, null, true); return; }
+      card.querySelector(`[data-person="${personId}"]`)?.remove();
+      bumpCount(personId, -1);
+      say(fromUndo ? `Took ${name} off ${ref} again.` : `Removed ${name} from ${ref}.`, fromUndo ? null : () => assign(card, personId, name, true));
+    }
+
+    // Remove buttons (also on tags added after the page loaded).
+    board.addEventListener('click', (e) => {
+      const x = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-mb-remove]');
+      if (!x) return;
+      const card = x.closest<HTMLElement>('[data-mb-proj]');
+      const personId = x.closest<HTMLElement>('[data-person]')?.dataset.person;
+      if (!card || !personId) return;
+      const name = chipFor(personId)?.dataset.label ?? x.previousElementSibling?.textContent ?? 'this mentee';
+      unassign(card, personId, name);
+    });
+
+    // ---- Tap / keyboard: pick a name, then "Add here" on a project ----
+    function select(chip: HTMLButtonElement | null) {
+      if (selected) { selected.classList.remove('is-picked'); selected.setAttribute('aria-pressed', 'false'); }
+      selected = chip && chip !== selected ? chip : null;
+      if (selected) { selected.classList.add('is-picked'); selected.setAttribute('aria-pressed', 'true'); }
+      board.classList.toggle('has-pick', !!selected);
+      for (const card of cards) {
+        const add = card.querySelector<HTMLButtonElement>('[data-mb-add]')!;
+        add.hidden = !selected;
+        const nm = add.querySelector('[data-mb-add-name]');
+        if (nm) nm.textContent = selected?.dataset.label ?? '';
+      }
+    }
+    let suppressClick = false;
+    chips.forEach((chip) => chip.addEventListener('click', () => {
+      if (suppressClick) { suppressClick = false; return; }
+      select(chip);
+    }));
+    cards.forEach((card) => card.querySelector('[data-mb-add]')?.addEventListener('click', () => {
+      if (!selected) return;
+      const chip = selected;
+      select(null);
+      assign(card, chip.dataset.id!, chip.dataset.label ?? 'Mentee');
+    }));
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && selected) select(null); });
+
+    // ---- Mouse / pen drag ----
+    let drag: { chip: HTMLButtonElement; ghost: HTMLElement | null; x: number; y: number; over: HTMLElement | null; id: number } | null = null;
+    let scrollRaf = 0;
+    let lastY = 0;
+
+    const cardAt = (x: number, y: number) => {
+      const el = document.elementFromPoint(x, y) as HTMLElement | null;
+      return el?.closest<HTMLElement>('[data-mb-proj]') ?? null;
+    };
+    function autoScroll() {
+      if (!drag?.ghost) return;
+      const edge = 70;
+      const h = window.innerHeight;
+      const step = lastY < edge ? -(edge - lastY) / 3 : lastY > h - edge ? (lastY - (h - edge)) / 3 : 0;
+      if (step) window.scrollBy(0, step);
+      scrollRaf = requestAnimationFrame(autoScroll);
+    }
+    function endDrag(drop: boolean) {
+      if (!drag) return;
+      cancelAnimationFrame(scrollRaf);
+      const { chip, ghost, over } = drag;
+      ghost?.remove();
+      over?.classList.remove('is-over');
+      board.classList.remove('is-dragging');
+      chip.classList.remove('is-dragged');
+      const started = !!ghost;
+      drag = null;
+      if (started) {
+        suppressClick = true;
+        setTimeout(() => { suppressClick = false; }, 0);
+        if (drop && over) assign(over, chip.dataset.id!, chip.dataset.label ?? 'Mentee');
+      }
+    }
+    chips.forEach((chip) => {
+      chip.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'touch' || e.button !== 0) return;
+        drag = { chip, ghost: null, x: e.clientX, y: e.clientY, over: null, id: e.pointerId };
+      });
+    });
+    document.addEventListener('pointermove', (e) => {
+      if (!drag || e.pointerId !== drag.id) return;
+      if (!drag.ghost) {
+        if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+        const g = document.createElement('div');
+        g.className = 'mb-ghost';
+        g.textContent = drag.chip.dataset.label ?? '';
+        document.body.append(g);
+        drag.ghost = g;
+        drag.chip.classList.add('is-dragged');
+        board.classList.add('is-dragging');
+        if (selected) select(null);
+        scrollRaf = requestAnimationFrame(autoScroll);
+      }
+      e.preventDefault();
+      lastY = e.clientY;
+      drag.ghost.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 12}px)`;
+      const over = cardAt(e.clientX, e.clientY);
+      if (over !== drag.over) {
+        drag.over?.classList.remove('is-over');
+        over?.classList.add('is-over');
+        drag.over = over;
+      }
+    });
+    document.addEventListener('pointerup', (e) => { if (drag && e.pointerId === drag.id) endDrag(true); });
+    document.addEventListener('pointercancel', (e) => { if (drag && e.pointerId === drag.id) endDrag(false); });
+    window.addEventListener('blur', () => endDrag(false));
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') endDrag(false); });
+  }
+</script>
 
 <script>
   const input = document.querySelector('[data-mnt-search]');
@@ -376,6 +734,98 @@ if (supabase) {
      :global beyond the page heading override, and Astro only bundles this
      stylesheet into this one route, so it can't leak onto other pages. */
   :global(.app__heading) { display: none; }
+
+  /* ---------- view switch ---------- */
+  .mnt-views { display: inline-flex; margin-top: 0.8rem; border: 1px solid var(--border-soft); border-radius: 10px; overflow: hidden; }
+  .mnt-view { border: 0; background: var(--surface); padding: 0.45rem 0.9rem; font: inherit; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); cursor: pointer; }
+  .mnt-view + .mnt-view { border-left: 1px solid var(--border-soft); }
+  .mnt-view.is-on { background: var(--text-strong); color: var(--bg); }
+  .mnt-progress { display: inline-block; margin-top: 0.5rem; font-size: 0.82rem; font-weight: 600; color: var(--blue); }
+  .mnt-avatar--photo { object-fit: cover; padding: 0; }
+  .mnt-link--inline { justify-self: start; font-size: 0.8rem; font-weight: 600; color: var(--blue); }
+  [data-mnt-view][hidden] { display: none !important; }
+
+  /* ---------- board ---------- */
+  .mb { display: grid; grid-template-columns: minmax(230px, 290px) 1fr; gap: 1.25rem; align-items: start; }
+  .mb__people {
+    position: sticky; top: 1rem; display: grid; gap: 0.6rem; padding: 1rem;
+    background: var(--surface); border: 1px solid var(--border-soft); border-radius: 16px;
+    max-height: calc(100vh - 2rem); min-height: 0; grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
+  .mb__search {
+    display: flex; align-items: center; gap: 0.45rem; padding: 0.55rem 0.75rem;
+    background: var(--bg-tint); border: 1px solid var(--border-soft); border-radius: 10px; color: var(--text-muted);
+  }
+  .mb__search input { border: 0; background: none; outline: none; font-size: 0.88rem; color: var(--text-strong); width: 100%; min-width: 0; }
+  .mb__search:focus-within { border-color: var(--blue); }
+  .mb__search--wide { max-width: 420px; }
+  .mb__hint { margin: 0; font-size: 0.76rem; line-height: 1.5; color: var(--text-muted); }
+  .mb__chips { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; overflow-y: auto; min-height: 0; }
+  .mb__chips li[hidden] { display: none; }
+  .mb-chip {
+    width: 100%; display: grid; gap: 1px; text-align: left; padding: 0.55rem 0.75rem;
+    background: var(--bg); border: 1px solid var(--border-soft); border-radius: 10px;
+    font: inherit; color: var(--text-strong); cursor: grab; user-select: none; -webkit-user-select: none;
+  }
+  .mb-chip:hover { border-color: var(--border); }
+  .mb-chip:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .mb-chip__name { font-size: 0.88rem; font-weight: 600; }
+  .mb-chip__meta { font-size: 0.72rem; color: var(--text-muted); }
+  .mb-chip.is-unavail .mb-chip__name { color: var(--text-muted); }
+  .mb-chip.is-flag { border-left: 3px solid var(--warn); }
+  .mb-chip.is-picked { border-color: var(--blue); background: var(--accent-wash); box-shadow: 0 0 0 1px var(--blue) inset; }
+  .mb-chip.is-dragged { opacity: 0.45; }
+  .mb__empty { margin: 0; font-size: 0.84rem; color: var(--text-muted); }
+  .mb__projects { display: grid; gap: 0.8rem; min-width: 0; }
+  .mb__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.8rem; }
+  .mb-proj {
+    display: grid; gap: 0.45rem; align-content: start; padding: 0.9rem 1rem; min-height: 120px;
+    background: var(--surface); border: 1px solid var(--border-soft); border-radius: 14px;
+    transition: border-color 0.12s, background-color 0.12s;
+  }
+  .mb-proj[hidden] { display: none; }
+  .mb.is-dragging .mb-proj { border-style: dashed; }
+  .mb-proj.is-over { border: 2px solid var(--blue); background: var(--accent-wash); padding: calc(0.9rem - 1px) calc(1rem - 1px); }
+  .mb-proj.is-busy { opacity: 0.6; }
+  .mb-proj.is-flash { border-color: var(--ok); background: var(--ok-bg); }
+  .mb-proj__title { font-size: 0.86rem; line-height: 1.35; color: var(--text-strong); }
+  .mb-proj__title:hover { color: var(--blue); }
+  .mb-proj__lead { margin: 0; font-size: 0.74rem; color: var(--text-muted); }
+  .mb-proj__people { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .mb-tag {
+    display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.3rem 0.2rem 0.6rem;
+    background: var(--bg-tint); border: 1px solid var(--border-soft); border-radius: 999px; font-size: 0.76rem; color: var(--text-strong);
+  }
+  .mb-tag__x {
+    border: 0; background: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
+    font-size: 0.95rem; line-height: 1; color: var(--text-muted); cursor: pointer; padding: 0;
+  }
+  .mb-tag__x:hover { background: var(--red-wash); color: var(--red); }
+  .mb-tag:not(:has(.mb-tag__x)) { padding-right: 0.6rem; }
+  .mb-proj__add {
+    justify-self: start; margin-top: 0.2rem; padding: 0.4rem 0.75rem; border: 1px dashed var(--blue); border-radius: 8px;
+    background: var(--accent-wash); color: var(--blue); font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
+  }
+  .mb-proj__add[hidden] { display: none; }
+  .mb-toast {
+    position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 60;
+    display: flex; align-items: center; gap: 0.9rem; max-width: calc(100vw - 2rem);
+    padding: 0.7rem 1rem; background: var(--text-strong); color: var(--bg); border-radius: 12px; font-size: 0.86rem;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  }
+  .mb-toast[hidden] { display: none; }
+  .mb-toast.is-error { background: var(--red); color: #fff; }
+  .mb-toast__undo { border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; }
+  :global(.mb-ghost) {
+    position: fixed; left: 0; top: 0; z-index: 70; pointer-events: none;
+    padding: 0.45rem 0.8rem; background: var(--blue); color: #fff; border-radius: 10px;
+    font-size: 0.85rem; font-weight: 700; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.22); white-space: nowrap;
+  }
+  @media (max-width: 760px) {
+    .mb { grid-template-columns: 1fr; }
+    .mb__people { position: static; max-height: none; }
+    .mb__chips { max-height: 260px; }
+  }
 
   .mnt-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
   .mnt-head__title { font-family: var(--font-sans); font-weight: 700; font-size: 2.3rem; color: var(--text-strong); margin: 0; }

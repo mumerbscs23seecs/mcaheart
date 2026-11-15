@@ -1,0 +1,64 @@
+---
+/** A list of private mentee reviews, newest first, with delete for the author or an admin. */
+import { SCORE_FIELDS, WORK_AGAIN_LABEL, fmtReviewDate, type MenteeReview } from '../lib/mentee-reviews';
+
+interface Props {
+  reviews: MenteeReview[];
+  names: Map<string, string>;
+  /** Shown above each review (e.g. the paper's title on the progress page). */
+  projectLabel?: (r: MenteeReview) => string | null;
+  viewerId: string;
+  isAdmin: boolean;
+  returnTo: string;
+}
+const { reviews, names, projectLabel, viewerId, isAdmin, returnTo } = Astro.props;
+---
+<ul class="mrl">
+  {reviews.map((r) => (
+    <li class="mrl__item">
+      {projectLabel && projectLabel(r) && <p class="mrl__proj">{projectLabel(r)}</p>}
+      <p class="mrl__head">
+        <b class="mrl__overall">Overall {r.overall}/5</b>
+        <span>{r.reviewer_id ? names.get(r.reviewer_id) ?? 'Former member' : 'Unknown'} · {fmtReviewDate(r.created_at)}</span>
+      </p>
+      {SCORE_FIELDS.some(([f]) => r[f] != null) && (
+        <p class="mrl__scores">
+          {SCORE_FIELDS.filter(([f]) => r[f] != null).map(([f, label]) => <span>{label} <b>{r[f]}</b></span>)}
+        </p>
+      )}
+      {r.work_again && <p class="mrl__line">Would work with again: <b>{WORK_AGAIN_LABEL[r.work_again]}</b></p>}
+      {r.strengths && <p class="mrl__line"><span class="mrl__k">Did well:</span> {r.strengths}</p>}
+      {r.improve && <p class="mrl__line"><span class="mrl__k">To work on:</span> {r.improve}</p>}
+      {(isAdmin || r.reviewer_id === viewerId) && (
+        <form method="post" action={`/pipeline/projects/${r.project_id}/review-mentee`} class="mrl__del" data-mrl-delete>
+          <input type="hidden" name="action" value="delete" />
+          <input type="hidden" name="reviewId" value={r.id} />
+          <input type="hidden" name="return" value={returnTo} />
+          <button type="submit">Delete review</button>
+        </form>
+      )}
+    </li>
+  ))}
+</ul>
+
+<script>
+  document.querySelectorAll<HTMLFormElement>('[data-mrl-delete]').forEach((f) => {
+    if (f.dataset.bound) return;
+    f.dataset.bound = '1';
+    f.addEventListener('submit', (e) => { if (!confirm('Delete this review? This cannot be undone.')) e.preventDefault(); });
+  });
+</script>
+
+<style>
+  .mrl { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+  .mrl__item { padding: 10px 12px; border-left: 3px solid var(--border); background: var(--bg-tint); }
+  .mrl__proj { margin: 0 0 4px; font-size: 0.78rem; font-weight: 700; color: var(--text-strong); }
+  .mrl__head { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 0.8rem; color: var(--text-muted); }
+  .mrl__overall { color: var(--text-strong); font-size: 0.86rem; }
+  .mrl__scores { margin: 6px 0 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.78rem; color: var(--text); }
+  .mrl__line { margin: 6px 0 0; font-size: 0.82rem; color: var(--text); line-height: 1.5; white-space: pre-line; }
+  .mrl__k { font-weight: 600; }
+  .mrl__del { margin-top: 6px; }
+  .mrl__del button { border: 0; background: none; padding: 0; font: inherit; font-size: 0.74rem; color: var(--red); cursor: pointer; }
+  .mrl__del button:hover { text-decoration: underline; }
+</style>
