@@ -5,7 +5,7 @@ import CalmBar from '../../components/calm/CalmBar.astro';
 import CalmActions from '../../components/calm/CalmActions.astro';
 import CalmStatus from '../../components/calm/CalmStatus.astro';
 import CalmDock from '../../components/calm/CalmDock.astro';
-import { journalSiteHref } from '../../lib/journal-links';
+import { journalHrefFn } from '../../lib/journals';
 import { drawerInfo, stageColor, fmtDate } from '../../lib/calm';
 
 export const prerender = false;
@@ -31,10 +31,11 @@ const { data: attempts } = attemptIds.length
   ? await supabase.from('journal_attempts').select('id,portal_url').in('id', attemptIds)
   : { data: [] };
 const portal = new Map((attempts ?? []).map((a: any) => [a.id, a.portal_url]));
+const journalSiteHref = await journalHrefFn();
 const journalHref = (p: any) => journalSiteHref(p.current_journal, portal.get(p.open_journal_attempt_id));
 ---
 
-<PipelineLayout title="Published" active="published">
+<PipelineLayout title="Published" active="published" journals>
   <div class="cv">
     <CalmBar title="Published" count={list.length} />
     {error && <p class="pl-flash pl-flash--err">{error.message}</p>}

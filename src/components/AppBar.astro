@@ -9,7 +9,7 @@ import ThemeToggle from './ThemeToggle.astro';
 import LogoMark from './LogoMark.astro';
 
 interface Props {
-  active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'mentees' | 'requests' | 'testimonials' | 'hidden' | 'deleted' | 'access' | 'tasks' | 'new-idea';
+  active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'mentees' | 'requests' | 'testimonials' | 'hidden' | 'deleted' | 'access' | 'tasks' | 'new-idea' | 'journals' | 'progress';
   name: string;
   role: string;
   email: string;
@@ -62,6 +62,7 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
           { key: 'access', label: 'Members', href: '/admin/access', badge: 0 },
           { key: 'testimonials', label: 'Testimonials', href: '/admin/testimonials', badge: 0 },
           { key: 'mentees', label: 'Mentees', href: '/admin/mentees', badge: 0 },
+          { key: 'journals', label: 'Journals', href: '/admin/journals', badge: 0 },
           { key: 'hidden', label: 'Hidden', href: '/admin/hidden', badge: hiddenCount },
           { key: 'deleted', label: 'Deleted', href: '/admin/deleted', badge: deletedCount },
           { key: 'tasks', label: 'Tasks', href: '/pipeline/tasks', badge: 0 },

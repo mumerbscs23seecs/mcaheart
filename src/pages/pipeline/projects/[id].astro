@@ -155,7 +155,7 @@ const peopleRows2: { label: string; name: string | null }[] = [
 ];
 ---
 
-<PipelineLayout title={p.title} active={activeTab}>
+<PipelineLayout title={p.title} active={activeTab} journals>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Merriweather+Sans:wght@400;500;600;700&display=swap" />
   <div class="cv pd">
   <a class="pd-back" href={backHref}>{backLabel}</a>
@@ -230,7 +230,7 @@ const peopleRows2: { label: string; name: string | null }[] = [
             ))}
           </select>
           {p.phase === 'journal' && (
-            <input name="journal" placeholder="Enter journal name" value={p.current_journal ?? ''} data-journal-input hidden={p.stage !== 'submitted'} />
+            <input name="journal" placeholder="Enter journal name" value={p.current_journal ?? ''} data-journal-input hidden={p.stage !== 'submitted'} list="pl-journal-options" autocomplete="off" />
           )}
           <button class="pd-btn" type="submit">Update</button>
         </form>
@@ -416,7 +416,7 @@ const peopleRows2: { label: string; name: string | null }[] = [
               <summary>Submit to journal →</summary>
               <form method="post" action={`/pipeline/projects/${id}/gate`} class="pl-mini pl-mini--col">
                 <input type="hidden" name="gate" value="3" />
-                <input name="journal" placeholder="Journal name" required />
+                <input name="journal" placeholder="Journal name" required list="pl-journal-options" autocomplete="off" />
                 <input name="full_title" placeholder="Full title (optional - shown on Submissions)" value={p.full_title ?? ''} />
                 <input name="manuscript_url" placeholder="Manuscript link (if not set below)" />
                 <button class="pl-btn" type="submit">Submit</button>
@@ -437,7 +437,7 @@ const peopleRows2: { label: string; name: string | null }[] = [
             <input type="hidden" name="attempt" value={openJournalAttempt.id} />
             <span class="pl-muted pl-small">Deciding: <b>{openJournalAttempt.journal}</b></span>
             <input name="review_url" placeholder="Reviewer report / decision letter link (optional)" title={DOC_LINK_HINT} />
-            <input name="next_journal" placeholder="Next journal (only if rejected - reopens at Submitted)" />
+            <input name="next_journal" placeholder="Next journal (only if rejected - reopens at Submitted)" list="pl-journal-options" autocomplete="off" />
             <div class="pl-mini">
               <button class="pl-btn" name="outcome" value="accepted" type="submit">Accepted</button>
               <button class="pl-btn pl-btn--danger" name="outcome" value="rejected" type="submit">Rejected</button>

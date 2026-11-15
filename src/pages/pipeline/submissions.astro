@@ -8,7 +8,7 @@ import CalmStatus from '../../components/calm/CalmStatus.astro';
 import CalmDock from '../../components/calm/CalmDock.astro';
 import { scopeProjects } from '../../lib/pipeline-scope';
 import { stagesFor } from '../../lib/lifecycle.mjs';
-import { journalSiteHref } from '../../lib/journal-links';
+import { journalHrefFn } from '../../lib/journals';
 import { drawerInfo, stageColor } from '../../lib/calm';
 import PeoplePicker from '../../components/PeoplePicker.astro';
 import { fellowsFor, sortByFellow, FELLOWS } from '../../lib/research-fellow';
@@ -71,6 +71,7 @@ const { data: attempts } = attemptIds.length
   ? await supabase.from('journal_attempts').select('id,portal_url').in('id', attemptIds)
   : { data: [] };
 const portal = new Map((attempts ?? []).map((a: any) => [a.id, a.portal_url]));
+const journalSiteHref = await journalHrefFn();
 const journalHref = (p: any) => journalSiteHref(p.current_journal, portal.get(p.open_journal_attempt_id));
 
 const chips = stagesFor('journal').map((s: any) => ({
@@ -80,7 +81,7 @@ const chips = stagesFor('journal').map((s: any) => ({
 }));
 ---
 
-<PipelineLayout title="Submissions" active="submissions">
+<PipelineLayout title="Submissions" active="submissions" journals>
   <div class="cv">
     <CalmBar title="Submissions" count={list.length} />
     {isAdmin && (
@@ -106,7 +107,7 @@ const chips = stagesFor('journal').map((s: any) => ({
             <PeoplePicker name="analyst_id" label="Analyst (optional)" roster={people ?? []} />
             <label class="pl-field">
               <span>Journal (optional)</span>
-              <input name="journal" placeholder="Journal name" />
+              <input name="journal" placeholder="Journal name" list="pl-journal-options" autocomplete="off" />
             </label>
             <label class="pl-field">
               <span>Research fellow</span>

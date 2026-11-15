@@ -4,14 +4,17 @@ import '../styles/pipeline.css';
 import FontLinks from '../components/FontLinks.astro';
 import ThemeInit from '../components/ThemeInit.astro';
 import AppBar from '../components/AppBar.astro';
+import JournalOptions from '../components/JournalOptions.astro';
 import { scopeProjects } from '../lib/pipeline-scope';
 import { getPipelineTasks } from '../lib/pipeline-tasks';
 
 interface Props {
   title: string;
   active?: 'conferences' | 'ongoing' | 'submissions' | 'published' | 'tasks' | 'ideas' | 'requests';
+  /** The page has journal-name boxes: include the shared journal list. */
+  journals?: boolean;
 }
-const { title, active } = Astro.props;
+const { title, active, journals = false } = Astro.props;
 const { supabase, person } = Astro.locals;
 const isAdmin = person.role === 'admin';
 
@@ -143,6 +146,7 @@ const tabs: Tab[] = [
       {flashOk && <p class="pl-flash pl-flash--ok">{flashOk}</p>}
       {flashErr && <p class="pl-flash pl-flash--err">{flashErr}</p>}
       <slot />
+      {journals && <JournalOptions canSave={isAdmin} />}
     </main>
 
     <!-- Slide-in project detail. Populated client-side from /pipeline/projects/:id/panel.json. -->

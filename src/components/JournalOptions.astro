@@ -1,0 +1,95 @@
+---
+/**
+ * One shared journal list per workflow page: a <datalist> every journal-name
+ * box points at (list="pl-journal-options"), plus the name -> link map the
+ * status cell uses to update "Open journal site" in place. For admins, a name
+ * that isn't on the list gets a "Save to journal list" button beside the box.
+ */
+import { listJournals } from '../lib/journals';
+
+interface Props { canSave?: boolean }
+const { canSave = false } = Astro.props;
+const { list, fromDb } = await listJournals();
+// "<" escaped so a journal name can never close the script tag.
+const data = JSON.stringify(list.map((j) => [j.name, j.url])).replace(/</g, '\\u003c');
+---
+<datalist id="pl-journal-options">
+  {list.map((j) => <option value={j.name} />)}
+</datalist>
+<script type="application/json" id="pl-journal-data" set:html={data} />
+{canSave && fromDb && <span hidden data-journal-can-save></span>}
+
+<script>
+  // Admins only (the marker above is rendered for them): offer to save a
+  // journal name that isn't on the list yet, right where it was typed.
+  const canSave = !!document.querySelector('[data-journal-can-save]');
+  const dl = document.getElementById('pl-journal-options') as HTMLDataListElement | null;
+  const norm = (s: string) => s.toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+  const known = new Set<string>([...(dl?.options ?? [])].map((o) => norm(o.value)));
+
+  function buttonFor(input: HTMLInputElement): HTMLButtonElement {
+    const next = input.nextElementSibling;
+    if (next instanceof HTMLButtonElement && next.dataset.journalSave !== undefined) return next;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'pl-jsave';
+    b.dataset.journalSave = '';
+    b.hidden = true;
+    input.after(b);
+    b.addEventListener('click', async () => {
+      const name = input.value.trim();
+      if (!name) return;
+      b.disabled = true;
+      b.textContent = 'Saving…';
+      try {
+        const body = new FormData();
+        body.set('name', name);
+        const res = await fetch('/admin/journals/quick-add', { method: 'POST', body, headers: { accept: 'application/json' } });
+        const out = await res.json().catch(() => ({ ok: false, error: 'Could not save.' }));
+        if (!res.ok || !out.ok) throw new Error(out.error || 'Could not save.');
+        known.add(norm(name));
+        dl?.append(new Option(name));
+        b.textContent = 'Saved to the journal list';
+        b.classList.add('is-done');
+        setTimeout(() => { b.hidden = true; b.classList.remove('is-done'); b.disabled = false; }, 2200);
+      } catch (err) {
+        b.disabled = false;
+        b.textContent = `${err instanceof Error ? err.message : 'Could not save.'} Try again`;
+      }
+    });
+    return b;
+  }
+
+  function check(input: HTMLInputElement) {
+    const name = input.value.trim();
+    const b = buttonFor(input);
+    if (b.classList.contains('is-done')) return;
+    const missing = !!name && !known.has(norm(name));
+    b.hidden = !missing;
+    if (missing) { b.disabled = false; b.textContent = `+ Save "${name}" to the journal list`; }
+  }
+
+  if (canSave) {
+    document.addEventListener('change', (e) => {
+      const t = e.target;
+      if (t instanceof HTMLInputElement && t.getAttribute('list') === 'pl-journal-options') check(t);
+    });
+    document.addEventListener('input', (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement) || t.getAttribute('list') !== 'pl-journal-options') return;
+      const next = t.nextElementSibling;
+      if (next instanceof HTMLButtonElement && next.dataset.journalSave !== undefined && !next.classList.contains('is-done')) next.hidden = true;
+    });
+  }
+</script>
+
+<style is:global>
+  .pl-jsave {
+    border: 0; background: none; padding: 2px 0; margin: 0;
+    font: inherit; font-size: 0.78rem; font-weight: 600; color: var(--red, #7a1322);
+    cursor: pointer; text-align: left; white-space: normal;
+  }
+  .pl-jsave:hover { text-decoration: underline; }
+  .pl-jsave.is-done { color: var(--ok, #2e7d32); cursor: default; text-decoration: none; }
+  .pl-jsave[hidden] { display: none; }
+</style>

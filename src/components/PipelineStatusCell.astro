@@ -192,16 +192,19 @@ const editable =
   // saves them all in the background through the same endpoints as before,
   // then refreshes each row in place. Astro dedupes this script across every
   // PipelineStatusCell on the page.
-  import { JOURNAL_NAMES, journalSiteHref } from '../lib/journal-links';
-
-  // The journal-name boxes suggest every journal on the lab's list (one shared
-  // list per page). Picking one also gives the row its submission link.
-  if (document.querySelector('[list="pl-journal-options"]') && !document.getElementById('pl-journal-options')) {
-    const dl = document.createElement('datalist');
-    dl.id = 'pl-journal-options';
-    for (const name of JOURNAL_NAMES) dl.append(new Option(name));
-    document.body.append(dl);
-  }
+  // The journal-name boxes suggest every journal on the lab's list: one shared
+  // <datalist> per page, rendered by JournalOptions.astro with each journal's
+  // link alongside. Picking one also gives the row its submission link.
+  const normJournal = (s: string) => s.toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+  const journalLinks = new Map<string, string>();
+  try {
+    const raw = document.getElementById('pl-journal-data')?.textContent;
+    for (const [name, url] of (raw ? JSON.parse(raw) : []) as [string, string | null][]) {
+      if (url) journalLinks.set(normJournal(name), url);
+    }
+  } catch { /* no list on this page - links fall back to a web search */ }
+  const journalSiteHref = (journal: string) =>
+    journalLinks.get(normJournal(journal)) ?? `https://www.google.com/search?q=${encodeURIComponent(`${journal} journal`)}`;
 
   type Dirty = { form: HTMLFormElement; select: HTMLSelectElement };
   const dirty = new Map<HTMLFormElement, Dirty>();

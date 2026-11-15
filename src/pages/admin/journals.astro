@@ -1,0 +1,210 @@
+---
+/**
+ * Manage > Journals: the lab's journal list. Every journal-name box in the
+ * workflow suggests these names, and "Open journal site" uses their links.
+ * Stored in the `journals` table (mca-pipeline/add-journals.sql); every write
+ * goes through save_journal / delete_journal, which re-check the caller is an
+ * admin themselves.
+ */
+import AppLayout from '../../layouts/AppLayout.astro';
+import '../../styles/admin.css';
+import { currentUser } from '../../lib/auth';
+import { getPipelineSession } from '../../lib/pipeline-auth';
+import { listJournals, forgetJournals } from '../../lib/journals';
+
+export const prerender = false;
+
+const me = currentUser(Astro.cookies);
+if (!me) return Astro.redirect('/login', 302);
+if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+const session = await getPipelineSession(Astro.request, Astro.cookies);
+const supabase = session?.supabase ?? null;
+
+type Flash = { tone: 'ok' | 'error'; text: string };
+let flash: Flash | null = null;
+// Keep what was typed when adding fails, so it doesn't need typing again.
+let draft = { name: '', url: '' };
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  const id = String(form.get('id') ?? '') || null;
+  const name = String(form.get('name') ?? '').trim();
+  const url = String(form.get('url') ?? '').trim();
+  if (!supabase) {
+    flash = { tone: 'error', text: 'Could not reach the database - try again in a moment.' };
+  } else if (action === 'save') {
+    const { error } = await supabase.rpc('save_journal', { p_id: id, p_name: name, p_url: url });
+    if (error) {
+      flash = { tone: 'error', text: error.message };
+      if (!id) draft = { name, url };
+    } else {
+      forgetJournals();
+      flash = { tone: 'ok', text: id ? `Saved ${name}.` : `Added ${name}.` };
+    }
+  } else if (action === 'delete' && id) {
+    const { error } = await supabase.rpc('delete_journal', { p_id: id });
+    if (error) flash = { tone: 'error', text: error.message };
+    else {
+      forgetJournals();
+      flash = { tone: 'ok', text: `Removed ${name || 'the journal'}.` };
+    }
+  }
+}
+
+const { list, fromDb } = await listJournals();
+---
+
+<AppLayout title="Journals" heading="Journals" user={me} active="journals">
+  <div class="adm jr">
+    {flash && (
+      <div class:list={['adm-flash', `adm-flash--${flash.tone}`]} role="status">
+        <p>{flash.text}</p>
+      </div>
+    )}
+
+    {!fromDb && (
+      <div class="adm-flash adm-flash--error">
+        <p><strong>The journal list isn't in the database yet.</strong></p>
+        <p>
+          Run <code>mca-pipeline/add-journals.sql</code> once in the Supabase SQL editor, then reload
+          this page. It copies in the {list.length} journals the site already knows, so nothing is lost.
+          Until then the workflow keeps using that built-in list.
+        </p>
+      </div>
+    )}
+
+    <p class="jr__intro">
+      Every journal-name box in the workflow suggests these names as you type, and
+      &ldquo;Open journal site&rdquo; uses the link saved here.
+    </p>
+
+    {fromDb && (
+      <form method="post" class="adm-panel adm-add jr__add">
+        <input type="hidden" name="action" value="save" />
+        <label class="adm-f jr__name">
+          <span>Journal name</span>
+          <input name="name" required maxlength="200" value={draft.name} placeholder="e.g. JACC: Cardiovascular Interventions" />
+        </label>
+        <label class="adm-f jr__url">
+          <span>Submission link</span>
+          <input name="url" type="url" maxlength="2000" value={draft.url} placeholder="https://… (optional)" />
+        </label>
+        <button class="adm-btn adm-btn--on jr__go" type="submit">Add journal</button>
+      </form>
+    )}
+
+    <div class="jr__bar">
+      <input class="jr__search" type="search" placeholder={`Search ${list.length} journals`} aria-label="Search journals" data-jr-search />
+      <span class="jr__count" data-jr-count>{list.length} journals</span>
+    </div>
+
+    <ul class="jr__list" data-jr-list>
+      {list.map((j) => (
+        <li class="jr__row" data-jr-row data-name={j.name.toLowerCase()}>
+          <div class="jr__view">
+            <span class="jr__title">{j.name}</span>
+            {j.url
+              ? <a class="jr__link" href={j.url} target="_blank" rel="noopener noreferrer">Open submission site</a>
+              : <span class="jr__nolink">No link saved</span>}
+            {fromDb && j.id && (
+              <span class="jr__acts">
+                <button class="adm-btn" type="button" data-jr-edit>Edit</button>
+                <form method="post" class="adm-inline" data-jr-delete>
+                  <input type="hidden" name="action" value="delete" />
+                  <input type="hidden" name="id" value={j.id} />
+                  <input type="hidden" name="name" value={j.name} />
+                  <button class="adm-btn adm-btn--danger" type="submit">Remove</button>
+                </form>
+              </span>
+            )}
+          </div>
+          {fromDb && j.id && (
+            <form method="post" class="jr__edit" hidden data-jr-form>
+              <input type="hidden" name="action" value="save" />
+              <input type="hidden" name="id" value={j.id} />
+              <label class="adm-f"><span>Name</span><input name="name" required maxlength="200" value={j.name} /></label>
+              <label class="adm-f"><span>Submission link</span><input name="url" type="url" maxlength="2000" value={j.url ?? ''} placeholder="https://…" /></label>
+              <span class="jr__acts">
+                <button class="adm-btn adm-btn--on" type="submit">Save</button>
+                <button class="adm-btn" type="button" data-jr-cancel>Cancel</button>
+              </span>
+            </form>
+          )}
+        </li>
+      ))}
+    </ul>
+    <p class="adm-hint" data-jr-empty hidden>No journal matches that search.</p>
+  </div>
+</AppLayout>
+
+<script>
+  const search = document.querySelector<HTMLInputElement>('[data-jr-search]');
+  const rows = [...document.querySelectorAll<HTMLElement>('[data-jr-row]')];
+  const count = document.querySelector<HTMLElement>('[data-jr-count]');
+  const empty = document.querySelector<HTMLElement>('[data-jr-empty]');
+  search?.addEventListener('input', () => {
+    const q = search.value.trim().toLowerCase();
+    let shown = 0;
+    for (const r of rows) {
+      const hit = !q || (r.dataset.name ?? '').includes(q);
+      r.hidden = !hit;
+      if (hit) shown++;
+    }
+    if (count) count.textContent = q ? `${shown} of ${rows.length}` : `${rows.length} journals`;
+    if (empty) empty.hidden = shown > 0;
+  });
+
+  for (const r of rows) {
+    const view = r.querySelector<HTMLElement>('.jr__view');
+    const form = r.querySelector<HTMLFormElement>('[data-jr-form]');
+    r.querySelector('[data-jr-edit]')?.addEventListener('click', () => {
+      if (!view || !form) return;
+      view.hidden = true;
+      form.hidden = false;
+      form.querySelector<HTMLInputElement>('input[name="name"]')?.focus();
+    });
+    r.querySelector('[data-jr-cancel]')?.addEventListener('click', () => {
+      if (!view || !form) return;
+      form.reset();
+      form.hidden = true;
+      view.hidden = false;
+    });
+  }
+
+  document.querySelectorAll<HTMLFormElement>('[data-jr-delete]').forEach((f) => {
+    f.addEventListener('submit', (e) => {
+      const name = f.querySelector<HTMLInputElement>('input[name="name"]')?.value ?? 'this journal';
+      if (!confirm(`Remove "${name}" from the journal list? Papers already sent there keep the name.`)) e.preventDefault();
+    });
+  });
+</script>
+
+<style>
+  .jr__intro { margin: 0 0 var(--space-m); color: var(--text-muted); font-size: 0.9rem; max-width: 70ch; }
+  .jr__add { margin-bottom: var(--space-m); }
+  .jr__name { flex: 2 1 260px; }
+  .jr__url { flex: 3 1 300px; }
+  .jr__go { padding: 0.68rem 1rem; font-size: 0.82rem; }
+  .jr__bar { display: flex; align-items: center; gap: var(--space-s); margin-bottom: var(--space-s); }
+  .jr__search {
+    flex: 1 1 auto; max-width: 420px; padding: 0.6rem 0.8rem; background: var(--bg);
+    border: 1px solid var(--border-soft); border-radius: var(--radius); font-size: 0.9rem; color: var(--text-strong);
+  }
+  .jr__count { font-size: 0.8rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .jr__list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border-soft); }
+  .jr__row { border-bottom: 1px solid var(--border-soft); }
+  .jr__view { display: flex; align-items: center; gap: var(--space-s); padding: 0.7rem 0; flex-wrap: wrap; }
+  .jr__view[hidden], .jr__edit[hidden] { display: none; }
+  .jr__title { flex: 1 1 280px; font-weight: 600; color: var(--text-strong); font-size: 0.92rem; }
+  .jr__link { font-size: 0.82rem; color: var(--red); }
+  .jr__nolink { font-size: 0.82rem; color: var(--text-muted); }
+  .jr__acts { display: inline-flex; gap: 0.4rem; align-items: center; }
+  .jr__edit { display: flex; flex-wrap: wrap; gap: var(--space-s); align-items: end; padding: 0.8rem 0; }
+  @media (max-width: 640px) {
+    .jr__title { flex-basis: 100%; }
+    .jr__bar { flex-wrap: wrap; }
+    .jr__search { max-width: none; }
+  }
+</style>

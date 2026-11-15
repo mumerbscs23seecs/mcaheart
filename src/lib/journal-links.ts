@@ -148,26 +148,24 @@ const LINKS: Record<string, string> = {
   'World Journal of Surgery': 'https://mc.manuscriptcentral.com/wjsurgery',
 };
 
-/** Every journal on the lab's list, for the journal-name picker. */
-export const JOURNAL_NAMES = Object.keys(LINKS).sort((a, b) => a.localeCompare(b));
+/** The built-in list: what the site uses until mca-pipeline/add-journals.sql
+ *  has been run (after that, the list lives in the database - see journals.ts). */
+export const DEFAULT_JOURNALS: Array<{ name: string; url: string | null }> = Object.entries(LINKS)
+  .map(([name, url]) => ({ name, url }))
+  .sort((a, b) => a.name.localeCompare(b.name));
 
 /** Lower-case, "&" as "and", punctuation and extra spaces removed, so
  *  "Archives of Medical Science – Atherosclerotic Diseases" still matches. */
-const norm = (s: string) =>
+export const normJournal = (s: string) =>
   s.toLowerCase().replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
 
-const BY_NAME = new Map(Object.entries(LINKS).map(([name, url]) => [norm(name), url]));
-
-/** The submission portal for a journal name, or null if it isn't on the list. */
-export function journalSubmissionLink(journal: string | null | undefined): string | null {
-  if (!journal) return null;
-  return BY_NAME.get(norm(journal)) ?? null;
-}
-
-/** Where "Open journal site" goes: the attempt's own portal link, then the
- *  lab's list, then a web search for the journal's name. */
-export function journalSiteHref(journal: string | null | undefined, portalUrl?: string | null): string | null {
-  if (portalUrl) return portalUrl;
-  if (!journal) return null;
-  return journalSubmissionLink(journal) ?? `https://www.google.com/search?q=${encodeURIComponent(`${journal} journal`)}`;
+/** Build "Open journal site" for a given list: the attempt's own portal link,
+ *  then the list's link for that journal, then a web search for its name. */
+export function makeJournalHref(entries: Array<{ name: string; url: string | null }>) {
+  const byName = new Map(entries.filter((e) => e.url).map((e) => [normJournal(e.name), e.url as string]));
+  return (journal: string | null | undefined, portalUrl?: string | null): string | null => {
+    if (portalUrl) return portalUrl;
+    if (!journal) return null;
+    return byName.get(normJournal(journal)) ?? `https://www.google.com/search?q=${encodeURIComponent(`${journal} journal`)}`;
+  };
 }
