@@ -918,3 +918,25 @@ select.pl-status:focus-visible { outline: 2px solid var(--pl-accent); outline-of
 .pl-authcard .pl-btn { width: 100%; text-align: center; }
 .pl-mentee__link { margin-left: 8px; font-size: 0.76rem; font-weight: 600; color: var(--blue); }
 .pl-mentee__edit + .pl-mentee__edit { margin-top: 4px; }
+
+/* Edit details / history lines / submission entries (paper page) */
+.pd-details-edit { margin-top: 10px; }
+.pd-details-form { display: grid; gap: 10px; margin-top: 10px; max-width: 640px; }
+.pd-details-form label, .pl-history__form label { display: grid; gap: 4px; }
+.pd-details-form label > span, .pl-history__form label > span { font-size: 0.74rem; font-weight: 600; color: var(--text-muted); }
+.pd-details-form input, .pd-details-form textarea, .pd-details-form select,
+.pl-history__form input, .pl-history__form select {
+  width: 100%; padding: 7px 9px; font: inherit; font-size: 0.86rem; border: 1px solid var(--border-soft);
+  background: var(--surface); color: var(--text-strong); border-radius: 0;
+}
+.pd-details-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+.pd-details-form .pl-btn { justify-self: start; }
+.pl-history__editable { flex-wrap: wrap; }
+.pl-history__edit { flex-basis: 100%; }
+.pl-history__edit > summary { cursor: pointer; display: inline-block; font-size: 0.74rem; font-weight: 600; color: var(--blue); list-style: none; }
+.pl-history__edit > summary::-webkit-details-marker { display: none; }
+.pl-history__form { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 10px; margin: 6px 0 4px; }
+.pl-history__form label { flex: 0 1 150px; }
+.pl-history__form .pl-history__text { flex: 1 1 240px; }
+.pl-history__btns { display: inline-flex; gap: 6px; }
+.pd-attempt-edit { display: block; margin-top: 4px; }

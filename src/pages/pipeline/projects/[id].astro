@@ -5,7 +5,8 @@ import TeamPicker from '../../../components/TeamPicker.astro';
 import MenteeReviewForm from '../../../components/MenteeReviewForm.astro';
 import MenteeReviewList from '../../../components/MenteeReviewList.astro';
 import { listReviews, average } from '../../../lib/mentee-reviews';
-import { stagesFor } from '../../../lib/lifecycle.mjs';
+import { stagesFor, STUDY_TYPES } from '../../../lib/lifecycle.mjs';
+import { FELLOWS } from '../../../lib/research-fellow';
 import { personOnProject } from '../../../lib/pipeline-scope';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { docLinkLabel, DOC_LINK_HINT } from '../../../lib/doc-links';
@@ -58,7 +59,7 @@ const pendingAttempt = (confAttempts ?? []).find((a: any) => a.outcome == null);
 
 const { data: journalAttempts } = await supabase
   .from('journal_attempts')
-  .select('id,journal,outcome,submitted_on,revision_round')
+  .select('id,journal,outcome,submitted_on,decided_on,revision_round')
   .eq('project_id', id)
   .order('submitted_on', { ascending: false })
   .order('id', { ascending: false });
@@ -89,10 +90,26 @@ const reviewerNames = new Map<string, string>((reviewerRows ?? []).map((r: any) 
 
 const { data: history } = await supabase
   .from('project_history')
-  .select('at,label,actor')
+  .select('at,label,actor,kind,detail')
   .eq('project_id', id)
   .order('at', { ascending: false })
   .limit(60);
+// What a history line says: a coordinator's corrected wording first, then the
+// system's own note (e.g. "Title: A -> B"), then the standard label.
+const historyText = (h: any) => h.detail?.label_override || h.detail?.system || h.label;
+// Admins can fix or delete lines: find each line's event id (same time, kind
+// and details - identical lines are interchangeable).
+const eventIds = new Map<string, number[]>();
+if (isAdmin && (history ?? []).length) {
+  const { data: evs } = await supabase.from('events').select('id,at,kind,detail').eq('project_id', id);
+  for (const e of evs ?? []) {
+    const k = `${e.at}|${e.kind}|${JSON.stringify(e.detail)}`;
+    eventIds.set(k, [...(eventIds.get(k) ?? []), e.id]);
+  }
+}
+const takeEventId = (h: any): number | null => eventIds.get(`${h.at}|${h.kind}|${JSON.stringify(h.detail)}`)?.shift() ?? null;
+const isoDay = (d: string) => new Date(d).toISOString().slice(0, 10);
+const canEditTitle = isAdmin || person.id === p.lead_id;
 
 const { data: requests } = await supabase
   .from('stage_change_requests')
@@ -195,6 +212,26 @@ const peopleRows2: { label: string; name: string | null }[] = [
       </p>
       <h1>{p.full_title || p.title}</h1>
       {p.full_title && <p class="pd-abbr">{p.title}</p>}
+      {canEditTitle && (
+        <details class="pl-inline-details pd-details-edit">
+          <summary>Edit details</summary>
+          <form method="post" action={`/pipeline/projects/${id}/details`} class="pd-details-form">
+            <label><span>Short title</span><input name="title" required maxlength="300" value={p.title} /></label>
+            <label><span>Full title (shown on Submissions)</span><textarea name="full_title" rows="2" maxlength="1000">{p.full_title ?? ''}</textarea></label>
+            {isAdmin && (
+              <div class="pd-details-row">
+                <label><span>Type of research</span>
+                  <select name="study_type">{STUDY_TYPES.map((t: string) => <option value={t} selected={t === p.study_type}>{t}</option>)}</select>
+                </label>
+                <label><span>Research fellow</span>
+                  <select name="research_fellow">{FELLOWS.map((f) => <option value={f.key} selected={f.key === (p.research_fellow ?? 'burhan')}>{f.label}</option>)}</select>
+                </label>
+              </div>
+            )}
+            <button class="pl-btn" type="submit">Save details</button>
+          </form>
+        </details>
+      )}
       {p.review_url && (
         <a class="pd-btn pd-btn--ghost pd-letter" href={p.review_url} target="_blank" rel="noopener">Review decision letter</a>
       )}
@@ -590,18 +627,41 @@ const peopleRows2: { label: string; name: string | null }[] = [
     </div>
   </section>
 
-    <section class="pd-card">
+    <section class="pd-card" id="history">
       <h2>History</h2>
       {(!history || history.length === 0) && (
         <p class="pl-muted pl-small">No recorded events yet - they accumulate as the project moves.</p>
       )}
+      {isAdmin && (history ?? []).length > 0 && (
+        <p class="pl-muted pl-small">Fixing a line only corrects the record. It doesn't change the paper's status.</p>
+      )}
       <ul class="pl-history">
-        {(history ?? []).map((h: any) => (
-          <li>
-            <span>{h.label}{h.actor && <span class="pl-muted"> · {h.actor}</span>}</span>
-            <time>{fmtDate(h.at)}</time>
-          </li>
-        ))}
+        {(history ?? []).map((h: any) => {
+          const eid = isAdmin ? takeEventId(h) : null;
+          const auto = h.detail?.system || h.label;
+          return (
+            <li class:list={[eid && 'pl-history__editable']}>
+              <span>{historyText(h)}{h.actor && <span class="pl-muted"> · {h.actor}</span>}</span>
+              <time>{fmtDate(h.at)}</time>
+              {eid && (
+                <details class="pl-history__edit">
+                  <summary aria-label={`Edit "${historyText(h)}"`}>Edit</summary>
+                  <form method="post" action={`/pipeline/projects/${id}/history`} class="pl-history__form">
+                    <input type="hidden" name="eventId" value={eid} />
+                    <input type="hidden" name="at" value={h.at} />
+                    <input type="hidden" name="auto" value={auto} />
+                    <label><span>Date</span><input type="date" name="date" required value={isoDay(h.at)} /></label>
+                    <label class="pl-history__text"><span>Wording</span><input name="label" maxlength="300" value={historyText(h)} /></label>
+                    <span class="pl-history__btns">
+                      <button class="pl-btn" type="submit">Save</button>
+                      <button class="pl-btn pl-btn--danger" type="submit" name="action" value="delete" data-confirm="Delete this history line? This cannot be undone.">Delete</button>
+                    </span>
+                  </form>
+                </details>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </section>
   </div>
@@ -657,6 +717,21 @@ const peopleRows2: { label: string; name: string | null }[] = [
                     {a.decided_on && ` · Decided ${fmtDate(a.decided_on)}`}
                     {a.presenter?.full_name && ` · Presenter ${a.presenter.full_name}`}
                     {recycledFromName && ` · previously submitted to ${recycledFromName}`}
+                    {isAdmin && (
+                      <details class="pl-history__edit pd-attempt-edit">
+                        <summary>Edit</summary>
+                        <form method="post" action={`/pipeline/projects/${id}/attempt`} class="pl-history__form">
+                          <input type="hidden" name="kind" value="conference" />
+                          <input type="hidden" name="attemptId" value={a.id} />
+                          <label class="pl-history__text"><span>Conference</span>
+                            <select name="conference">{(allConferences ?? []).map((c: any) => <option value={c.name} selected={c.name === a.conference?.name}>{c.name}</option>)}</select>
+                          </label>
+                          <label><span>Submitted</span><input type="date" name="submitted_on" required value={a.submitted_on ?? ''} /></label>
+                          <label><span>Decided</span><input type="date" name="decided_on" value={a.decided_on ?? ''} /></label>
+                          <span class="pl-history__btns"><button class="pl-btn" type="submit">Save</button></span>
+                        </form>
+                      </details>
+                    )}
                   </dd>
                 </>
               );
@@ -675,6 +750,21 @@ const peopleRows2: { label: string; name: string | null }[] = [
                 <dd>
                   {a.outcome ?? 'open'}{a.revision_round ? ` · rev ${a.revision_round}` : ''}
                   {' · '}Submitted {a.submitted_on ? fmtDate(a.submitted_on) : 'date unknown'}
+                  {a.decided_on && ` · Decided ${fmtDate(a.decided_on)}`}
+                  {isAdmin && (
+                    <details class="pl-history__edit pd-attempt-edit">
+                      <summary>Edit</summary>
+                      <form method="post" action={`/pipeline/projects/${id}/attempt`} class="pl-history__form">
+                        <input type="hidden" name="kind" value="journal" />
+                        <input type="hidden" name="attemptId" value={a.id} />
+                        <label class="pl-history__text"><span>Journal</span><input name="journal" required maxlength="300" value={a.journal} list="pl-journal-options" autocomplete="off" /></label>
+                        <label><span>Submitted</span><input type="date" name="submitted_on" required value={a.submitted_on ?? ''} /></label>
+                        <label><span>Decided</span><input type="date" name="decided_on" value={a.decided_on ?? ''} /></label>
+                        <label><span>Revision round</span><input type="number" name="revision_round" min="0" max="20" value={a.revision_round ?? 0} /></label>
+                        <span class="pl-history__btns"><button class="pl-btn" type="submit">Save</button></span>
+                      </form>
+                    </details>
+                  )}
                 </dd>
               </>
             ))}
@@ -685,6 +775,13 @@ const peopleRows2: { label: string; name: string | null }[] = [
   </div>
   </div>
 </PipelineLayout>
+
+<script>
+  // Buttons that need a second "are you sure" (e.g. deleting a history line).
+  document.querySelectorAll<HTMLButtonElement>('button[data-confirm]').forEach((b) => {
+    b.addEventListener('click', (e) => { if (!confirm(b.dataset.confirm!)) e.preventDefault(); });
+  });
+</script>
 
 <script is:inline define:vars={{ returnHere }}>
   // Actions on this page come back here with the same "opened from" page, so
