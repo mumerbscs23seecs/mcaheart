@@ -212,7 +212,7 @@ const fmt = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numer
       <h2>Paper</h2>
       <div class="ed__grid">
         <label class="ed__f ed__f--wide"><span>Short title</span><input name="title" required maxlength="300" value={cur.title} /></label>
-        <label class="ed__f ed__f--wide"><span>Full title</span><textarea name="full_title" rows="2" maxlength="1000" placeholder="Shown on Submissions">{cur.full_title ?? ''}</textarea></label>
+        <label class="ed__f ed__f--wide"><span>Full title (shown on Submissions)</span><textarea name="full_title" rows="2" maxlength="1000">{cur.full_title ?? ''}</textarea></label>
         {isAdmin && (
           <>
             <label class="ed__f"><span>Type of research</span>
@@ -338,7 +338,14 @@ const fmt = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numer
   }
   .ed__f input:disabled { color: var(--text-muted); }
   .ed__f input:focus, .ed__f select:focus, .ed__f textarea:focus { outline: 2px solid var(--cv-accent); outline-offset: 0; border-color: transparent; }
-  .ed__people :global(.pl-field input) { border-radius: 8px; }
+  /* The people pickers come from a shared component; match them to this page. */
+  .ed__people :global(.pl-field) { margin: 0; gap: 5px; }
+  .ed__people :global(.tpick__chips:not(:has(*))) { display: none; }
+  .ed__people :global(.pl-field > span) { font-size: 0.76rem; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text-muted); }
+  .ed__people :global(.pl-field input) {
+    padding: 9px 11px; border: 1px solid var(--cv-line); border-radius: 8px; background: var(--cv-bg);
+    font-size: 0.9rem; color: var(--cv-ink);
+  }
   .ed__chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .ed__chip { position: relative; cursor: pointer; }
   .ed__chip input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
@@ -346,10 +353,10 @@ const fmt = (d: string) => new Date(d).toLocaleDateString('en-GB', { day: 'numer
   .ed__chip input:checked + span { background: var(--cv-accent); color: #fff; }
   .ed__chip input:focus-visible + span { outline: 2px solid var(--cv-accent); outline-offset: 2px; }
   .ed__row { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 12px; padding: 12px 14px; background: var(--cv-tint); border-radius: 10px; }
-  .ed__row .ed__f { flex: 0 1 160px; }
+  .ed__row .ed__f { flex: 0 0 160px; }
   .ed__row .ed__f--grow { flex: 1 1 240px; }
-  .ed__row .ed__f--num { flex: 0 1 90px; }
-  .ed__state { align-self: center; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: capitalize; padding-top: 18px; }
+  .ed__row .ed__f--num { flex: 0 0 90px; }
+  .ed__state { flex: 0 0 72px; align-self: center; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); text-transform: capitalize; padding-top: 18px; }
   .ed__del { display: inline-flex; align-items: center; gap: 6px; font-size: 0.82rem; font-weight: 600; color: var(--red); padding-bottom: 9px; cursor: pointer; }
   .ed__row.is-deleting .ed__f { opacity: 0.45; }
   .ed__bar {

@@ -107,7 +107,7 @@ const { searchLabel, filters, noun } = Astro.props;
     background: var(--surface); border: 1px solid var(--border-soft);
   }
   .lf__search {
-    flex: 1 1 180px; display: flex; align-items: center; gap: 0.45rem;
+    flex: 1 1 100%; display: flex; align-items: center; gap: 0.45rem;
     padding: 0.55rem 0.7rem; background: var(--bg); border: 1px solid var(--border-soft); color: var(--text-muted);
   }
   .lf__search:focus-within { border-color: var(--blue); }
@@ -118,7 +118,7 @@ const { searchLabel, filters, noun } = Astro.props;
     padding: 0.5rem 0.6rem; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 0;
     font: inherit; font-size: 0.85rem; color: var(--text-strong); max-width: 175px;
   }
-  .lf__count { margin: 0 0 0.45rem; font-size: 0.8rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .lf__count { margin: 0 0 0.45rem auto; font-size: 0.8rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
   .lf__clear { margin-bottom: 0.4rem; border: 0; background: none; padding: 0; font: inherit; font-size: 0.8rem; font-weight: 600; color: var(--blue); cursor: pointer; }
   .lf__clear[hidden] { display: none; }
   :global([data-lf-item][hidden]) { display: none !important; }
