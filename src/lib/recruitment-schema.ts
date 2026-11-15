@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SKILLS } from './skills';
 
 /**
  * MCA Heart Research Lab recruitment application. Shared between the browser (hints)
@@ -17,14 +18,9 @@ export const JOB_STATUSES = [
 ] as const;
 export type JobStatus = (typeof JOB_STATUSES)[number];
 
-export const EXPERTISE = [
-  'Data screening / extraction for meta-analysis',
-  'Analysis for meta-analysis',
-  'Manuscript writing',
-  'Large database analysis (NIS / NRD / NEDS / CDC)',
-  'Visuals',
-  'Not much experience in any of these',
-] as const;
+// The same skills the lab uses everywhere else (src/lib/skills.ts), plus a
+// choice for applicants who are just starting out.
+export const EXPERTISE = [...SKILLS, 'Not much experience in any of these'] as const;
 export type Expertise = (typeof EXPERTISE)[number];
 
 const longText = (min: number, label: string, max = 4000) =>
