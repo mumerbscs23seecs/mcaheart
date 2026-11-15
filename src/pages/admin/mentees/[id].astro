@@ -9,6 +9,14 @@ import '../../../styles/admin.css';
 import { currentUser } from '../../../lib/auth';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { listReviews, average, SCORE_FIELDS, fmtReviewDate } from '../../../lib/mentee-reviews';
+import MembershipComposer from '../../../components/MembershipComposer.astro';
+import { sendEmail } from '../../../lib/email';
+import { renderReplyEmail } from '../../../lib/request-replies';
+import {
+  loadMemberships, emailFor, dayNumber, longDate, shortDate, addSixMonths, nextTermStart,
+  STEP_ACTION, LOG_LABEL, STATUS_LABEL, NOTICE_ORDER,
+  type MemberRow, type LogRow, type EmailStep, type NoticeStep,
+} from '../../../lib/membership';
 
 export const prerender = false;
 
@@ -19,6 +27,78 @@ if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
 const { supabase } = Astro.locals as any;
 const id = String(Astro.params.id ?? '');
 if (!/^[0-9a-f-]{36}$/i.test(id)) return Astro.redirect('/admin/mentees', 302);
+
+const here = `/admin/mentees/${id}`;
+const LAB_EMAIL = 'researchlab@mcaheart.com';
+const EMAIL_STEPS: EmailStep[] = ['warning_1', 'warning_2', 'explanation', 'removal', 'renewal', 'departure'];
+const DONE_TEXT: Record<string, string> = {
+  warning_1: 'First warning sent.',
+  warning_2: 'Second warning sent.',
+  explanation: 'Request for an explanation sent.',
+  removal: 'They have been removed from the lab and told by email.',
+  renewal: 'Membership renewed for six months.',
+  departure: 'Membership ended and the departure email sent.',
+  note: 'Marked as active. The three-month count starts again from today.',
+  restore: 'Membership restored. A new six-month term starts today.',
+};
+
+// ---------------------------------------------------------------- membership actions
+let flashErr = '';
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  if (String(form.get('action') ?? '') === 'member-step' && String(form.get('personId') ?? '') === id) {
+    const kind = String(form.get('kind') ?? '');
+    const subject = String(form.get('subject') ?? '').trim();
+    const body = String(form.get('body') ?? '').trim();
+    const note = String(form.get('note') ?? '').trim();
+    const { ready: msReady, rows } = await loadMemberships(supabase);
+    const row = rows.find((r) => r.person_id === id);
+    const isEmailStep = (EMAIL_STEPS as string[]).includes(kind);
+    const emailIt = isEmailStep && (kind !== 'renewal' || form.get('email') === '1');
+
+    if (!msReady || !row) {
+      flashErr = 'Membership tracking is not switched on yet. Run add-membership.sql first.';
+    } else if ((NOTICE_ORDER as string[]).includes(kind) && row.next_step !== kind) {
+      flashErr = 'That step is no longer due. The page has been refreshed to show where things stand.';
+    } else if ((kind === 'renewal' || kind === 'departure') && !(row.review_due && row.membership_status === 'active')) {
+      flashErr = 'The term review is not due yet.';
+    } else if (kind === 'note' && !note) {
+      flashErr = 'Add a short note saying what they have been doing.';
+    } else if (emailIt && (!subject || !body)) {
+      flashErr = 'The email needs a subject and a message.';
+    } else if (!isEmailStep && kind !== 'note' && kind !== 'restore') {
+      flashErr = 'Unknown action.';
+    } else {
+      let sentOk = true;
+      if (emailIt) {
+        const sent = await sendEmail({ to: row.email, subject, html: renderReplyEmail(body, { formal: true }), replyTo: LAB_EMAIL })
+          .catch((e: unknown) => ({ ok: false, error: e instanceof Error ? e.message : 'Email delivery failed.' }));
+        if (!sent.ok) {
+          sentOk = false;
+          flashErr = `The email could not be sent (${sent.error ?? 'unknown error'}). Nothing was changed. Please try again.`;
+        }
+      }
+      if (sentOk) {
+        const { error } = await supabase.rpc('record_membership_step', {
+          p_person: id,
+          p_kind: kind,
+          p_subject: emailIt ? subject : null,
+          p_body: kind === 'note' ? note : emailIt ? body : null,
+          p_emailed: emailIt,
+        });
+        if (error) {
+          flashErr = emailIt
+            ? `The email was sent, but the step could not be saved: ${error.message}`
+            : error.message;
+        } else {
+          return Astro.redirect(`${here}?done=${encodeURIComponent(kind)}#membership`, 303);
+        }
+      }
+    }
+  }
+}
+const doneKey = Astro.url.searchParams.get('done') ?? '';
+const flashOk = DONE_TEXT[doneKey] ?? '';
 
 const { data: m } = await supabase
   .from('people')
@@ -55,7 +135,56 @@ const againCount = { yes: 0, maybe: 0, no: 0 };
 for (const r of reviews) if (r.work_again) againCount[r.work_again]++;
 const initials = m.full_name.split(/\s+/).filter(Boolean).map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
 const status = m.flag_status !== 'none' ? m.flag_status.replace('_', ' ') : m.open_to_assignment ? 'Available' : 'Unavailable';
-const here = `/admin/mentees/${id}`;
+
+// ---------------------------------------------------------------- membership
+const { ready: msReady, rows: msRows } = await loadMemberships(supabase);
+const ms: MemberRow | null = msRows.find((r) => r.person_id === id) ?? null;
+let log: LogRow[] = [];
+let activity: { at: string; label: string; project_id: string | null }[] = [];
+if (ms) {
+  const [{ data: logRows }, { data: actRows }] = await Promise.all([
+    supabase.from('membership_log').select('id,person_id,kind,at,by_id,term_number,emailed,subject,body').eq('person_id', id).order('at', { ascending: false }),
+    supabase.rpc('member_recent_activity', { p_person: id, p_limit: 8 }),
+  ]);
+  log = (logRows ?? []) as LogRow[];
+  activity = (actRows ?? []) as any[];
+}
+const byIds = [...new Set(log.map((l) => l.by_id).filter(Boolean))] as string[];
+const { data: byRows } = byIds.length ? await supabase.from('people').select('id,full_name').in('id', byIds) : { data: [] };
+const byName = new Map<string, string>((byRows ?? []).map((r: any) => [r.id, r.full_name]));
+
+const day = ms ? dayNumber(ms.member_since) : null;
+const termDay = ms ? dayNumber(ms.term_started_on) : null;
+const inactiveLong = ms && ms.next_step !== null;
+const stepNo = ms?.next_step ? NOTICE_ORDER.indexOf(ms.next_step) + 1 : 0;
+const reviewOpen = Boolean(ms && ms.review_due && ms.membership_status === 'active');
+const ended = ms && ms.membership_status !== 'active';
+
+// Work for the term review: everything they're on, ideas, and this term's reviews.
+let roleProjects: any[] = [];
+let ideas: { title: string; status: string; submitted_at: string }[] = [];
+if (ms) {
+  const { data: rp } = await supabase
+    .from('projects')
+    .select('id')
+    .is('deleted_at', null)
+    .or(`lead_id.eq.${id},colead_id.eq.${id},analyst_id.eq.${id},presenter_id.eq.${id},corresponding_id.eq.${id},team_member_ids.cs.{${id}}`);
+  const ids = (rp ?? []).map((r: any) => r.id).filter((x: string) => !projectIds.includes(x));
+  if (ids.length) {
+    const { data } = await supabase.from('project_list').select('id,ref,title,phase,stage,stage_label,lead_name,archived_at').in('id', ids);
+    roleProjects = data ?? [];
+  }
+  const { data: ideaRows } = await supabaseAdmin()
+    .from('ideas')
+    .select('status,submitted_at,payload')
+    .eq('payload->>leadEmail', String(m.email).toLowerCase())
+    .order('submitted_at', { ascending: false });
+  ideas = (ideaRows ?? []).map((r: any) => ({ title: r.payload?.title ?? 'Untitled idea', status: r.status, submitted_at: r.submitted_at }));
+}
+const termStart = ms?.term_started_on ?? '';
+const reviewsThisTerm = termStart ? reviews.filter((r) => r.created_at.slice(0, 10) >= termStart) : [];
+const newThisTerm = termStart ? (pmRows ?? []).filter((pm: any) => String(pm.assigned_at).slice(0, 10) >= termStart).length : 0;
+const nextStart = ms ? nextTermStart(ms) : '';
 ---
 
 <AppLayout title={`${m.full_name} - progress`} user={me} active="mentees">
@@ -77,6 +206,197 @@ const here = `/admin/mentees/${id}`;
         {m.flag_status !== 'none' && m.flag_reason && <p class="mp__flag">Reason: {m.flag_reason}</p>}
       </div>
     </header>
+
+    {flashOk && <div class="adm-flash adm-flash--ok" role="status"><p>{flashOk}</p></div>}
+    {flashErr && <div class="adm-flash adm-flash--error" role="alert"><p>{flashErr}</p></div>}
+
+    {!msReady && (
+      <div class="adm-flash adm-flash--error">
+        <p>Membership tracking isn't switched on yet. Run <code>mca-pipeline/add-membership.sql</code> in the Supabase SQL editor, then reload.</p>
+      </div>
+    )}
+
+    {ms && (
+      <section class="ms" id="membership" aria-label="Membership">
+        <div class="ms__facts">
+          <div class="ms__fact">
+            <span class="ms__k">{ended ? 'Membership' : 'In the lab'}</span>
+            <b class="ms__big">{ended ? STATUS_LABEL[ms.membership_status] : `Day ${day}`}</b>
+            <span class="ms__s">{ended ? `Ended ${longDate(ms.ended_on)}` : `Joined ${longDate(ms.member_since)}`}</span>
+          </div>
+          <div class="ms__fact">
+            <span class="ms__k">Term {ms.term_number}</span>
+            <b class="ms__big">{ended ? '-' : `Day ${termDay}`}</b>
+            <span class="ms__s">{shortDate(ms.term_started_on)} to {shortDate(ms.term_ends_on)}</span>
+          </div>
+          <div class="ms__fact">
+            <span class="ms__k">Term review</span>
+            <b class:list={['ms__big', reviewOpen && 'is-due']}>{ended ? '-' : reviewOpen ? 'Due now' : shortDate(ms.review_due_on)}</b>
+            <span class="ms__s">Six months and five days into the term</span>
+          </div>
+          <div class="ms__fact">
+            <span class="ms__k">Last active</span>
+            <b class:list={['ms__big', inactiveLong && 'is-due']}>{ms.days_inactive === null ? '-' : ms.days_inactive === 0 ? 'Today' : `${ms.days_inactive} day${ms.days_inactive === 1 ? '' : 's'} ago`}</b>
+            <span class="ms__s">{ms.last_active_label ?? 'Nothing recorded'}</span>
+          </div>
+        </div>
+
+        {inactiveLong && ms.next_step && (
+          <div class="ms__due">
+            <div class="ms__due-head">
+              <h2 class="ms__h">No activity for {ms.days_inactive} days</h2>
+              <ol class="ms__steps" aria-label="Inactivity steps">
+                {NOTICE_ORDER.map((st, n) => (
+                  <li class:list={['ms__step', n + 1 < stepNo && 'is-done', n + 1 === stepNo && 'is-now']}>
+                    {['First warning', 'Second warning', 'Explanation', 'Removal'][n]}
+                  </li>
+                ))}
+              </ol>
+              <p class="ms__p">
+                {ms.notice_stage
+                  ? `${LOG_LABEL[ms.notice_stage]} on ${longDate(ms.notice_sent_at)}. The next step is below. Any new activity, or marking them active, stops this.`
+                  : 'Their last recorded activity was more than three months ago. You can send them a first warning.'}
+              </p>
+            </div>
+            {(() => {
+              const e = emailFor(ms.next_step as EmailStep, ms, log);
+              return (
+                <MembershipComposer
+                  personId={id}
+                  step={ms.next_step!}
+                  to={`${ms.full_name} <${ms.email}>`}
+                  subject={e.subject}
+                  body={e.body}
+                  sendLabel={STEP_ACTION[ms.next_step as EmailStep]}
+                  confirmText={ms.next_step === 'removal'
+                    ? `Remove ${ms.full_name} from the lab and send this email? They will be taken off the list of active collaborators.`
+                    : `Send this email to ${ms.full_name} now?`}
+                  danger={ms.next_step === 'removal'}
+                />
+              );
+            })()}
+          </div>
+        )}
+
+        {reviewOpen && (
+          <div class="ms__due">
+            <div class="ms__due-head">
+              <h2 class="ms__h">Term {ms.term_number} review</h2>
+              <p class="ms__p">Their term ran from {longDate(ms.term_started_on)} to {longDate(ms.term_ends_on)}. Look over their work, then renew them for six more months or end their membership.</p>
+            </div>
+
+            <div class="ms__work">
+              <div class="ms__tally">
+                <div><b>{projectIds.length + roleProjects.length}</b><span>projects in total</span></div>
+                <div><b>{newThisTerm}</b><span>joined this term</span></div>
+                <div><b>{ideas.length}</b><span>idea{ideas.length === 1 ? '' : 's'} submitted</span></div>
+                <div><b>{reviewsThisTerm.length ? average(reviewsThisTerm, 'overall') : '-'}</b><span>{reviewsThisTerm.length} lead review{reviewsThisTerm.length === 1 ? '' : 's'} this term</span></div>
+              </div>
+              <div class="ms__lists">
+                <div>
+                  <h3 class="ms__h3">Projects</h3>
+                  {projectIds.length + roleProjects.length === 0 && <p class="ms__empty">Not on any project.</p>}
+                  <ul class="ms__ul">
+                    {(pmRows ?? []).map((pm: any) => {
+                      const p: any = projById.get(pm.project_id);
+                      return p && <li><a href={`/pipeline/projects/${p.id}`}>{p.ref}</a> {p.title}<span class="ms__tag">{done(p) ? 'Completed' : p.stage_label ?? ''}</span></li>;
+                    })}
+                    {roleProjects.map((p: any) => (
+                      <li><a href={`/pipeline/projects/${p.id}`}>{p.ref}</a> {p.title}<span class="ms__tag">{done(p) ? 'Completed' : p.stage_label ?? ''}</span></li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <h3 class="ms__h3">Ideas</h3>
+                  {ideas.length === 0 && <p class="ms__empty">No ideas submitted.</p>}
+                  <ul class="ms__ul">
+                    {ideas.map((i) => <li>{i.title}<span class="ms__tag">{i.status === 'approved' ? 'Approved' : i.status === 'declined' ? 'Declined' : i.status === 'withheld' ? 'On hold' : 'Pending'} · {shortDate(i.submitted_at)}</span></li>)}
+                  </ul>
+                  <h3 class="ms__h3">Recent activity</h3>
+                  {activity.length === 0 && <p class="ms__empty">Nothing recorded.</p>}
+                  <ul class="ms__ul">
+                    {activity.map((a) => <li>{a.label}<span class="ms__tag">{shortDate(a.at)}</span></li>)}
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div class="ms__choice" role="group" aria-label="Decision">
+              <button type="button" class="ms__pick is-on" data-ms-pick="renewal" aria-pressed="true">Renew for 6 months</button>
+              <button type="button" class="ms__pick" data-ms-pick="departure" aria-pressed="false">End membership</button>
+            </div>
+            {(['renewal', 'departure'] as const).map((st) => {
+              const e = emailFor(st, ms, log);
+              return (
+                <div class="ms__pane" data-ms-pane={st} hidden={st !== 'renewal'}>
+                  <p class="ms__p">{st === 'renewal'
+                    ? `The new term will run from ${longDate(nextStart)} to ${longDate(addSixMonths(nextStart))}.`
+                    : 'They will be marked as finished and taken off the list of active collaborators.'}</p>
+                  <MembershipComposer
+                    personId={id}
+                    step={st}
+                    to={`${ms.full_name} <${ms.email}>`}
+                    subject={e.subject}
+                    body={e.body}
+                    sendLabel={STEP_ACTION[st]}
+                    optionalEmail={st === 'renewal'}
+                    confirmText={st === 'renewal'
+                      ? `Renew ${ms.full_name} for six months?`
+                      : `End ${ms.full_name}'s membership and send this email?`}
+                    danger={st === 'departure'}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div class="ms__more">
+          {!ended && (
+            <details class="ms__mini">
+              <summary>Mark as active</summary>
+              <form method="post" class="ms__note">
+                <input type="hidden" name="action" value="member-step" />
+                <input type="hidden" name="kind" value="note" />
+                <input type="hidden" name="personId" value={id} />
+                <label class="ms__label" for="ms-note">What have they been doing? This restarts the three-month count.</label>
+                <textarea id="ms-note" name="note" rows="2" maxlength="500" required placeholder="For example: helping with screening on P123, discussed on WhatsApp"></textarea>
+                <button class="btn" type="submit">Mark as active</button>
+              </form>
+            </details>
+          )}
+          {ended && (
+            <form method="post" class="ms__restore" onsubmit={`return confirm('Restore ${ms.full_name.replace(/'/g, '')} as an active member? A new six-month term starts today. No email is sent.')`}>
+              <input type="hidden" name="action" value="member-step" />
+              <input type="hidden" name="kind" value="restore" />
+              <input type="hidden" name="personId" value={id} />
+              <button class="btn" type="submit">Restore membership</button>
+            </form>
+          )}
+        </div>
+
+        {log.length > 0 && (
+          <div class="ms__log">
+            <h3 class="ms__h3">History</h3>
+            <ul class="ms__history">
+              {log.map((l) => (
+                <li>
+                  <details>
+                    <summary>
+                      <span class="ms__when">{shortDate(l.at)}</span>
+                      <span class="ms__what">{LOG_LABEL[l.kind]}{l.kind === 'renewal' && !l.emailed ? ' (no email)' : ''}</span>
+                      <span class="ms__who">{l.by_id ? byName.get(l.by_id) ?? '' : ''}</span>
+                    </summary>
+                    {l.subject && <p class="ms__subj">{l.subject}</p>}
+                    {l.body && <p class="ms__body">{l.body}</p>}
+                  </details>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+    )}
 
     {!ready && (
       <div class="adm-flash adm-flash--error">
@@ -142,7 +462,77 @@ const here = `/admin/mentees/${id}`;
   </div>
 </AppLayout>
 
+<script>
+  // Term review: switch between the renewal and departure emails.
+  const picks = [...document.querySelectorAll<HTMLButtonElement>('[data-ms-pick]')];
+  const panes = [...document.querySelectorAll<HTMLElement>('[data-ms-pane]')];
+  picks.forEach((b) => b.addEventListener('click', () => {
+    picks.forEach((x) => { const on = x === b; x.classList.toggle('is-on', on); x.setAttribute('aria-pressed', String(on)); });
+    panes.forEach((pn) => { pn.hidden = pn.dataset.msPane !== b.dataset.msPick; });
+  }));
+</script>
+
 <style>
+  /* ---------- membership ---------- */
+  .ms { margin-bottom: var(--space-m); display: grid; gap: 1rem; scroll-margin-top: 90px; }
+  .ms__facts { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--bg-tint); }
+  .ms__fact { padding: 0.9rem 1rem; display: grid; gap: 3px; align-content: start; min-width: 0; }
+  .ms__k { font-size: 0.76rem; font-weight: 700; color: var(--text-muted); }
+  .ms__big { font-size: 1.35rem; color: var(--text-strong); line-height: 1.15; font-variant-numeric: tabular-nums; }
+  .ms__big.is-due { color: var(--red); }
+  .ms__s { font-size: 0.78rem; color: var(--text-muted); overflow-wrap: anywhere; }
+  .ms__due { display: grid; gap: 1rem; padding: 1.1rem 1.2rem 1.2rem; background: var(--red-wash); }
+  .ms__due-head { display: grid; gap: 0.5rem; }
+  .ms__h { margin: 0; font-size: var(--step-1); color: var(--text-strong); }
+  .ms__h3 { margin: 0 0 0.4rem; font-size: 0.86rem; color: var(--text-strong); }
+  .ms__p { margin: 0; font-size: 0.88rem; line-height: 1.55; color: var(--text); max-width: 70ch; }
+  .ms__steps { display: flex; flex-wrap: wrap; gap: 0.35rem; margin: 0.2rem 0 0; padding: 0; list-style: none; counter-reset: st; }
+  .ms__step { counter-increment: st; font-size: 0.76rem; font-weight: 700; padding: 0.3rem 0.6rem; background: var(--surface); color: var(--text-muted); }
+  .ms__step::before { content: counter(st) '. '; }
+  .ms__step.is-done { color: var(--text-strong); }
+  .ms__step.is-done::after { content: ' sent'; font-weight: 600; color: var(--text-muted); }
+  .ms__step.is-now { background: var(--red); color: #fff; }
+  .ms__work { display: grid; gap: 1rem; background: var(--surface); padding: 1rem; }
+  .ms__tally { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; }
+  .ms__tally div { display: grid; gap: 2px; }
+  .ms__tally b { font-size: 1.4rem; color: var(--text-strong); font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .ms__tally span { font-size: 0.76rem; color: var(--text-muted); }
+  .ms__lists { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+  .ms__ul { margin: 0 0 0.9rem; padding: 0; list-style: none; display: grid; gap: 0.35rem; font-size: 0.84rem; color: var(--text); }
+  .ms__ul a { color: var(--blue); font-weight: 700; margin-right: 0.25rem; }
+  .ms__tag { display: block; font-size: 0.74rem; color: var(--text-muted); }
+  .ms__empty { margin: 0 0 0.9rem; font-size: 0.84rem; color: var(--text-muted); }
+  .ms__choice { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .ms__pick { border: 0; padding: 0.5rem 0.9rem; background: var(--surface); font: inherit; font-size: 0.86rem; font-weight: 700; color: var(--text-muted); cursor: pointer; }
+  .ms__pick:hover { color: var(--text-strong); }
+  .ms__pick.is-on { background: var(--blue); color: #fff; }
+  .ms__pane { display: grid; gap: 0.8rem; }
+  .ms__pane[hidden] { display: none; }
+  .ms__more { display: flex; flex-wrap: wrap; gap: 0.8rem; }
+  .ms__mini { width: 100%; }
+  .ms__mini summary { cursor: pointer; display: inline-block; font-size: 0.86rem; font-weight: 700; color: var(--blue); list-style: none; }
+  .ms__mini summary::-webkit-details-marker { display: none; }
+  .ms__note { display: grid; gap: 0.5rem; margin-top: 0.6rem; max-width: 640px; }
+  .ms__label { font-size: 0.82rem; color: var(--text-muted); }
+  .ms__note textarea { width: 100%; padding: 0.6rem 0.7rem; border: 0; background: var(--bg-tint); font: inherit; font-size: 0.9rem; color: var(--text-strong); resize: vertical; }
+  .ms__note textarea:focus { outline: 2px solid var(--blue); outline-offset: -2px; }
+  .ms__note .btn { justify-self: start; }
+  .ms__history { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.3rem; }
+  .ms__history details { background: var(--bg-tint); padding: 0.55rem 0.8rem; }
+  .ms__history summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 0.2rem 0.9rem; font-size: 0.84rem; list-style: none; }
+  .ms__history summary::-webkit-details-marker { display: none; }
+  .ms__when { color: var(--text-muted); font-variant-numeric: tabular-nums; min-width: 6.5rem; }
+  .ms__what { font-weight: 700; color: var(--text-strong); }
+  .ms__who { color: var(--text-muted); }
+  .ms__subj { margin: 0.6rem 0 0.2rem; font-size: 0.84rem; font-weight: 700; color: var(--text-strong); }
+  .ms__body { margin: 0.3rem 0 0.2rem; font-size: 0.84rem; line-height: 1.6; color: var(--text); white-space: pre-wrap; }
+  @media (max-width: 760px) {
+    .ms__facts, .ms__tally { grid-template-columns: repeat(2, 1fr); }
+    .ms__due { padding: 1rem 0.9rem; }
+    .ms__work { padding: 0.9rem; }
+    .ms__lists { grid-template-columns: 1fr; }
+  }
+
   .mp { max-width: 980px; }
   .mp__back { display: inline-block; margin-bottom: var(--space-s); font-size: 0.85rem; color: var(--blue); }
   .mp__head { display: flex; gap: 1.1rem; align-items: center; margin-bottom: var(--space-m); }

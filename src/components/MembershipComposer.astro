@@ -1,0 +1,118 @@
+---
+/**
+ * One membership email (warning, explanation, removal, renewal, departure),
+ * ready to edit, preview and send. Posts back to the member's page.
+ */
+interface Props {
+  personId: string;
+  step: string;
+  to: string;
+  subject: string;
+  body: string;
+  sendLabel: string;
+  /** Renewal can be recorded without emailing. */
+  optionalEmail?: boolean;
+  /** Ask before sending (removal and departure). */
+  confirmText: string;
+  danger?: boolean;
+}
+const { personId, step, to, subject, body, sendLabel, optionalEmail = false, confirmText, danger = false } = Astro.props;
+const uid = `mc-${step}`;
+---
+
+<form method="post" class="mc" data-mc data-confirm={confirmText}>
+  <input type="hidden" name="action" value="member-step" />
+  <input type="hidden" name="kind" value={step} />
+  <input type="hidden" name="personId" value={personId} />
+
+  <div class="mc__card">
+    <div class="mc__meta">
+      <span class="mc__k">To</span><span class="mc__v">{to}</span>
+      <label class="mc__k" for={`${uid}-s`}>Subject</label>
+      <input class="mc__subject" id={`${uid}-s`} name="subject" required maxlength="300" value={subject} data-mc-subject />
+    </div>
+    <div class="mc__tabs" role="tablist">
+      <button type="button" class="mc__tab is-on" role="tab" aria-selected="true" data-mc-tab="write">Write</button>
+      <button type="button" class="mc__tab" role="tab" aria-selected="false" data-mc-tab="preview">Preview</button>
+    </div>
+    <textarea class="mc__body" name="body" required rows="14" maxlength="20000" aria-label="Message" data-mc-body>{body}</textarea>
+    <iframe class="mc__frame" title="Email preview" sandbox="" data-mc-frame hidden></iframe>
+  </div>
+
+  <div class="mc__foot">
+    {optionalEmail && (
+      <label class="mc__opt"><input type="checkbox" name="email" value="1" checked data-mc-email /> Email them</label>
+    )}
+    {!optionalEmail && <input type="hidden" name="email" value="1" />}
+    <button class:list={['btn', 'mc__send', danger && 'mc__send--danger']} type="submit" data-label={sendLabel}>{sendLabel}</button>
+  </div>
+</form>
+
+<script>
+  document.querySelectorAll<HTMLFormElement>('[data-mc]').forEach((form) => {
+    if (form.dataset.mcReady) return;
+    form.dataset.mcReady = '1';
+    const body = form.querySelector<HTMLTextAreaElement>('[data-mc-body]')!;
+    const subject = form.querySelector<HTMLInputElement>('[data-mc-subject]')!;
+    const frame = form.querySelector<HTMLIFrameElement>('[data-mc-frame]')!;
+    const tabs = [...form.querySelectorAll<HTMLButtonElement>('[data-mc-tab]')];
+    const emailBox = form.querySelector<HTMLInputElement>('[data-mc-email]');
+
+    async function showTab(which: string) {
+      tabs.forEach((t) => { const on = t.dataset.mcTab === which; t.classList.toggle('is-on', on); t.setAttribute('aria-selected', String(on)); });
+      const preview = which === 'preview';
+      body.hidden = preview;
+      frame.hidden = !preview;
+      if (preview) {
+        const fd = new FormData();
+        fd.set('body', body.value);
+        fd.set('formal', '1');
+        try {
+          const res = await fetch('/admin/requests/preview', { method: 'POST', body: fd });
+          if (res.ok) frame.srcdoc = await res.text();
+        } catch { /* keep the last preview */ }
+      }
+    }
+    tabs.forEach((t) => t.addEventListener('click', () => showTab(t.dataset.mcTab ?? 'write')));
+
+    // Without the email, the subject and message aren't needed.
+    emailBox?.addEventListener('change', () => {
+      const on = emailBox.checked;
+      subject.required = on;
+      body.required = on;
+      form.querySelector('.mc__card')?.classList.toggle('is-off', !on);
+    });
+
+    form.addEventListener('submit', (e) => {
+      if (!confirm(form.dataset.confirm ?? 'Send this email now?')) { e.preventDefault(); return; }
+      const btn = form.querySelector<HTMLButtonElement>('.mc__send')!;
+      setTimeout(() => { btn.disabled = true; btn.textContent = 'Working…'; }, 0);
+    });
+  });
+</script>
+
+<style>
+  .mc { display: grid; gap: 0.9rem; }
+  .mc__card { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-soft); transition: opacity 0.15s; }
+  .mc__card.is-off { opacity: 0.45; }
+  .mc__meta { display: grid; grid-template-columns: 4.5rem 1fr; align-items: center; gap: 0.5rem 0.8rem; padding: 0.8rem 1rem 0.4rem; }
+  .mc__k { font-size: 0.78rem; font-weight: 700; color: var(--text-muted); }
+  .mc__v { font-size: 0.88rem; color: var(--text-strong); overflow-wrap: anywhere; }
+  .mc__subject { width: 100%; padding: 0.5rem 0.6rem; border: 0; background: var(--bg-tint); font: inherit; font-size: 0.9rem; font-weight: 600; color: var(--text-strong); }
+  .mc__subject:focus, .mc__body:focus { outline: 2px solid var(--blue); outline-offset: -2px; }
+  .mc__tabs { display: flex; gap: 1.1rem; padding: 0.6rem 1rem 0; }
+  .mc__tab { border: 0; background: none; padding: 0.3rem 0; font: inherit; font-size: 0.82rem; font-weight: 700; color: var(--text-muted); cursor: pointer; box-shadow: inset 0 -2px 0 transparent; }
+  .mc__tab.is-on { color: var(--text-strong); box-shadow: inset 0 -2px 0 var(--blue); }
+  .mc__body { display: block; width: 100%; min-height: 320px; padding: 0.9rem 1rem; border: 0; background: var(--surface); font: inherit; font-size: 0.92rem; line-height: 1.6; color: var(--text-strong); resize: vertical; }
+  .mc__body[hidden], .mc__frame[hidden] { display: none; }
+  .mc__frame { display: block; width: 100%; height: 560px; border: 0; background: #f3f3f3; }
+  .mc__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.2rem; }
+  .mc__opt { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.86rem; color: var(--text-strong); cursor: pointer; }
+  .mc__opt input { width: 16px; height: 16px; accent-color: var(--blue); }
+  .mc__send--danger { background: var(--red); border-color: var(--red); }
+  @media (max-width: 560px) {
+    .mc__meta { grid-template-columns: 1fr; gap: 0.25rem; }
+    .mc__meta .mc__k:not(:first-child) { margin-top: 0.4rem; }
+    .mc__body { min-height: 380px; }
+  }
+</style>

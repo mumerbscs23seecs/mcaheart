@@ -153,7 +153,7 @@ export function templatesFor(r: RequestRecord): ReplyTemplate[] {
 
 /** The email as it will be sent: the typed text (blank lines start a new
  *  paragraph, lines starting with "- " become a list), then the lab's signature. */
-export function renderReplyEmail(body: string): string {
+export function renderReplyEmail(body: string, opts: { formal?: boolean } = {}): string {
   const linkify = (h: string) =>
     h.replace(/https?:\/\/[^\s<]+[^\s<.,;:!?)]/g, (u) => `<a href="${u}" style="color:${RED}">${u}</a>`);
   const blocks = body
@@ -173,7 +173,7 @@ export function renderReplyEmail(body: string): string {
       return head + list;
     });
   const signature =
-    p('Warm regards,', 'margin:26px 0 6px') +
+    p(opts.formal ? 'Sincerely,' : 'Warm regards,', 'margin:26px 0 6px') +
     `<p style="margin:0;color:${TEXT};font-family:${FONT};font-size:14px;line-height:1.55"><strong>Operations Team</strong><br>MCA Heart Research Lab<br><a href="mailto:${LAB_EMAIL}" style="color:${RED}">${LAB_EMAIL}</a></p>`;
   return emailShell(blocks.join('') + signature, FOOTER_ON_BEHALF);
 }

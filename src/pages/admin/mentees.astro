@@ -5,6 +5,7 @@ import { currentUser } from '../../lib/auth';
 import { getPipelineSession } from '../../lib/pipeline-auth';
 import { listReviews, average, type MenteeReview } from '../../lib/mentee-reviews';
 import { SKILLS, SKILL_SHORT, isSkill } from '../../lib/skills';
+import { loadMemberships, dayNumber, shortDate, LOG_LABEL, STATUS_LABEL, type MemberRow } from '../../lib/membership';
 
 export const prerender = false;
 
@@ -162,7 +163,20 @@ const onProject = new Map<string, string[]>();
 for (const [personId, list] of assignmentsByPerson) {
   for (const a of list) onProject.set(a.project_id, [...(onProject.get(a.project_id) ?? []), personId]);
 }
-const boardMentees = mentees.filter((m) => m.flag_status !== 'blacklisted');
+// Memberships (add-membership.sql): day counts, inactivity and term reviews.
+const { ready: msReady, rows: msRows } = dbReady ? await loadMemberships(supabase) : { ready: false, rows: [] as MemberRow[] };
+const msById = new Map(msRows.map((r) => [r.person_id, r]));
+const isCurrent = (personId: string) => (msById.get(personId)?.membership_status ?? 'active') === 'active';
+const reviewsDue = msRows.filter((r) => r.review_due && r.membership_status === 'active');
+const inactive = msRows.filter((r) => r.next_step !== null);
+const soonCutoff = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+const todayIso = new Date().toISOString().slice(0, 10);
+const reviewsSoon = msRows.filter((r) => r.membership_status === 'active' && !r.review_due && r.review_due_on && r.review_due_on <= soonCutoff);
+const checkinCount = new Set([...reviewsDue, ...inactive].map((r) => r.person_id)).size;
+const NEXT_LABEL: Record<string, string> = { warning_1: 'First warning', warning_2: 'Second warning', explanation: 'Ask for an explanation', removal: 'Removal' };
+const daysUntil = (d: string) => Math.round((Date.parse(`${d}T00:00:00Z`) - Date.parse(`${todayIso}T00:00:00Z`)) / 86400000);
+
+const boardMentees = mentees.filter((m) => m.flag_status !== 'blacklisted' && isCurrent(m.id));
 const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_id}`));
 ---
 
@@ -198,6 +212,7 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
             <div class="mnt-views" role="tablist" aria-label="View">
               <button type="button" class="mnt-view is-on" role="tab" aria-selected="true" data-mnt-view-btn="list">List</button>
               <button type="button" class="mnt-view" role="tab" aria-selected="false" data-mnt-view-btn="board">Assign to projects</button>
+              <button type="button" class="mnt-view" role="tab" aria-selected="false" data-mnt-view-btn="checkins">Check-ins{checkinCount > 0 && <span class="mnt-view__n">{checkinCount}</span>}</button>
             </div>
           </div>
           <label class="mnt-search" data-mnt-view="list">
@@ -225,8 +240,18 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
                     <span class="mnt-avatar" data-tone={avatarTone(m.id)}>{initials(m.full_name)}</span>
                     <span class="mnt-row__id">
                       <span class="mnt-row__name">{m.full_name}</span>
-                      <span class="mnt-row__meta">{tags.length ? tags.join(' · ') : 'No skills listed'} · {assigned.length} project{assigned.length === 1 ? '' : 's'}</span>
-                      <span class="mnt-pill" data-tone={badgeTone}><i /> {badgeLabel}</span>
+                      <span class="mnt-row__meta">{tags.length ? tags.join(' · ') : 'No skills listed'} · {assigned.length} project{assigned.length === 1 ? '' : 's'}{(() => {
+                        const r = msById.get(m.id);
+                        if (!r) return '';
+                        return r.membership_status === 'active' ? ` · Day ${dayNumber(r.member_since)} in the lab` : '';
+                      })()}</span>
+                      <span class="mnt-row__pills">
+                        {isCurrent(m.id)
+                          ? <span class="mnt-pill" data-tone={badgeTone}><i /> {badgeLabel}</span>
+                          : <span class="mnt-pill" data-tone="unavailable"><i /> {STATUS_LABEL[msById.get(m.id)!.membership_status]}</span>}
+                        {msById.get(m.id)?.review_due && isCurrent(m.id) && <span class="mnt-pill" data-tone="red_flag"><i /> Term review due</span>}
+                        {msById.get(m.id)?.next_step && <span class="mnt-pill" data-tone="red_flag"><i /> Inactive {msById.get(m.id)!.days_inactive} days</span>}
+                      </span>
                     </span>
                     <svg class="mnt-row__chev" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="m5 7.5 5 5 5-5" /></svg>
                   </summary>
@@ -411,6 +436,58 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
           })}
         </div>
 
+        <section class="ci" data-mnt-view="checkins" data-ci hidden aria-label="Check-ins">
+          {!msReady && (
+            <p class="ci__off">Check-ins aren't switched on yet. Run <code>mca-pipeline/add-membership.sql</code> in the Supabase SQL editor, then reload.</p>
+          )}
+          {msReady && checkinCount === 0 && reviewsSoon.length === 0 && (
+            <p class="ci__off">Nobody needs a check-in right now. Members show up here three months after their last activity, and six months and five days into each term.</p>
+          )}
+          {msReady && reviewsDue.length > 0 && (
+            <div class="ci__group">
+              <h3 class="ci__h">Term reviews due <span>{reviewsDue.length}</span></h3>
+              <p class="ci__sub">Six months and five days into their term. Review their work, then renew or end their membership.</p>
+              <ul class="ci__list">
+                {reviewsDue.map((r) => (
+                  <li><a class="ci__row" href={`/admin/mentees/${r.person_id}#membership`}>
+                    <span class="mnt-avatar" data-tone={avatarTone(r.person_id)}>{initials(r.full_name)}</span>
+                    <span class="ci__id"><b>{r.full_name}</b><span>Term {r.term_number} ended {shortDate(r.term_ends_on)} · Day {dayNumber(r.member_since)} in the lab</span></span>
+                    <span class="ci__go">Review</span>
+                  </a></li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {msReady && inactive.length > 0 && (
+            <div class="ci__group">
+              <h3 class="ci__h">No activity for three months <span>{inactive.length}</span></h3>
+              <p class="ci__sub">Warnings go out one at a time, in order. Any new activity, or marking someone active, takes them off this list.</p>
+              <ul class="ci__list">
+                {inactive.sort((a, b) => (b.days_inactive ?? 0) - (a.days_inactive ?? 0)).map((r) => (
+                  <li><a class="ci__row" href={`/admin/mentees/${r.person_id}#membership`}>
+                    <span class="mnt-avatar" data-tone={avatarTone(r.person_id)}>{initials(r.full_name)}</span>
+                    <span class="ci__id"><b>{r.full_name}</b><span>{r.days_inactive} days since: {r.last_active_label ?? 'nothing recorded'}{r.notice_stage ? ` · ${LOG_LABEL[r.notice_stage]} ${shortDate(r.notice_sent_at)}` : ''}</span></span>
+                    <span class="ci__go">{NEXT_LABEL[r.next_step!]}</span>
+                  </a></li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {msReady && reviewsSoon.length > 0 && (
+            <div class="ci__group">
+              <h3 class="ci__h">Reviews in the next two weeks <span>{reviewsSoon.length}</span></h3>
+              <ul class="ci__list">
+                {reviewsSoon.sort((a, b) => String(a.review_due_on).localeCompare(String(b.review_due_on))).map((r) => (
+                  <li><a class="ci__row ci__row--quiet" href={`/admin/mentees/${r.person_id}#membership`}>
+                    <span class="mnt-avatar" data-tone={avatarTone(r.person_id)}>{initials(r.full_name)}</span>
+                    <span class="ci__id"><b>{r.full_name}</b><span>Review on {shortDate(r.review_due_on)}, in {daysUntil(r.review_due_on!)} day{daysUntil(r.review_due_on!) === 1 ? '' : 's'}</span></span>
+                  </a></li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+
         <section class="mb" data-mnt-view="board" data-mb hidden aria-label="Assign mentees to ongoing projects">
           <div class="mb__skills" role="group" aria-label="Show by skill">
             <button type="button" class="mb-skill is-on" data-mb-skill="" aria-pressed="true">All skills</button>
@@ -514,8 +591,10 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
   viewBtns.forEach((b) => b.addEventListener('click', () => showView(b.dataset.mntViewBtn ?? 'list')));
   let saved = 'list';
   try { saved = localStorage.getItem('mnt-view') ?? 'list'; } catch { /* storage blocked */ }
-  if (new URLSearchParams(location.search).get('view') === 'board') saved = 'board';
+  const asked = new URLSearchParams(location.search).get('view');
+  if (asked === 'board' || asked === 'checkins') saved = asked;
   if (saved === 'board' && document.querySelector('[data-mb]')) showView('board');
+  if (saved === 'checkins' && document.querySelector('[data-ci]')) showView('checkins');
 
   // ---------- Board ----------
   const board = document.querySelector<HTMLElement>('[data-mb]');
@@ -945,6 +1024,28 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
   .mnt-row__id { display: grid; gap: 0.35rem; min-width: 0; }
   .mnt-row__name { font-family: var(--font-sans); font-weight: 700; font-size: 1.3rem; color: var(--text-strong); }
   .mnt-row__meta { font-size: 0.85rem; color: var(--text-muted); }
+  .mnt-row__pills { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .mnt-view__n { display: inline-block; margin-left: 0.4rem; min-width: 1.3em; padding: 0 0.35em; background: var(--red); color: #fff; font-size: 0.72rem; line-height: 1.5; text-align: center; font-variant-numeric: tabular-nums; }
+
+  /* ---------- check-ins ---------- */
+  .ci { display: grid; gap: 1.6rem; margin-top: 1rem; }
+  .ci__off { margin: 0; padding: 1rem 1.1rem; background: var(--bg-tint); font-size: 0.9rem; color: var(--text-muted); }
+  .ci__group { display: grid; gap: 0.5rem; }
+  .ci__h { margin: 0; font-size: var(--step-1); color: var(--text-strong); display: flex; align-items: center; gap: 0.5rem; }
+  .ci__h span { font-size: 0.8rem; padding: 0 0.45em; background: var(--bg-tint); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .ci__sub { margin: 0 0 0.3rem; font-size: 0.85rem; color: var(--text-muted); max-width: 70ch; }
+  .ci__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.4rem; }
+  .ci__row { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.9rem; padding: 0.75rem 1rem; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-soft); color: inherit; text-decoration: none; }
+  .ci__row:hover { box-shadow: inset 0 0 0 1px var(--text-strong); }
+  .ci__id { display: grid; gap: 2px; min-width: 0; }
+  .ci__id b { color: var(--text-strong); font-size: 0.95rem; }
+  .ci__id span { font-size: 0.8rem; color: var(--text-muted); overflow-wrap: anywhere; }
+  .ci__go { font-size: 0.82rem; font-weight: 700; color: #fff; background: var(--red); padding: 0.4rem 0.75rem; white-space: nowrap; }
+  .ci__row--quiet { grid-template-columns: auto 1fr; }
+  @media (max-width: 560px) {
+    .ci__row { grid-template-columns: auto 1fr; }
+    .ci__go { grid-column: 2; justify-self: start; }
+  }
 
   .mnt-pill {
     justify-self: start; display: inline-flex; align-items: center; gap: 0.4rem;

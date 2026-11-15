@@ -9,7 +9,7 @@ export const POST: APIRoute = async ({ request, locals }) => {
   if (!person || person.role !== 'admin') return new Response('Forbidden', { status: 403 });
   const form = await request.formData();
   const body = String(form.get('body') ?? '').slice(0, 20000);
-  return new Response(renderReplyEmail(body), {
+  return new Response(renderReplyEmail(body, { formal: form.get('formal') === '1' }), {
     headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
   });
 };

@@ -65,6 +65,10 @@ export interface ApplicationDecisionOpts {
   bcc?: string[];
 }
 
+// A small heading inside a letter.
+const subhead = (text: string) =>
+  p(`<strong style="color:#1a1a1a;font-size:15px">${esc(text)}</strong>`, 'margin:22px 0 6px');
+
 // Sign-off shared by every decision letter, with the lab's contact details.
 const SIGNOFF =
   p('Best regards,<br>Operations Team<br>MCA Heart Research Lab') +
@@ -80,28 +84,39 @@ export function renderApplicationDecisionEmail(
   let inner: string;
 
   if (opts.decision === 'approved') {
-    subject = 'Welcome to MCA Heart Research Lab as a Research Collaborator';
+    subject = 'Welcome to MCA Heart Research Lab as a Remote Research Collaborator';
     inner =
       p(`Dear ${name},`) +
-      p(`Thank you for completing the application form to join our research lab. After reviewing your responses, we are pleased to accept you and welcome you as a <strong>Research Collaborator at MCA Heart Research Lab</strong>.`) +
-      p(`Led by <strong>Dr. Chadi Alraies</strong> and supported by Research Coordinators <strong>Jawad Basit</strong> and <strong>Muhammad Burhan</strong>, MCA Heart Research Lab is a global community of more than <strong>300 cardiology researchers</strong>. Our lab has a prolific record of consistently producing <strong>70+ peer-reviewed papers and 150+ conference abstracts annually</strong>.`) +
-      p(`You can learn more about the lab at ${link(site.url)}.`) +
-      p(`Upon joining our WhatsApp group, you will receive learning materials and resources to help you become familiar with our research workflow. For research ideas you would like to pursue through the lab, please contact a Research Coordinator to arrange a discussion with Dr. Alraies.`) +
-      p(`Our team has expertise in <strong>TriNetX, NIS, NRD, NEDS, and meta-analysis</strong>, as well as data analysis, manuscript preparation, and research submission workflows. We may also be able to support <strong>conference submission and poster printing costs</strong> for conferences such as SCAI, TCT, and ACC, provided projects are reviewed by Dr. Alraies before the relevant deadlines and meet the requirements communicated by the lab.`) +
-      p(`We encourage new members to develop expertise in a specific area, such as data extraction, screening, statistical analysis, visualization, scientific writing, or formatting. Building expertise in one area allows members to contribute consistently across multiple projects and strengthens the team's overall workflow.`) +
-      p(`Our weekly meetings are held every <strong>Sunday at 12:00 PM EST</strong>, during which we review submissions, project updates, and ongoing research activities. Attendance is not mandatory, but regular participation is strongly encouraged to facilitate effective collaboration and engagement with the team.`) +
-      p(`You will be added to the lab's WhatsApp platform shortly using the contact number provided in your application. Once added, you are welcome to introduce yourself to the other members. You will also have the opportunity to briefly introduce yourself during the upcoming Sunday meeting.`) +
-      p(`In the meantime, we encourage you to follow our activities on Instagram and X using the links below. Should you have any questions or require assistance, please feel free to contact either of the Research Coordinators.`) +
+      p(`Thank you for your interest in MCA Heart Research Lab and for completing our application process. Following a review of your application, we are pleased to welcome you as a <strong>Remote Research Collaborator</strong> for an initial period of six months, effective today.`) +
+      p(`Led by <strong>Dr. Chadi Alraies</strong>, with support from Research Fellows <strong>Jawad Basit</strong> and <strong>Muhammad Burhan</strong> and our administrative team, the lab brings together more than <strong>300 cardiology researchers</strong> worldwide. It produces over <strong>70 peer-reviewed publications and 150 conference abstracts</strong> annually, with expertise spanning <strong>TriNetX, NIS, NRD, NEDS, and meta-analysis</strong>.`) +
+      subhead('Onboarding') +
+      p(`You will shortly be added to the lab's WhatsApp group using the contact number provided in your application. There, you will receive introductory materials, workflow guidance, and information about available opportunities. Once added, please introduce yourself to the team.`) +
+      p(`We encourage you to develop expertise in an area such as literature screening, data extraction, statistical analysis, visualization, scientific writing, or manuscript formatting. Building these skills will help you contribute consistently across projects and strengthen the team's research activities.`) +
+      subhead('Weekly Meetings') +
+      p(`Our weekly meetings take place every <strong>Sunday at 12:00 noon Eastern Time (US)</strong>. They cover project updates, submissions, and ongoing research activities. Attendance is encouraged but not mandatory, and you will have an opportunity to introduce yourself briefly at an upcoming meeting.`) +
+      subhead('Conference Support') +
+      p(`Financial support for conference submissions and poster printing may be available for selected projects presented at meetings such as SCAI, TCT, and ACC. Support is subject to prior review by Dr. Alraies, applicable deadlines, and the requirements communicated by the lab.`) +
+      p(`We look forward to working with you. If you have questions or need assistance during onboarding, please contact a Research Fellow or reply to this email.`) +
       note +
-      SIGNOFF +
+      p('Sincerely,<br>Operations Team<br>MCA Heart Research Lab') +
+      p(`Email: ${link(`mailto:${LAB_EMAIL}`, LAB_EMAIL)}`, 'font-size:14px') +
       infoBox(
-        `<strong style="display:block;margin-bottom:10px;color:#1a1a1a">Important information</strong>
+        `<strong style="display:block;margin-bottom:12px;color:#1a1a1a;font-size:15px">Important Information</strong>
+         <strong>Appointment and continued participation</strong><br>
+         Your initial collaborator appointment is for six months, beginning today. Continued affiliation requires active participation and meaningful contributions. These may include:
+         <ul style="margin:8px 0 10px;padding-left:20px">
+           <li style="margin:0 0 3px">Proposing research ideas that receive approval</li>
+           <li style="margin:0 0 3px">Completing assigned project tasks on time</li>
+           <li style="margin:0 0 3px">Responding to open calls for manuscript contributors and fulfilling the associated responsibilities</li>
+           <li style="margin:0 0 3px">Contributing to conference submissions or presentations</li>
+         </ul>
+         Members who remain inactive for three consecutive months without prior approval or a reasonable explanation will be removed from the active research team following two warnings. At the end of your six-month appointment, your contributions, performance, and overall engagement will be reviewed to determine eligibility for continued collaboration.<br><br>
          <strong>Project availability</strong><br>
-         Addition to active projects is subject to project availability and may involve a waiting period of several weeks.<br><br>
+         Assignment to active projects depends on availability and may involve a waiting period of several weeks. During this time, we encourage you to review the introductory resources, attend meetings, develop relevant research skills, and submit your own research idea.<br><br>
          <strong>Submitting a research idea</strong><br>
-         If you have an idea you would like to pursue through the lab, please submit it at ${link(`${site.url}/submit-idea`)}.<br><br>
+         To propose a research idea, please use our ${link(`${site.url}/submit-idea`, 'research idea submission form')}. A Research Coordinator can help arrange further discussion with Dr. Alraies when appropriate.<br><br>
          <strong>Letters of recommendation</strong><br>
-         Joining the research group does not guarantee a Letter of Recommendation (LOR) from the PI or other faculty collaborators. LOR requests are evaluated individually and are based on a rigorous assessment of the member's performance, contribution, and engagement within the lab.`,
+         Lab membership does not guarantee a letter of recommendation from the Principal Investigator or other faculty collaborators. Requests are considered individually based on the member's demonstrated contributions, performance, reliability, and engagement. Members must be actively participating in the lab when submitting a request.`,
       );
   } else if (opts.decision === 'declined') {
     subject = 'Your application to MCA Heart Research Lab';
