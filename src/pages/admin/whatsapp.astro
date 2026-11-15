@@ -1,0 +1,231 @@
+---
+/**
+ * Manage > WhatsApp: accepted applicants still to be added to the lab's
+ * WhatsApp group. Copy the number, add them, click Added.
+ */
+import AppLayout from '../../layouts/AppLayout.astro';
+import '../../styles/admin.css';
+import { currentUser } from '../../lib/auth';
+import { listWhatsapp, setWhatsappAdded } from '../../lib/applications';
+
+export const prerender = false;
+
+const me = currentUser(Astro.cookies);
+if (!me) return Astro.redirect('/login', 302);
+if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  const ids = form.getAll('id').map(String).filter((x) => /^[0-9a-f-]{36}$/i.test(x)).slice(0, 200);
+  const wantsJson = (Astro.request.headers.get('accept') ?? '').includes('application/json');
+  let err: string | null = 'Unknown action.';
+  if (action === 'added') err = await setWhatsappAdded(ids, me.name);
+  if (action === 'undo') err = await setWhatsappAdded(ids, null);
+  if (wantsJson) return err ? json({ ok: false, error: err }, 400) : json({ ok: true });
+  const msg = err ?? (action === 'added' ? `Marked ${ids.length === 1 ? 'as' : `${ids.length} people as`} added.` : 'Put back on the list.');
+  return Astro.redirect(`/admin/whatsapp?${err ? 'err' : 'ok'}=${encodeURIComponent(msg)}`, 303);
+}
+
+const { ready, error, toAdd, added } = await listWhatsapp();
+const flashOk = Astro.url.searchParams.get('ok');
+const flashErr = Astro.url.searchParams.get('err');
+
+const fmt = (t: number | null) => (t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '-');
+const ago = (t: number | null) => {
+  if (!t) return '';
+  const d = Math.floor((Date.now() - t) / 86_400_000);
+  return d === 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`;
+};
+/** Digits for a wa.me link: no spaces or symbols, and no leading 00. */
+const waDigits = (phone: string) => phone.replace(/[^\d]/g, '').replace(/^00/, '');
+---
+
+<AppLayout title="Add to WhatsApp" heading="Add to WhatsApp" user={me} active="whatsapp">
+  <div class="adm wa">
+    {flashOk && <div class="adm-flash adm-flash--ok" role="status"><p>{flashOk}</p></div>}
+    {flashErr && <div class="adm-flash adm-flash--error" role="alert"><p>{flashErr}</p></div>}
+
+    {!ready && (
+      <div class="adm-flash adm-flash--error">
+        <p>This list isn't switched on yet. Run <code>mca-pipeline/add-whatsapp-list.sql</code> in the Supabase SQL editor, then reload.{error && <><br /><span class="adm-hint">({error})</span></>}</p>
+      </div>
+    )}
+
+    {ready && (
+      <>
+        <div class="wa__head">
+          <p class="wa__lead"><b data-wa-count>{toAdd.length}</b> <span data-wa-noun>{toAdd.length === 1 ? 'person' : 'people'}</span> to add. Everyone accepted shows here once their acceptance email has been sent. Click <b>Added</b> when they are in the group.</p>
+          {toAdd.length > 1 && (
+            <button type="button" class="wa__ghost" data-wa-copyall>Copy all numbers</button>
+          )}
+        </div>
+
+        <p class="wa__empty" data-wa-empty hidden={toAdd.length > 0}>Everyone accepted is already in the group.</p>
+
+        <ul class="wa__list" data-wa-list>
+          {toAdd.map((r) => (
+            <li class="wa__row" data-wa-row data-id={r.id} data-phone={r.phone}>
+              <div class="wa__who">
+                <b class="wa__name">{r.name}</b>
+                <a class="wa__email" href={`mailto:${r.email}`}>{r.email}</a>
+                <span class="wa__when">Accepted {fmt(r.acceptedAt)} · {ago(r.acceptedAt)}{!r.emailed && <span class="wa__warn"> · acceptance email not sent yet</span>}</span>
+              </div>
+              <div class="wa__phone">
+                {r.phone
+                  ? <span class="wa__num">{r.phone}</span>
+                  : <span class="wa__num wa__num--none">No number given</span>}
+                <span class="wa__phone-actions">
+                  {r.phone && <button type="button" class="wa__ghost" data-wa-copy={r.phone}>Copy number</button>}
+                  {/^\s*(\+|00)/.test(r.phone) && waDigits(r.phone).length >= 8 && <a class="wa__ghost" href={`https://wa.me/${waDigits(r.phone)}`} target="_blank" rel="noopener">Open chat</a>}
+                </span>
+              </div>
+              <form method="post" class="wa__done" data-wa-form>
+                <input type="hidden" name="action" value="added" />
+                <input type="hidden" name="id" value={r.id} />
+                <button class="btn wa__added" type="submit">Added</button>
+              </form>
+            </li>
+          ))}
+        </ul>
+
+        {added.length > 0 && (
+          <details class="wa__past">
+            <summary>Recently added ({added.length})</summary>
+            <ul class="wa__plist">
+              {added.map((r) => (
+                <li>
+                  <span><b>{r.name}</b> · {r.phone || 'no number'}</span>
+                  <span class="wa__pmeta">Added {fmt(r.addedAt)}{r.addedBy && ` by ${r.addedBy}`}</span>
+                  <form method="post">
+                    <input type="hidden" name="action" value="undo" />
+                    <input type="hidden" name="id" value={r.id} />
+                    <button type="submit" class="wa__link">Put back</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </>
+    )}
+
+    <div class="wa__toast" data-wa-toast role="status" aria-live="polite" hidden>
+      <span data-wa-toast-text></span>
+      <button type="button" class="wa__undo" data-wa-undo hidden>Undo</button>
+    </div>
+  </div>
+</AppLayout>
+
+<script>
+  const list = document.querySelector<HTMLElement>('[data-wa-list]');
+  const toast = document.querySelector<HTMLElement>('[data-wa-toast]')!;
+  const toastText = document.querySelector<HTMLElement>('[data-wa-toast-text]')!;
+  const undoBtn = document.querySelector<HTMLButtonElement>('[data-wa-undo]')!;
+  const count = document.querySelector<HTMLElement>('[data-wa-count]');
+  const noun = document.querySelector<HTMLElement>('[data-wa-noun]');
+  const empty = document.querySelector<HTMLElement>('[data-wa-empty]');
+  let timer = 0;
+  let undo: (() => void) | null = null;
+
+  function say(text: string, onUndo: (() => void) | null = null) {
+    toastText.textContent = text;
+    undo = onUndo;
+    undoBtn.hidden = !onUndo;
+    toast.hidden = false;
+    clearTimeout(timer);
+    timer = window.setTimeout(() => { toast.hidden = true; undo = null; }, onUndo ? 8000 : 3000);
+  }
+  undoBtn.addEventListener('click', () => { const fn = undo; toast.hidden = true; undo = null; fn?.(); });
+
+  async function copy(text: string, done: string) {
+    try { await navigator.clipboard.writeText(text); say(done); }
+    catch { say('Copying was blocked. Select the number and copy it yourself.'); }
+  }
+  document.querySelectorAll<HTMLButtonElement>('[data-wa-copy]').forEach((b) =>
+    b.addEventListener('click', () => copy(b.dataset.waCopy ?? '', `Copied ${b.dataset.waCopy}`)));
+  document.querySelector<HTMLButtonElement>('[data-wa-copyall]')?.addEventListener('click', () => {
+    const nums = [...document.querySelectorAll<HTMLElement>('[data-wa-row]:not([hidden])')].map((r) => r.dataset.phone ?? '').filter(Boolean);
+    copy(nums.join('\n'), `Copied ${nums.length} number${nums.length === 1 ? '' : 's'}, one per line`);
+  });
+
+  function recount() {
+    const n = document.querySelectorAll('[data-wa-row]:not([hidden])').length;
+    if (count) count.textContent = String(n);
+    if (noun) noun.textContent = n === 1 ? 'person' : 'people';
+    if (empty) empty.hidden = n > 0;
+  }
+  async function send(action: 'added' | 'undo', id: string) {
+    const fd = new FormData();
+    fd.set('action', action);
+    fd.set('id', id);
+    const res = await fetch('/admin/whatsapp', { method: 'POST', body: fd, headers: { accept: 'application/json' } });
+    const out = await res.json().catch(() => ({ ok: false, error: 'Something went wrong. Reload the page and try again.' }));
+    if (!out.ok) throw new Error(out.error || 'Something went wrong.');
+  }
+
+  list?.querySelectorAll<HTMLFormElement>('[data-wa-form]').forEach((form) => {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const row = form.closest<HTMLElement>('[data-wa-row]')!;
+      const id = row.dataset.id!;
+      const name = row.querySelector('.wa__name')?.textContent ?? 'They';
+      const btn = form.querySelector<HTMLButtonElement>('button')!;
+      btn.disabled = true;
+      try {
+        await send('added', id);
+        row.hidden = true;
+        recount();
+        say(`${name} is off the list.`, async () => {
+          try { await send('undo', id); row.hidden = false; btn.disabled = false; recount(); say(`${name} is back on the list.`); }
+          catch (err) { say(err instanceof Error ? err.message : 'Could not put them back.'); }
+        });
+      } catch (err) {
+        btn.disabled = false;
+        say(err instanceof Error ? err.message : 'Could not save that.');
+      }
+    });
+  });
+</script>
+
+<style>
+  .wa { max-width: 980px; }
+  .wa__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.8rem 1.4rem; margin-bottom: 1.1rem; }
+  .wa__lead { margin: 0; max-width: 64ch; font-size: 0.92rem; line-height: 1.55; color: var(--text); }
+  .wa__lead b { color: var(--text-strong); }
+  .wa__empty { margin: 0; padding: 1rem 1.1rem; background: var(--ok-bg); color: var(--ok); font-weight: 600; font-size: 0.92rem; }
+  .wa__empty[hidden] { display: none; }
+  .wa__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.5rem; }
+  .wa__row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; align-items: center; gap: 0.6rem 1.4rem; padding: 0.95rem 1.1rem; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-soft); }
+  .wa__row[hidden] { display: none; }
+  .wa__who { display: grid; gap: 2px; min-width: 0; }
+  .wa__name { font-size: 1rem; color: var(--text-strong); }
+  .wa__email { font-size: 0.84rem; color: var(--blue); overflow-wrap: anywhere; }
+  .wa__when { font-size: 0.78rem; color: var(--text-muted); }
+  .wa__warn { color: var(--red); font-weight: 700; }
+  .wa__phone { display: grid; gap: 0.35rem; min-width: 0; }
+  .wa__num { font-size: 1.12rem; font-weight: 700; color: var(--text-strong); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; overflow-wrap: anywhere; user-select: all; }
+  .wa__num--none { font-size: 0.86rem; font-weight: 600; color: var(--text-muted); user-select: auto; }
+  .wa__phone-actions { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .wa__ghost { display: inline-flex; align-items: center; padding: 0.35rem 0.7rem; border: 0; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); font: inherit; font-size: 0.78rem; font-weight: 700; color: var(--text-strong); cursor: pointer; text-decoration: none; }
+  .wa__ghost:hover { box-shadow: inset 0 0 0 1px var(--blue); color: var(--blue); }
+  .wa__done { margin: 0; }
+  .wa__added { min-width: 6.5rem; }
+  .wa__past { margin-top: 1.6rem; }
+  .wa__past summary { cursor: pointer; font-size: 0.9rem; font-weight: 700; color: var(--text-strong); }
+  .wa__plist { margin: 0.7rem 0 0; padding: 0; list-style: none; display: grid; gap: 0.3rem; }
+  .wa__plist li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 1rem; padding: 0.5rem 0.8rem; background: var(--bg-tint); font-size: 0.86rem; color: var(--text); }
+  .wa__plist form { margin: 0 0 0 auto; }
+  .wa__pmeta { color: var(--text-muted); font-size: 0.8rem; }
+  .wa__link { border: 0; background: none; padding: 0; font: inherit; font-size: 0.82rem; font-weight: 700; color: var(--blue); cursor: pointer; text-decoration: underline; }
+  .wa__toast { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); z-index: 50; display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1.1rem; background: var(--text-strong); color: var(--bg); font-size: 0.88rem; max-width: calc(100vw - 2rem); }
+  .wa__toast[hidden] { display: none; }
+  .wa__undo { border: 0; background: none; padding: 0; font: inherit; font-weight: 700; color: var(--bg); text-decoration: underline; cursor: pointer; }
+  @media (max-width: 760px) {
+    .wa__row { grid-template-columns: 1fr; }
+    .wa__done .btn { width: 100%; }
+  }
+</style>

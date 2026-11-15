@@ -140,8 +140,11 @@ export function renderApplicationDecisionEmail(
   return { subject, html: emailShell(inner, FOOTER_ON_BEHALF) };
 }
 
-export async function deliverApplicationDecision(opts: ApplicationDecisionOpts): Promise<void> {
+/** Sends the decision letter. Returns false when email isn't set up on this
+ *  server (local dev), so nothing actually went out. Throws if sending failed. */
+export async function deliverApplicationDecision(opts: ApplicationDecisionOpts): Promise<boolean> {
   const { subject, html } = renderApplicationDecisionEmail(opts);
   const sent = await sendEmail({ to: opts.to, cc: opts.cc, bcc: opts.bcc, subject, html });
   if (!sent.ok) throw new Error(sent.error ?? 'Email delivery failed.');
+  return sent.id !== 'logged-only';
 }

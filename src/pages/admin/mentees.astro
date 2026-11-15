@@ -94,7 +94,12 @@ if (supabase && Astro.request.method === 'POST') {
 }
 
 let mentees: any[] = [];
-let openProjects: { id: string; ref: string; title: string; phase: string; lead_id: string | null }[] = [];
+type OpenProject = {
+  id: string; ref: string; title: string; phase: string; stage: string; study_type: string;
+  lead_id: string | null; colead_id: string | null; analyst_id: string | null; presenter_id: string | null;
+  corresponding_id: string | null; team_member_ids: string[] | null;
+};
+let openProjects: OpenProject[] = [];
 let assignmentsByPerson = new Map<string, any[]>();
 let dbReady = false;
 let dbError = '';
@@ -111,7 +116,7 @@ if (supabase) {
 
     const { data: projRows, error: pErr } = await supabase
       .from('projects')
-      .select('id,ref,title,phase,lead_id')
+      .select('id,ref,title,phase,stage,study_type,lead_id,colead_id,analyst_id,presenter_id,corresponding_id,team_member_ids')
       .is('archived_at', null)
       .is('hidden_at', null)
       .is('deleted_at', null)
@@ -144,24 +149,65 @@ const reviewsFor = (personId: string, projectId?: string) =>
   allReviews.filter((r) => r.person_id === personId && (!projectId || r.project_id === projectId));
 
 
-// Board: the Ongoing tab's projects (manuscript stage), with who's on each
-// and the skills each one needs (add-skills.sql; none until it's run).
-const boardProjects = openProjects.filter((p) => p.phase === 'manuscript');
+// Board: the Ongoing tab's projects (manuscript stage), plus any NIS, NRD or
+// TriNetX paper that still has no analyst (often a new one at the idea
+// stage). Those show when the matching analysis skill is picked.
+const ANALYSIS_SKILL: Record<string, string> = { NIS: 'Analysis for NIS/NRD', NRD: 'Analysis for NIS/NRD', TriNetX: 'Analysis for TriNetX' };
+const analystNeededFor = (p: OpenProject): string =>
+  !p.analyst_id && p.phase !== 'journal' && ANALYSIS_SKILL[p.study_type] ? ANALYSIS_SKILL[p.study_type] : '';
+const boardProjects = openProjects
+  .filter((p) => p.phase === 'manuscript' || analystNeededFor(p))
+  .sort((a, b) => Number(!!analystNeededFor(b)) - Number(!!analystNeededFor(a)) || a.ref.localeCompare(b.ref));
 const needsById = new Map<string, string[]>();
 if (supabase && boardProjects.length) {
   const { data: needRows, error: needErr } = await supabase.from('projects').select('id,needed_skills').in('id', boardProjects.map((p) => p.id));
   if (!needErr) for (const r of needRows ?? []) needsById.set(r.id, ((r as any).needed_skills ?? []).filter(isSkill));
 }
 const skillsOf = (m: any): string[] => (m.expertise ?? []).filter(isSkill);
+// Everyone active in the lab can be put on a project from the board.
+let labPeople: any[] = [];
+if (supabase && dbReady) {
+  const { data } = await supabase
+    .from('people')
+    .select('id,full_name,email,role,expertise,is_mentee,open_to_assignment,flag_status')
+    .eq('active', true)
+    .neq('role', 'viewer')
+    .order('full_name');
+  labPeople = data ?? [];
+}
 const leadIds = [...new Set(boardProjects.map((p) => p.lead_id).filter(Boolean))] as string[];
-const { data: leadRows } = supabase && leadIds.length
-  ? await supabase.from('people').select('id,full_name').in('id', leadIds)
+const missingLeads = leadIds.filter((id) => !labPeople.some((x: any) => x.id === id));
+const { data: leadRows } = supabase && missingLeads.length
+  ? await supabase.from('people').select('id,full_name').in('id', missingLeads)
   : { data: [] };
-const leadName = new Map<string, string>((leadRows ?? []).map((r: any) => [r.id, r.full_name]));
-const menteeName = new Map<string, string>(mentees.map((m) => [m.id, m.full_name]));
+const leadName = new Map<string, string>([...labPeople, ...(leadRows ?? [])].map((r: any) => [r.id, r.full_name]));
+const menteeName = new Map<string, string>([...labPeople, ...mentees].map((m: any) => [m.id, m.full_name]));
+// Mentees on each project (project_mentees), and team members (team_member_ids).
 const onProject = new Map<string, string[]>();
 for (const [personId, list] of assignmentsByPerson) {
   for (const a of list) onProject.set(a.project_id, [...(onProject.get(a.project_id) ?? []), personId]);
+}
+const teamOn = new Map<string, string[]>(openProjects.map((p) => [p.id, (p.team_member_ids ?? []).filter((x) => !(onProject.get(p.id) ?? []).includes(x))]));
+// How many open projects each person is on, in any role.
+const projectsOf = new Map<string, Set<string>>();
+const addTo = (pid: string | null | undefined, projectId: string) => {
+  if (!pid) return;
+  if (!projectsOf.has(pid)) projectsOf.set(pid, new Set());
+  projectsOf.get(pid)!.add(projectId);
+};
+for (const p of openProjects) {
+  for (const pid of [p.lead_id, p.colead_id, p.analyst_id, p.presenter_id, p.corresponding_id, ...(p.team_member_ids ?? [])]) addTo(pid, p.id);
+  for (const pid of onProject.get(p.id) ?? []) addTo(pid, p.id);
+}
+const projectCount = (pid: string) => projectsOf.get(pid)?.size ?? 0;
+// Analysts of NIS/NRD or TriNetX papers count as having that skill on the board.
+const doneAnalysis = new Map<string, Set<string>>();
+for (const p of openProjects) {
+  const sk = ANALYSIS_SKILL[p.study_type];
+  if (sk && p.analyst_id) {
+    if (!doneAnalysis.has(p.analyst_id)) doneAnalysis.set(p.analyst_id, new Set());
+    doneAnalysis.get(p.analyst_id)!.add(sk);
+  }
 }
 // Memberships (add-membership.sql): day counts, inactivity and term reviews.
 const { ready: msReady, rows: msRows } = dbReady ? await loadMemberships(supabase) : { ready: false, rows: [] as MemberRow[] };
@@ -176,7 +222,10 @@ const checkinCount = new Set([...reviewsDue, ...inactive].map((r) => r.person_id
 const NEXT_LABEL: Record<string, string> = { warning_1: 'First warning', warning_2: 'Second warning', explanation: 'Ask for an explanation', removal: 'Removal' };
 const daysUntil = (d: string) => Math.round((Date.parse(`${d}T00:00:00Z`) - Date.parse(`${todayIso}T00:00:00Z`)) / 86400000);
 
-const boardMentees = mentees.filter((m) => m.flag_status !== 'blacklisted' && isCurrent(m.id));
+const boardMentees = labPeople
+  .filter((m) => m.flag_status !== 'blacklisted' && (!m.is_mentee || isCurrent(m.id)))
+  .sort((a, b) => projectCount(a.id) - projectCount(b.id) || String(a.full_name).localeCompare(String(b.full_name)));
+const boardSkills = (m: any): string[] => [...new Set([...skillsOf(m), ...(doneAnalysis.get(m.id) ?? [])])];
 const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_id}`));
 
 // Ratings for the board: each mentee's averages and their rating on every paper.
@@ -202,7 +251,7 @@ for (const m of boardMentees) {
   });
 }
 const ratingJson = JSON.stringify(Object.fromEntries(
-  [...ratingOf].map(([id, r]) => [id, { ...r, name: menteeName.get(id) ?? '', projects: (assignmentsByPerson.get(id) ?? []).length }]),
+  [...ratingOf].map(([id, r]) => [id, { ...r, name: menteeName.get(id) ?? '', projects: projectCount(id) }]),
 )).replace(/</g, '\\u003c');
 ---
 
@@ -526,71 +575,92 @@ const ratingJson = JSON.stringify(Object.fromEntries(
             <aside class="mb__people">
               <label class="mb__search">
                 <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
-                <input type="search" placeholder="Find a mentee" aria-label="Find a mentee" data-mb-psearch autocomplete="off" />
+                <input type="search" placeholder={`Find anyone of ${boardMentees.length}`} aria-label="Find a person" data-mb-psearch autocomplete="off" />
               </label>
-              <p class="mb__hint">Move a name onto a project to add them. On a phone, tap a name, then <b>Add here</b>. Tap a name to see their ratings.</p>
-              {reviewsReady && (
-                <div class="mb__sort" role="group" aria-label="Order mentees by">
-                  <span>Order by</span>
-                  <button type="button" class="mb-sort is-on" data-mb-sort="name" aria-pressed="true">Name</button>
-                  <button type="button" class="mb-sort" data-mb-sort="rating" aria-pressed="false">Highest rated</button>
-                </div>
-              )}
+              <p class="mb__hint">Everyone in the lab, with the number of projects they are on. People on no project come first. Move a name onto a project to add them, or tap a name, then <b>Add here</b>.</p>
+              <div class="mb__sort" role="group" aria-label="Order people by">
+                <span>Order by</span>
+                <button type="button" class="mb-sort is-on" data-mb-sort="count" aria-pressed="true">Fewest projects</button>
+                <button type="button" class="mb-sort" data-mb-sort="name" aria-pressed="false">Name</button>
+                {reviewsReady && <button type="button" class="mb-sort" data-mb-sort="rating" aria-pressed="false">Highest rated</button>}
+              </div>
               <ul class="mb__chips" data-mb-chips>
                 {boardMentees.map((m) => {
-                  const count = (assignmentsByPerson.get(m.id) ?? []).length;
-                  const sk = skillsOf(m);
-                  const rt = ratingOf.get(m.id);
+                  const count = projectCount(m.id);
+                  const sk = boardSkills(m);
+                  const rt = m.is_mentee ? ratingOf.get(m.id) : undefined;
                   return (
-                    <li data-mb-chip-row data-name={m.full_name.toLowerCase()} data-skills={sk.join('|')} data-rating={rt?.overall ?? ''} data-reviews={rt?.n ?? 0}>
-                      <button type="button" class:list={['mb-chip', !m.open_to_assignment && 'is-unavail', m.flag_status === 'red_flag' && 'is-flag']}
+                    <li data-mb-chip-row data-name={m.full_name.toLowerCase()} data-skills={sk.join('|')} data-rating={rt?.overall ?? ''} data-reviews={rt?.n ?? 0} data-count={count}>
+                      <button type="button" class:list={['mb-chip', m.is_mentee && !m.open_to_assignment && 'is-unavail', m.flag_status === 'red_flag' && 'is-flag', count === 0 && 'is-free']}
                         data-mb-chip data-id={m.id} data-label={m.full_name} data-skills={sk.join('|')} aria-pressed="false">
                         <span class="mb-chip__top">
                           <span class="mb-chip__name">{m.full_name}</span>
-                          <span class="mb-chip__count" data-mb-count={count} title="Projects they're on">{count}</span>
+                          <span class="mb-chip__count" data-mb-count={count} title="Open projects they are on">{count}</span>
                         </span>
+                        <span class="mb-chip__load" data-mb-load>{count === 0 ? 'Not on any project' : `On ${count} project${count === 1 ? '' : 's'}`}{m.is_mentee ? ' · mentee' : ''}</span>
                         {sk.length > 0 && <span class="mb-chip__skills">{sk.map((x) => SKILL_SHORT[x as keyof typeof SKILL_SHORT]).join(' · ')}</span>}
-                        {reviewsReady && (rt && rt.overall !== null
+                        {reviewsReady && m.is_mentee && (rt && rt.overall !== null
                           ? <span class="mb-chip__rate"><span class="mb-dots" aria-hidden="true">{[1, 2, 3, 4, 5].map((k) => <i class:list={[k <= Math.round(rt.overall!) && 'on']} />)}</span><b>{rt.overall}</b> from {rt.n} review{rt.n === 1 ? '' : 's'}</span>
                           : <span class="mb-chip__rate mb-chip__rate--none">Not reviewed yet</span>)}
-                        {(!m.open_to_assignment || m.flag_status === 'red_flag') && (
-                          <span class="mb-chip__warn">{!m.open_to_assignment ? 'Unavailable' : 'Red flag'}</span>
+                        {((m.is_mentee && !m.open_to_assignment) || m.flag_status === 'red_flag') && (
+                          <span class="mb-chip__warn">{m.flag_status === 'red_flag' ? 'Red flag' : 'Unavailable'}</span>
                         )}
                       </button>
                     </li>
                   );
                 })}
               </ul>
-              <p class="mb__empty" data-mb-pempty hidden>No mentee matches.</p>
+              <p class="mb__empty" data-mb-pempty hidden>Nobody matches.</p>
             </aside>
 
             <div class="mb__projects">
               <label class="mb__search mb__search--wide">
                 <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
-                <input type="search" placeholder={`Find one of ${boardProjects.length} ongoing projects`} aria-label="Find a project" data-mb-jsearch autocomplete="off" />
+                <input type="search" placeholder={`Find one of ${boardProjects.filter((p) => p.phase === 'manuscript').length} ongoing projects`} aria-label="Find a project" data-mb-jsearch autocomplete="off" />
               </label>
               <section class="mb-info" data-mb-info hidden aria-live="polite" aria-label="Ratings of the selected mentee"></section>
               {boardProjects.length === 0 && <p class="mb__empty">No ongoing projects right now.</p>}
               <div class="mb__grid" data-mb-grid>
                 {boardProjects.map((p) => {
                   const needs = needsById.get(p.id) ?? [];
+                  const analystFor = analystNeededFor(p);
                   return (
-                    <article class="mb-proj" data-mb-proj data-id={p.id} data-ref={p.ref} data-name={`${p.ref} ${p.title}`.toLowerCase()} data-needs={needs.join('|')}>
+                    <article class:list={['mb-proj', analystFor && 'has-slot']} data-mb-proj data-id={p.id} data-ref={p.ref}
+                      data-name={`${p.ref} ${p.title} ${p.study_type}`.toLowerCase()} data-needs={needs.join('|')}
+                      data-analyst-for={analystFor} data-only-skill={p.phase !== 'manuscript' ? analystFor : ''} hidden={p.phase !== 'manuscript'}>
                       <div class="mb-proj__head">
                         <a class="mb-proj__title" href={`/pipeline/projects/${p.id}`} draggable="false"><b>{p.ref}</b> {p.title}</a>
                         <span class="mb-proj__match">Good match</span>
                       </div>
-                      {p.lead_id && leadName.get(p.lead_id) && <p class="mb-proj__lead">Lead: {leadName.get(p.lead_id)}</p>}
+                      <p class="mb-proj__lead">
+                        <span>{p.study_type}</span>
+                        {p.phase !== 'manuscript' && <span>{p.phase === 'idea' ? 'New paper' : p.phase === 'conference' ? 'Conference' : p.phase}</span>}
+                        {p.lead_id && leadName.get(p.lead_id) && <span>Lead: {leadName.get(p.lead_id)}</span>}
+                      </p>
                       {needs.length > 0 && (
                         <p class="mb-proj__needs"><span>Needs</span> {needs.map((x) => <i>{SKILL_SHORT[x as keyof typeof SKILL_SHORT]}</i>)}</p>
                       )}
+                      {analystFor && (
+                        <div class="mb-slot" data-mb-slot="analyst">
+                          <span class="mb-slot__k">Analyst</span>
+                          <span class="mb-slot__empty" data-mb-slot-empty>Needed. Drop a name here.</span>
+                          <span class="mb-slot__filled" data-mb-slot-filled hidden></span>
+                          <button type="button" class="mb-slot__add" data-mb-add-analyst hidden>Make <span data-mb-add-name></span> the analyst</button>
+                        </div>
+                      )}
                       <ul class="mb-proj__people" data-mb-assigned>
                         {(onProject.get(p.id) ?? []).map((pid) => (
-                          <li class="mb-tag" data-person={pid}>
+                          <li class="mb-tag" data-person={pid} data-slot="helper">
                             <span>{menteeName.get(pid) ?? 'Mentee'}</span>
                             {!reviewedPairs.has(`${p.id}:${pid}`) && (
                               <button type="button" class="mb-tag__x" data-mb-remove aria-label={`Remove ${menteeName.get(pid) ?? 'mentee'} from ${p.ref}`}>&times;</button>
                             )}
+                          </li>
+                        ))}
+                        {(teamOn.get(p.id) ?? []).map((pid) => (
+                          <li class="mb-tag mb-tag--team" data-person={pid} data-slot="helper">
+                            <span>{menteeName.get(pid) ?? 'Member'}</span>
+                            <button type="button" class="mb-tag__x" data-mb-remove aria-label={`Remove ${menteeName.get(pid) ?? 'member'} from ${p.ref}`}>&times;</button>
                           </li>
                         ))}
                       </ul>
@@ -661,13 +731,21 @@ const ratingJson = JSON.stringify(Object.fromEntries(
       const pq = psearch?.value.trim().toLowerCase() ?? '';
       const jq = jsearch?.value.trim().toLowerCase() ?? '';
       let ps = 0, js = 0;
+      // People: a search finds anyone. A skill puts those who have it first
+      // and fades the rest, so you can still pick someone else.
       for (const r of chipRows) {
-        const ok = (!pq || (r.dataset.name ?? '').includes(pq)) && (!skill || has(r, 'data-skills'));
+        const ok = !pq || (r.dataset.name ?? '').includes(pq);
         r.hidden = !ok; if (ok) ps++;
+        r.classList.toggle('is-dim', !!skill && !pq && !has(r, 'data-skills'));
       }
+      // Projects: a skill shows those that need it, including papers whose
+      // analyst slot is empty for that kind of analysis.
       for (const c of cards) {
-        const ok = (!jq || (c.dataset.name ?? '').includes(jq)) && (!skill || has(c, 'data-needs'));
+        const analyst = !!skill && c.dataset.analystFor === skill && !c.classList.contains('slot-filled');
+        const visibleNow = skill ? has(c, 'data-needs') || analyst || (c.dataset.analystFor === skill) : !c.dataset.onlySkill;
+        const ok = (!jq || (c.dataset.name ?? '').includes(jq)) && visibleNow;
         c.hidden = !ok; if (ok) js++;
+        c.classList.toggle('is-analyst-match', analyst);
       }
       if (pempty) pempty.hidden = ps > 0 || chipRows.length === 0;
       if (jempty) jempty.hidden = js > 0 || cards.length === 0;
@@ -707,18 +785,26 @@ const ratingJson = JSON.stringify(Object.fromEntries(
 
     const chipFor = (personId: string) => chips.find((c) => c.dataset.id === personId) ?? null;
     function bumpCount(personId: string, by: number) {
-      const meta = chipFor(personId)?.querySelector<HTMLElement>('[data-mb-count]');
-      if (!meta) return;
+      const chip = chipFor(personId);
+      const meta = chip?.querySelector<HTMLElement>('[data-mb-count]');
+      if (!chip || !meta) return;
       const n = Math.max(0, Number(meta.dataset.mbCount ?? 0) + by);
       meta.dataset.mbCount = String(n);
       meta.textContent = String(n);
+      const row = chip.closest<HTMLElement>('[data-mb-chip-row]');
+      if (row) row.dataset.count = String(n);
+      chip.classList.toggle('is-free', n === 0);
+      const load = chip.querySelector<HTMLElement>('[data-mb-load]');
+      if (load) load.textContent = load.textContent!.replace(/^(Not on any project|On \d+ projects?)/, n === 0 ? 'Not on any project' : `On ${n} project${n === 1 ? '' : 's'}`);
     }
 
-    async function post(action: 'assign' | 'unassign', projectId: string, personId: string): Promise<string | null> {
+    type Slot = 'helper' | 'analyst';
+    async function post(action: 'assign' | 'unassign', projectId: string, personId: string, slot: Slot): Promise<string | null> {
       const body = new FormData();
       body.set('action', action);
       body.set('projectId', projectId);
       body.set('personId', personId);
+      body.set('slot', slot);
       try {
         const res = await fetch('/admin/mentees/assign', { method: 'POST', body, headers: { accept: 'application/json' } });
         const out = await res.json().catch(() => ({ ok: false, error: 'Something went wrong. Reload the page and try again.' }));
@@ -728,10 +814,38 @@ const ratingJson = JSON.stringify(Object.fromEntries(
       }
     }
 
+    // The analyst slot: empty ("Needed") or filled with a name and a remove button.
+    function fillSlot(card: HTMLElement, personId: string | null, name = '') {
+      const slot = card.querySelector<HTMLElement>('[data-mb-slot]');
+      if (!slot) return;
+      const filled = slot.querySelector<HTMLElement>('[data-mb-slot-filled]')!;
+      slot.querySelector<HTMLElement>('[data-mb-slot-empty]')!.hidden = !!personId;
+      filled.hidden = !personId;
+      filled.replaceChildren();
+      card.classList.toggle('slot-filled', !!personId);
+      if (personId) {
+        filled.dataset.person = personId;
+        filled.dataset.slot = 'analyst';
+        const span = document.createElement('span');
+        span.textContent = name;
+        const x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'mb-tag__x';
+        x.dataset.mbRemove = '';
+        x.setAttribute('aria-label', `Remove ${name} as analyst of ${card.dataset.ref}`);
+        x.textContent = '×';
+        filled.append(span, x);
+      } else {
+        delete filled.dataset.person;
+      }
+      if (selected) select(selected, true);
+    }
+
     function addTag(card: HTMLElement, personId: string, name: string) {
       const li = document.createElement('li');
       li.className = 'mb-tag';
       li.dataset.person = personId;
+      li.dataset.slot = 'helper';
       const span = document.createElement('span');
       span.textContent = name;
       const x = document.createElement('button');
@@ -744,32 +858,39 @@ const ratingJson = JSON.stringify(Object.fromEntries(
       card.querySelector('[data-mb-assigned]')?.append(li);
     }
 
-    async function assign(card: HTMLElement, personId: string, name: string, fromUndo = false) {
+    async function assign(card: HTMLElement, personId: string, name: string, slot: Slot = 'helper', fromUndo = false) {
       const ref = card.dataset.ref ?? 'the project';
+      if (slot === 'analyst' && card.classList.contains('slot-filled')) {
+        say(`${ref} already has an analyst.`, null, true);
+        return;
+      }
       if (card.querySelector(`[data-person="${personId}"]`)) {
         say(`${name} is already on ${ref}.`, null, true);
         return;
       }
       card.classList.add('is-busy');
-      const err = await post('assign', card.dataset.id!, personId);
+      const err = await post('assign', card.dataset.id!, personId, slot);
       card.classList.remove('is-busy');
       if (err) { say(err, null, true); return; }
-      addTag(card, personId, name);
+      if (slot === 'analyst') fillSlot(card, personId, name); else addTag(card, personId, name);
       bumpCount(personId, 1);
       card.classList.add('is-flash');
       setTimeout(() => card.classList.remove('is-flash'), 900);
-      say(fromUndo ? `${name} is back on ${ref}.` : `Added ${name} to ${ref}. They've been notified.`, fromUndo ? null : () => unassign(card, personId, name, true));
+      const what = slot === 'analyst' ? `${name} is now the analyst on ${ref}.` : `Added ${name} to ${ref}.`;
+      say(fromUndo ? `${name} is back on ${ref}.` : `${what} They've been notified.`, fromUndo ? null : () => unassign(card, personId, name, slot, true));
     }
 
-    async function unassign(card: HTMLElement, personId: string, name: string, fromUndo = false) {
+    async function unassign(card: HTMLElement, personId: string, name: string, slot: Slot = 'helper', fromUndo = false) {
       const ref = card.dataset.ref ?? 'the project';
       card.classList.add('is-busy');
-      const err = await post('unassign', card.dataset.id!, personId);
+      const err = await post('unassign', card.dataset.id!, personId, slot);
       card.classList.remove('is-busy');
       if (err) { say(err, null, true); return; }
-      card.querySelector(`[data-person="${personId}"]`)?.remove();
+      if (slot === 'analyst') fillSlot(card, null);
+      else card.querySelector(`.mb-tag[data-person="${personId}"]`)?.remove();
       bumpCount(personId, -1);
-      say(fromUndo ? `Took ${name} off ${ref} again.` : `Removed ${name} from ${ref}.`, fromUndo ? null : () => assign(card, personId, name, true));
+      const what = slot === 'analyst' ? `${name} is no longer the analyst on ${ref}.` : `Removed ${name} from ${ref}.`;
+      say(fromUndo ? `Took ${name} off ${ref} again.` : what, fromUndo ? null : () => assign(card, personId, name, slot, true));
     }
 
     // Remove buttons (also on tags added after the page loaded).
@@ -777,10 +898,11 @@ const ratingJson = JSON.stringify(Object.fromEntries(
       const x = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-mb-remove]');
       if (!x) return;
       const card = x.closest<HTMLElement>('[data-mb-proj]');
-      const personId = x.closest<HTMLElement>('[data-person]')?.dataset.person;
+      const holder = x.closest<HTMLElement>('[data-person]');
+      const personId = holder?.dataset.person;
       if (!card || !personId) return;
-      const name = chipFor(personId)?.dataset.label ?? x.previousElementSibling?.textContent ?? 'this mentee';
-      unassign(card, personId, name);
+      const name = chipFor(personId)?.dataset.label ?? x.previousElementSibling?.textContent ?? 'this person';
+      unassign(card, personId, name, holder?.dataset.slot === 'analyst' ? 'analyst' : 'helper');
     });
 
     // ---- Ratings of the picked mentee, and ordering by rating ----
@@ -840,16 +962,19 @@ const ratingJson = JSON.stringify(Object.fromEntries(
       if (!chipList) return;
       const rows = [...chipList.querySelectorAll<HTMLElement>('[data-mb-chip-row]')];
       const byName = (a: HTMLElement, c: HTMLElement) => (a.dataset.name ?? '').localeCompare(c.dataset.name ?? '');
-      rows.sort(b.dataset.mbSort === 'rating'
+      const mode = b.dataset.mbSort;
+      rows.sort(mode === 'rating'
         ? (a, c) => (Number(c.dataset.rating || -1) - Number(a.dataset.rating || -1)) || (Number(c.dataset.reviews) - Number(a.dataset.reviews)) || byName(a, c)
-        : byName);
+        : mode === 'count'
+          ? (a, c) => (Number(a.dataset.count) - Number(c.dataset.count)) || byName(a, c)
+          : byName);
       chipList.append(...rows);
     }));
 
     // ---- Tap / keyboard: pick a name, then "Add here" on a project ----
-    function select(chip: HTMLButtonElement | null) {
+    function select(chip: HTMLButtonElement | null, refresh = false) {
       if (selected) { selected.classList.remove('is-picked'); selected.setAttribute('aria-pressed', 'false'); }
-      selected = chip && chip !== selected ? chip : null;
+      selected = chip && (refresh || chip !== selected) ? chip : null;
       if (selected) { selected.classList.add('is-picked'); selected.setAttribute('aria-pressed', 'true'); }
       board.classList.toggle('has-pick', !!selected);
       markMatches(selected);
@@ -859,6 +984,12 @@ const ratingJson = JSON.stringify(Object.fromEntries(
         add.hidden = !selected;
         const nm = add.querySelector('[data-mb-add-name]');
         if (nm) nm.textContent = selected?.dataset.label ?? '';
+        const addA = card.querySelector<HTMLButtonElement>('[data-mb-add-analyst]');
+        if (addA) {
+          addA.hidden = !selected || card.classList.contains('slot-filled');
+          const an = addA.querySelector('[data-mb-add-name]');
+          if (an) an.textContent = selected?.dataset.label ?? '';
+        }
       }
     }
     let suppressClick = false;
@@ -870,18 +1001,30 @@ const ratingJson = JSON.stringify(Object.fromEntries(
       if (!selected) return;
       const chip = selected;
       select(null);
-      assign(card, chip.dataset.id!, chip.dataset.label ?? 'Mentee');
+      assign(card, chip.dataset.id!, chip.dataset.label ?? 'Member');
+    }));
+    cards.forEach((card) => card.querySelector('[data-mb-add-analyst]')?.addEventListener('click', () => {
+      if (!selected) return;
+      const chip = selected;
+      select(null);
+      assign(card, chip.dataset.id!, chip.dataset.label ?? 'Member', 'analyst');
     }));
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && selected) select(null); });
 
     // ---- Mouse / pen drag ----
-    let drag: { chip: HTMLButtonElement; ghost: HTMLElement | null; x: number; y: number; over: HTMLElement | null; id: number } | null = null;
+    let drag: { chip: HTMLButtonElement; ghost: HTMLElement | null; x: number; y: number; over: HTMLElement | null; slot: HTMLElement | null; id: number } | null = null;
     let scrollRaf = 0;
     let lastY = 0;
 
     const cardAt = (x: number, y: number) => {
       const el = document.elementFromPoint(x, y) as HTMLElement | null;
       return el?.closest<HTMLElement>('[data-mb-proj]') ?? null;
+    };
+    // An empty analyst slot under the pointer, if any.
+    const slotAt = (x: number, y: number) => {
+      const el = document.elementFromPoint(x, y) as HTMLElement | null;
+      const slot = el?.closest<HTMLElement>('[data-mb-slot]') ?? null;
+      return slot && !slot.closest('[data-mb-proj]')?.classList.contains('slot-filled') ? slot : null;
     };
     function autoScroll() {
       if (!drag?.ghost) return;
@@ -894,9 +1037,10 @@ const ratingJson = JSON.stringify(Object.fromEntries(
     function endDrag(drop: boolean) {
       if (!drag) return;
       cancelAnimationFrame(scrollRaf);
-      const { chip, ghost, over } = drag;
+      const { chip, ghost, over, slot } = drag;
       ghost?.remove();
       over?.classList.remove('is-over');
+      slot?.classList.remove('is-over');
       board.classList.remove('is-dragging');
       chip.classList.remove('is-dragged');
       markMatches(null);
@@ -905,13 +1049,13 @@ const ratingJson = JSON.stringify(Object.fromEntries(
       if (started) {
         suppressClick = true;
         setTimeout(() => { suppressClick = false; }, 0);
-        if (drop && over) assign(over, chip.dataset.id!, chip.dataset.label ?? 'Mentee');
+        if (drop && over) assign(over, chip.dataset.id!, chip.dataset.label ?? 'Member', slot ? 'analyst' : 'helper');
       }
     }
     chips.forEach((chip) => {
       chip.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'touch' || e.button !== 0) return;
-        drag = { chip, ghost: null, x: e.clientX, y: e.clientY, over: null, id: e.pointerId };
+        drag = { chip, ghost: null, x: e.clientX, y: e.clientY, over: null, slot: null, id: e.pointerId };
       });
     });
     document.addEventListener('pointermove', (e) => {
@@ -937,6 +1081,12 @@ const ratingJson = JSON.stringify(Object.fromEntries(
         drag.over?.classList.remove('is-over');
         over?.classList.add('is-over');
         drag.over = over;
+      }
+      const slot = over ? slotAt(e.clientX, e.clientY) : null;
+      if (slot !== drag.slot) {
+        drag.slot?.classList.remove('is-over');
+        slot?.classList.add('is-over');
+        drag.slot = slot;
       }
     });
     document.addEventListener('pointerup', (e) => { if (drag && e.pointerId === drag.id) endDrag(true); });
@@ -1002,6 +1152,8 @@ const ratingJson = JSON.stringify(Object.fromEntries(
   .mb__hint { margin: 0; font-size: 0.76rem; line-height: 1.5; color: var(--text-muted); }
   .mb__chips { list-style: none; margin: 0; padding: 0 2px 2px 0; display: grid; gap: 0.45rem; overflow-y: auto; min-height: 0; }
   .mb__chips li[hidden] { display: none; }
+  .mb__chips li.is-dim { order: 1; opacity: 0.5; }
+  .mb__chips li.is-dim:hover { opacity: 1; }
   .mb-chip {
     width: 100%; display: grid; gap: 3px; text-align: left; padding: 0.65rem 0.8rem;
     background: var(--surface); border: 0; border-radius: 12px;
@@ -1023,6 +1175,10 @@ const ratingJson = JSON.stringify(Object.fromEntries(
   .mb-chip.is-picked .mb-chip__skills, .mb-chip.is-picked .mb-chip__warn { color: rgba(255, 255, 255, 0.85); }
   .mb-chip.is-picked .mb-chip__count { background: rgba(255, 255, 255, 0.2); color: #fff; }
   .mb-chip.is-dragged { opacity: 0.4; }
+  .mb-chip__load { font-size: 0.74rem; color: var(--text-muted); }
+  .mb-chip.is-free .mb-chip__load { color: var(--ok); font-weight: 700; }
+  .mb-chip.is-free .mb-chip__count { background: var(--ok-bg); color: var(--ok); }
+  .mb-chip.is-picked .mb-chip__load { color: rgba(255, 255, 255, 0.85); }
   .mb-chip__rate { display: flex; align-items: center; gap: 0.4rem; font-size: 0.74rem; color: var(--text-muted); }
   .mb-chip__rate b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
   .mb-chip__rate--none { font-style: italic; }
@@ -1074,7 +1230,21 @@ const ratingJson = JSON.stringify(Object.fromEntries(
   .mb-proj__title:hover { color: var(--blue); }
   .mb-proj__match { display: none; flex-shrink: 0; padding: 0.15rem 0.5rem; border-radius: 999px; background: var(--ok-bg); color: var(--ok); font-size: 0.68rem; font-weight: 700; }
   .mb-proj.is-match .mb-proj__match { display: inline-block; }
-  .mb-proj__lead { margin: 0; font-size: 0.76rem; color: var(--text-muted); }
+  .mb-proj__lead { margin: 0; display: flex; flex-wrap: wrap; gap: 0.15rem 0.7rem; font-size: 0.76rem; color: var(--text-muted); }
+  .mb-proj__lead span:first-child { font-weight: 700; color: var(--text); }
+  .mb-proj.is-analyst-match { order: -1; box-shadow: inset 0 0 0 2px var(--blue); }
+  /* the analyst slot */
+  .mb-slot { display: grid; gap: 0.35rem; padding: 0.6rem 0.7rem; border-radius: 12px; background: var(--accent-wash); transition: box-shadow 0.12s, background-color 0.12s; }
+  .mb-slot__k { font-size: 0.72rem; font-weight: 700; color: var(--blue); }
+  .mb-slot__empty { font-size: 0.8rem; font-weight: 600; color: var(--text-strong); }
+  .mb-slot__empty[hidden], .mb-slot__filled[hidden], .mb-slot__add[hidden] { display: none; }
+  .mb-slot__filled { justify-self: start; display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.25rem 0.3rem 0.25rem 0.65rem; background: var(--surface); border-radius: 999px; font-size: 0.78rem; font-weight: 700; color: var(--text-strong); }
+  .mb-proj.slot-filled .mb-slot { background: var(--bg-tint); }
+  .mb-proj.slot-filled .mb-slot__k { color: var(--text-muted); }
+  .mb.is-dragging .mb-proj:not(.slot-filled) .mb-slot { box-shadow: inset 0 0 0 1.5px var(--blue); }
+  .mb.is-dragging .mb-slot.is-over { background: var(--blue); }
+  .mb.is-dragging .mb-slot.is-over .mb-slot__k, .mb.is-dragging .mb-slot.is-over .mb-slot__empty { color: #fff; }
+  .mb-slot__add { justify-self: start; padding: 0.4rem 0.75rem; border: 0; border-radius: 10px; background: var(--text-strong); color: var(--bg); font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
   .mb-proj__needs { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; font-size: 0.72rem; }
   .mb-proj__needs span { color: var(--text-muted); font-weight: 600; }
   .mb-proj__needs i { font-style: normal; padding: 0.15rem 0.5rem; border-radius: 999px; background: var(--accent-wash); color: var(--blue); font-weight: 600; }

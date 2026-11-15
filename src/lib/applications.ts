@@ -202,3 +202,71 @@ export async function castVote(
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
+
+/* ------------------------------ WhatsApp list ----------------------------- */
+// mca-pipeline/add-whatsapp-list.sql. Accepted applicants wait on Manage >
+// WhatsApp until someone has added them to the lab's group.
+
+/** Remember that the decision email really went out. Quietly does nothing before the SQL is run. */
+export async function markDecisionEmailed(id: string): Promise<void> {
+  await supabaseAdmin().from('applications').update({ decision_emailed_at: new Date().toISOString() }).eq('id', id)
+    .then(() => {}, () => {});
+}
+
+export interface WhatsappRow {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  acceptedAt: number | null;
+  emailed: boolean;
+  addedAt: number | null;
+  addedBy: string | null;
+}
+
+/** Accepted applicants: those still to add (oldest acceptance first) and the 30 most recently added. */
+export async function listWhatsapp(): Promise<{ ready: boolean; error?: string; toAdd: WhatsappRow[]; added: WhatsappRow[] }> {
+  const { data, error } = await supabaseAdmin()
+    .from('applications')
+    .select('id,payload,reviewed_at,decision_emailed_at,whatsapp_added_at,whatsapp_added_by')
+    .eq('status', 'approved')
+    .order('reviewed_at', { ascending: true });
+  if (error) return { ready: false, error: error.message, toAdd: [], added: [] };
+  const rows: WhatsappRow[] = (data ?? []).map((r: any) => ({
+    id: r.id,
+    name: String(r.payload?.name ?? '').trim() || 'No name given',
+    email: String(r.payload?.email ?? '').trim(),
+    phone: String(r.payload?.whatsapp ?? '').trim(),
+    acceptedAt: r.reviewed_at ? new Date(r.reviewed_at).getTime() : null,
+    emailed: r.decision_emailed_at != null,
+    addedAt: r.whatsapp_added_at ? new Date(r.whatsapp_added_at).getTime() : null,
+    addedBy: r.whatsapp_added_by ?? null,
+  }));
+  return {
+    ready: true,
+    toAdd: rows.filter((r) => r.addedAt === null),
+    added: rows.filter((r) => r.addedAt !== null).sort((a, b) => (b.addedAt ?? 0) - (a.addedAt ?? 0)).slice(0, 30),
+  };
+}
+
+/** Mark as added to the group (by = who clicked), or put back on the list (by = null). */
+export async function setWhatsappAdded(ids: string[], by: string | null): Promise<string | null> {
+  if (!ids.length) return null;
+  const { error } = await supabaseAdmin()
+    .from('applications')
+    .update(by ? { whatsapp_added_at: new Date().toISOString(), whatsapp_added_by: by } : { whatsapp_added_at: null, whatsapp_added_by: null })
+    .in('id', ids)
+    .eq('status', 'approved');
+  return error ? error.message : null;
+}
+
+/** How many accepted applicants are still to be added to the WhatsApp group (0 before the SQL is run). */
+export async function whatsappToAddCount(): Promise<number> {
+  const { count, error } = await supabaseAdmin()
+    .from('applications')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'approved')
+    .is('whatsapp_added_at', null);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}

@@ -1,6 +1,6 @@
 ---
 import { pendingIdeaCount } from '../lib/ideas';
-import { pendingApplicationCount } from '../lib/applications';
+import { pendingApplicationCount, whatsappToAddCount } from '../lib/applications';
 import { unreadRequestCount } from '../lib/requests';
 import { hiddenProjectCount } from '../lib/hidden-papers';
 import { deletedProjectCount } from '../lib/deleted-papers';
@@ -9,7 +9,7 @@ import ThemeToggle from './ThemeToggle.astro';
 import LogoMark from './LogoMark.astro';
 
 interface Props {
-  active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'mentees' | 'requests' | 'testimonials' | 'hidden' | 'deleted' | 'access' | 'tasks' | 'new-idea' | 'journals' | 'progress';
+  active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'mentees' | 'requests' | 'testimonials' | 'hidden' | 'deleted' | 'access' | 'tasks' | 'new-idea' | 'journals' | 'progress' | 'whatsapp';
   name: string;
   role: string;
   email: string;
@@ -38,6 +38,7 @@ const pendingApps = isAdmin ? await safeCount(pendingApplicationCount) : 0;
 const unreadRequests = isAdmin ? await safeCount(unreadRequestCount) : 0;
 const hiddenCount = isAdmin ? await safeCount(hiddenProjectCount) : 0;
 const deletedCount = isAdmin ? await safeCount(deletedProjectCount) : 0;
+const whatsappCount = isAdmin ? await safeCount(whatsappToAddCount) : 0;
 
 // Two kinds of entry: a plain link, or a dropdown ('menu') grouping a few
 // related pages - Review (things waiting on a decision) and Manage
@@ -57,11 +58,12 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
         ],
       },
       {
-        type: 'menu', key: 'manage', label: 'Manage', badge: 0,
+        type: 'menu', key: 'manage', label: 'Manage', badge: whatsappCount,
         items: [
           { key: 'access', label: 'Members', href: '/admin/access', badge: 0 },
           { key: 'testimonials', label: 'Testimonials', href: '/admin/testimonials', badge: 0 },
           { key: 'mentees', label: 'Mentees', href: '/admin/mentees', badge: 0 },
+          { key: 'whatsapp', label: 'Add to WhatsApp', href: '/admin/whatsapp', badge: whatsappCount },
           { key: 'journals', label: 'Journals', href: '/admin/journals', badge: 0 },
           { key: 'hidden', label: 'Hidden', href: '/admin/hidden', badge: hiddenCount },
           { key: 'deleted', label: 'Deleted', href: '/admin/deleted', badge: deletedCount },

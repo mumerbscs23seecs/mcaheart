@@ -8,7 +8,7 @@ import { currentUser } from '../../lib/auth';
 import { getPipelineSession } from '../../lib/pipeline-auth';
 import {
   listApplications, getApplication, decideApplication,
-  listVotes, castVote, reviewerFor, scoreVotes, REVIEWERS,
+  listVotes, castVote, reviewerFor, scoreVotes, REVIEWERS, markDecisionEmailed,
   type Vote, type VoteSet,
 } from '../../lib/applications';
 import { deliverApplicationDecision, renderApplicationDecisionEmail } from '../../lib/recruitment-mailer';
@@ -153,7 +153,7 @@ if (Astro.request.method === 'POST') {
         const app = result.application;
         let emailed = true;
         try {
-          await deliverApplicationDecision({ to: app.email, name: app.name, decision: it.decision, note: app.decisionNote, cc, bcc });
+          if (await deliverApplicationDecision({ to: app.email, name: app.name, decision: it.decision, note: app.decisionNote, cc, bcc })) await markDecisionEmailed(app.id);
         } catch (err) {
           emailed = false;
           console.error('[applications] batch decision email failed:', err);
@@ -213,10 +213,11 @@ if (Astro.request.method === 'POST') {
       const app = result.application;
       let emailed = true;
       try {
-        await deliverApplicationDecision({
+        const reallySent = await deliverApplicationDecision({
           to: app.email, name: app.name, decision, note: app.decisionNote,
           cc: emailsFrom(form, 'cc'), bcc: emailsFrom(form, 'bcc'),
         });
+        if (reallySent) await markDecisionEmailed(app.id);
       } catch (err) {
         emailed = false;
         console.error('[applications] decision email failed:', err);
