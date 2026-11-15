@@ -75,11 +75,6 @@ const { list, fromDb } = await listJournals();
       </div>
     )}
 
-    <p class="jr__intro">
-      Every journal-name box in the workflow suggests these names as you type, and
-      &ldquo;Open journal site&rdquo; uses the link saved here.
-    </p>
-
     {fromDb && (
       <form method="post" class="adm-panel adm-add jr__add">
         <input type="hidden" name="action" value="save" />
@@ -182,7 +177,6 @@ const { list, fromDb } = await listJournals();
 </script>
 
 <style>
-  .jr__intro { margin: 0 0 var(--space-m); color: var(--text-muted); font-size: 0.9rem; max-width: 70ch; }
   .jr__add { margin-bottom: var(--space-m); }
   .jr__name { flex: 2 1 260px; }
   .jr__url { flex: 3 1 300px; }
