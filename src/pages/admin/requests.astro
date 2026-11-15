@@ -180,7 +180,7 @@ const detailRows = (r: RequestRecord) => intentRows(r);
                         <textarea name="body" required rows="14" maxlength="20000" data-rp-body>{first.body}</textarea>
                       </label>
                       <p class="rp__note">Sent from researchlab@mcaheart.com. Their reply comes back to that inbox. Edit anything before sending.</p>
-                      <button class="adm-btn adm-btn--on rp__send" type="submit">Send reply</button>
+                      <button class="btn rp__send" type="submit">Send reply</button>
                     </div>
                     <div class="rp__preview">
                       <p class="rp__preview-label">Preview</p>
@@ -273,7 +273,7 @@ const detailRows = (r: RequestRecord) => intentRows(r);
   .rp__field input:disabled { color: var(--text-muted); }
   .rp__field textarea { line-height: 1.55; resize: vertical; }
   .rp__note { margin: 0; font-size: 0.76rem; color: var(--text-muted); }
-  .rp__send { justify-self: start; padding: 0.6rem 1.1rem; font-size: 0.85rem; }
+  .rp__send { justify-self: start; }
   .rp__preview { display: grid; gap: 0.3rem; align-content: start; }
   .rp__preview-label { margin: 0; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
   .rp__frame { width: 100%; height: 560px; border: 1px solid var(--border-soft); background: #f3f3f3; }
