@@ -785,23 +785,23 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
   }
   .mb-proj[hidden] { display: none; }
   .mb.is-dragging .mb-proj { border-style: dashed; }
-  .mb-proj.is-over { border: 2px solid var(--blue); background: var(--accent-wash); padding: calc(0.9rem - 1px) calc(1rem - 1px); }
+  .mb.is-dragging .mb-proj.is-over { border: 2px solid var(--blue); background: var(--accent-wash); padding: calc(0.9rem - 1px) calc(1rem - 1px); }
   .mb-proj.is-busy { opacity: 0.6; }
   .mb-proj.is-flash { border-color: var(--ok); background: var(--ok-bg); }
   .mb-proj__title { font-size: 0.86rem; line-height: 1.35; color: var(--text-strong); }
   .mb-proj__title:hover { color: var(--blue); }
   .mb-proj__lead { margin: 0; font-size: 0.74rem; color: var(--text-muted); }
   .mb-proj__people { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
-  .mb-tag {
+  .mb :global(.mb-tag) {
     display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.3rem 0.2rem 0.6rem;
     background: var(--bg-tint); border: 1px solid var(--border-soft); border-radius: 999px; font-size: 0.76rem; color: var(--text-strong);
   }
-  .mb-tag__x {
+  .mb :global(.mb-tag__x) {
     border: 0; background: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
     font-size: 0.95rem; line-height: 1; color: var(--text-muted); cursor: pointer; padding: 0;
   }
-  .mb-tag__x:hover { background: var(--red-wash); color: var(--red); }
-  .mb-tag:not(:has(.mb-tag__x)) { padding-right: 0.6rem; }
+  .mb :global(.mb-tag__x:hover) { background: var(--red-wash); color: var(--red); }
+  .mb :global(.mb-tag:not(:has(.mb-tag__x))) { padding-right: 0.6rem; }
   .mb-proj__add {
     justify-self: start; margin-top: 0.2rem; padding: 0.4rem 0.75rem; border: 1px dashed var(--blue); border-radius: 8px;
     background: var(--accent-wash); color: var(--blue); font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer;
