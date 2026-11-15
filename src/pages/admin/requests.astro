@@ -2,7 +2,9 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
-import { listRequests, markAllRequestsRead, type RequestRecord } from '../../lib/requests';
+import { listRequests, getRequest, markAllRequestsRead, type RequestRecord } from '../../lib/requests';
+import { templatesFor, fillTemplate, renderReplyEmail, listReplies, recordReply } from '../../lib/request-replies';
+import { sendEmail } from '../../lib/email';
 import { INTENT_LABELS, INTENTS, type Intent } from '../../lib/contact-schema';
 import { intentRows } from '../../lib/mailer';
 
@@ -11,6 +13,33 @@ export const prerender = false;
 const me = currentUser(Astro.cookies);
 if (!me) return Astro.redirect('/login', 302);
 if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+// --- Reply by email --------------------------------------------------------
+// Sent, recorded, then back to this page (so a refresh can't send it twice).
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const requestId = String(form.get('requestId') ?? '');
+  const subject = String(form.get('subject') ?? '').trim().slice(0, 300);
+  const body = String(form.get('body') ?? '').trim().slice(0, 20000);
+  const template = String(form.get('template') ?? '') || null;
+  const typeParam = String(form.get('type') ?? '');
+  const back = (kind: 'ok' | 'err', msg: string) =>
+    Astro.redirect(`/admin/requests?${typeParam ? `type=${encodeURIComponent(typeParam)}&` : ''}${kind}=${encodeURIComponent(msg)}&open=${encodeURIComponent(requestId)}#req-${requestId}`, 303);
+  const r = requestId ? await getRequest(requestId).catch(() => undefined) : undefined;
+  if (!r) return back('err', 'That request no longer exists.');
+  if (!subject || !body) return back('err', 'The subject and the message both need text.');
+  const sent = await sendEmail({ to: r.email, subject, html: renderReplyEmail(body), replyTo: 'researchlab@mcaheart.com' })
+    .catch((e) => ({ ok: false as const, error: String(e) }));
+  if (!sent.ok) return back('err', `The email to ${r.email} could not be sent. ${'error' in sent ? sent.error ?? '' : ''}`.trim());
+  if ('id' in sent && sent.id === 'logged-only') return back('err', 'Email sending is not set up on this server, so nothing was sent.');
+  const recErr = await recordReply({ request_id: r.id, sent_by: me.name, to_email: r.email, subject, body, template });
+  return back('ok', recErr
+    ? `Reply sent to ${r.email}, but it could not be saved to the history (${recErr}).`
+    : `Reply sent to ${r.email}.`);
+}
+const flashOk = Astro.url.searchParams.get('ok');
+const flashErr = Astro.url.searchParams.get('err');
+const openId = Astro.url.searchParams.get('open') ?? '';
 
 const activeParam = Astro.url.searchParams.get('type') ?? '';
 const active: Intent | null = (INTENTS as readonly string[]).includes(activeParam)
@@ -30,6 +59,7 @@ try {
   dbError = err instanceof Error ? err.message : 'Could not load requests.';
 }
 const requests = active ? all.filter((r) => r.intent === active) : all;
+const { ready: repliesReady, byRequest: replies } = dbReady ? await listReplies() : { ready: false, byRequest: new Map() };
 
 const fmtDate = (t: number) => new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
 const ago = (t: number) => {
@@ -43,6 +73,13 @@ const detailRows = (r: RequestRecord) => intentRows(r);
 
 <AppLayout title="Requests" heading="Contact requests" user={me} active="requests">
   <div class="adm">
+    {flashOk && <div class="adm-flash adm-flash--ok" role="status"><p>{flashOk}</p></div>}
+    {flashErr && <div class="adm-flash adm-flash--error" role="alert"><p>{flashErr}</p></div>}
+    {dbReady && !repliesReady && (
+      <div class="adm-flash adm-flash--error">
+        <p>Replying by email needs <code>mca-pipeline/add-request-replies.sql</code>. Run it once in the Supabase SQL editor, then reload this page.</p>
+      </div>
+    )}
     {!dbReady && (
       <div class="adm-flash adm-flash--error">
         <p>
@@ -69,9 +106,10 @@ const detailRows = (r: RequestRecord) => intentRows(r);
 
     <div class="reqs__list">
       {requests.map((r) => (
-        <details class="idea">
+        <details class="idea" id={`req-${r.id}`} open={r.id === openId}>
           <summary class="idea__summary">
             <span class="idea__pill">{INTENT_LABELS[r.intent]}</span>
+            {(replies.get(r.id) ?? []).length > 0 && <span class="idea__pill idea__pill--ok">Replied</span>}
             {r.source === 'member' && <span class="idea__pill">From a member</span>}
             <span class="idea__title">{r.fullName}</span>
             <span class="idea__meta">{r.email} · {ago(r.submittedAt)}</span>
@@ -99,6 +137,59 @@ const detailRows = (r: RequestRecord) => intentRows(r);
                 </div>
               )}
             </dl>
+
+            {(replies.get(r.id) ?? []).length > 0 && (
+              <div class="rp-sent">
+                <p class="rp-sent__title">Replies sent</p>
+                {(replies.get(r.id) ?? []).map((x: any) => (
+                  <details class="rp-sent__item">
+                    <summary><b>{x.subject}</b> <span>by {x.sent_by} · {fmtDate(new Date(x.sent_at).getTime())}</span></summary>
+                    <p class="rp-sent__body">{x.body}</p>
+                  </details>
+                ))}
+              </div>
+            )}
+
+            {repliesReady && (() => {
+              const options = templatesFor(r).map((tpl) => ({ key: tpl.key, label: tpl.label, subject: fillTemplate(tpl.subject, r), body: fillTemplate(tpl.body, r) }));
+              const first = options[0];
+              return (
+                <details class="rp" open={r.id === openId && !!flashErr}>
+                  <summary class="rp__toggle">Reply by email</summary>
+                  <form method="post" class="rp__form" data-rp>
+                    <input type="hidden" name="requestId" value={r.id} />
+                    <input type="hidden" name="type" value={active ?? ''} />
+                    <script type="application/json" data-rp-templates set:html={JSON.stringify(options).replace(/</g, '\\u003c')} />
+                    <div class="rp__controls">
+                      <label class="rp__field">
+                        <span>Start from</span>
+                        <select name="template" data-rp-template>
+                          {options.map((o) => <option value={o.key}>{o.label}</option>)}
+                        </select>
+                      </label>
+                      <label class="rp__field">
+                        <span>To</span>
+                        <input value={r.email} disabled />
+                      </label>
+                      <label class="rp__field">
+                        <span>Subject</span>
+                        <input name="subject" required maxlength="300" value={first.subject} data-rp-subject />
+                      </label>
+                      <label class="rp__field">
+                        <span>Message</span>
+                        <textarea name="body" required rows="14" maxlength="20000" data-rp-body>{first.body}</textarea>
+                      </label>
+                      <p class="rp__note">Sent from researchlab@mcaheart.com. Their reply comes back to that inbox. Edit anything before sending.</p>
+                      <button class="adm-btn adm-btn--on rp__send" type="submit">Send reply</button>
+                    </div>
+                    <div class="rp__preview">
+                      <p class="rp__preview-label">Preview</p>
+                      <iframe class="rp__frame" title="Email preview" sandbox="" srcdoc={renderReplyEmail(first.body)} data-rp-frame></iframe>
+                    </div>
+                  </form>
+                </details>
+              );
+            })()}
           </div>
         </details>
       ))}
@@ -107,7 +198,87 @@ const detailRows = (r: RequestRecord) => intentRows(r);
   </div>
 </AppLayout>
 
+<script>
+  // Reply boxes: switching template refills subject + message (after asking,
+  // if the text was already edited); the preview follows the typing.
+  document.querySelectorAll<HTMLFormElement>('[data-rp]').forEach((form) => {
+    const raw = form.querySelector('[data-rp-templates]')?.textContent ?? '[]';
+    const options: { key: string; subject: string; body: string }[] = JSON.parse(raw);
+    const sel = form.querySelector<HTMLSelectElement>('[data-rp-template]')!;
+    const subject = form.querySelector<HTMLInputElement>('[data-rp-subject]')!;
+    const body = form.querySelector<HTMLTextAreaElement>('[data-rp-body]')!;
+    const frame = form.querySelector<HTMLIFrameElement>('[data-rp-frame]')!;
+    let current = options[0];
+    let timer = 0;
+    let seq = 0;
+
+    async function refresh() {
+      const mine = ++seq;
+      const fd = new FormData();
+      fd.set('body', body.value);
+      try {
+        const res = await fetch('/admin/requests/preview', { method: 'POST', body: fd });
+        if (!res.ok || mine !== seq) return;
+        frame.srcdoc = await res.text();
+      } catch { /* keep the last preview */ }
+    }
+    body.addEventListener('input', () => { clearTimeout(timer); timer = window.setTimeout(refresh, 450); });
+
+    sel.addEventListener('change', () => {
+      const next = options.find((o) => o.key === sel.value);
+      if (!next) return;
+      const edited = body.value !== current.body || subject.value !== current.subject;
+      if (edited && !confirm('Replace what you have typed with this template?')) { sel.value = current.key; return; }
+      current = next;
+      subject.value = next.subject;
+      body.value = next.body;
+      refresh();
+    });
+
+    form.addEventListener('submit', (e) => {
+      if (body.value.includes('[Write your reply here.]')) {
+        e.preventDefault();
+        alert('Replace "[Write your reply here.]" with your reply before sending.');
+        return;
+      }
+      const to = form.querySelector<HTMLInputElement>('input[disabled]')?.value ?? 'this person';
+      if (!confirm(`Send this reply to ${to}?`)) { e.preventDefault(); return; }
+      form.querySelector<HTMLButtonElement>('.rp__send')!.disabled = true;
+    });
+  });
+</script>
+
 <style>
+  .idea__pill--ok { color: var(--ok); background: var(--ok-bg); grid-area: auto; }
+  .idea__summary:has(.idea__pill--ok) { grid-template-columns: auto auto 1fr auto; grid-template-areas: 'pill ok title chev' 'pill ok meta chev'; }
+  .idea__summary .idea__pill--ok { grid-area: ok; align-self: start; margin-top: 0.1rem; }
+  .rp-sent { margin-top: 1rem; }
+  .rp-sent__title { margin: 0 0 0.4rem; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
+  .rp-sent__item { border: 1px solid var(--border-soft); padding: 0.5rem 0.75rem; margin-bottom: 0.4rem; }
+  .rp-sent__item summary { cursor: pointer; font-size: 0.85rem; color: var(--text-strong); }
+  .rp-sent__item summary span { color: var(--text-muted); font-size: 0.78rem; margin-left: 0.4rem; }
+  .rp-sent__body { margin: 0.6rem 0 0; font-size: 0.85rem; line-height: 1.6; color: var(--text); white-space: pre-wrap; }
+  .rp { margin-top: 1rem; border-top: 1px solid var(--border-soft); padding-top: 0.9rem; }
+  .rp__toggle { cursor: pointer; display: inline-block; padding: 0.5rem 0.9rem; background: var(--ink); color: var(--bg); font-size: 0.82rem; font-weight: 700; list-style: none; }
+  .rp__toggle::-webkit-details-marker { display: none; }
+  .rp[open] .rp__toggle { background: transparent; color: var(--text-strong); padding-left: 0; }
+  .rp__form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.2rem; margin-top: 0.8rem; }
+  .rp__controls { display: grid; gap: 0.7rem; align-content: start; }
+  .rp__field { display: grid; gap: 0.3rem; }
+  .rp__field span { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
+  .rp__field input, .rp__field select, .rp__field textarea {
+    width: 100%; padding: 0.6rem 0.75rem; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 0;
+    font: inherit; font-size: 0.88rem; color: var(--text-strong);
+  }
+  .rp__field input:disabled { color: var(--text-muted); }
+  .rp__field textarea { line-height: 1.55; resize: vertical; }
+  .rp__note { margin: 0; font-size: 0.76rem; color: var(--text-muted); }
+  .rp__send { justify-self: start; padding: 0.6rem 1.1rem; font-size: 0.85rem; }
+  .rp__preview { display: grid; gap: 0.3rem; align-content: start; }
+  .rp__preview-label { margin: 0; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
+  .rp__frame { width: 100%; height: 560px; border: 1px solid var(--border-soft); background: #f3f3f3; }
+  @media (max-width: 900px) { .rp__form { grid-template-columns: 1fr; } .rp__frame { height: 420px; } }
+
   .reqs__filter { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: var(--space-m); }
   .reqs__chip {
     display: inline-flex;
