@@ -1,7 +1,8 @@
 import type { IdeaPayload } from './idea-schema';
 import { CONFERENCE_LABELS, COMMITMENT_LABELS } from './idea-schema';
 import { sendEmail, type Attachment } from './email';
-import { p, heading, dataTable, emailShell, FOOTER_INTERNAL } from './email-layout';
+import { p, heading, dataTable, emailShell, alertBlock, FOOTER_INTERNAL } from './email-layout';
+import { isLabMember, NOT_IN_LAB_TEXT } from './lab-members';
 import { renderIdeaDecisionEmail, type IdeaDecisionOpts } from './idea-email-template';
 
 export { renderIdeaDecisionEmail, type IdeaDecisionOpts };
@@ -49,9 +50,10 @@ function rows(data: IdeaPayload): Array<[string, string]> {
   return items;
 }
 
-function renderEmail(data: IdeaPayload, hasFile: boolean): string {
+function renderEmail(data: IdeaPayload, hasFile: boolean, notInLab = false): string {
   const inner =
     heading('New research idea') +
+    (notInLab ? alertBlock(NOT_IN_LAB_TEXT) : '') +
     dataTable(rows(data)) +
     (hasFile ? p('A supporting document is attached to this email.', 'font-size:14px;margin-bottom:0') : '');
   return emailShell(inner, FOOTER_INTERNAL);
@@ -71,7 +73,7 @@ export async function deliverIdea(data: IdeaPayload, attachment?: Attachment): P
     to: TO,
     replyTo: data.leadEmail,
     subject: `New research idea: ${data.title}`,
-    html: renderEmail(data, Boolean(attachment)),
+    html: renderEmail(data, Boolean(attachment), (await isLabMember(data.leadEmail)) === false),
     attachments: attachment ? [attachment] : undefined,
   });
   if (!sent.ok) throw new Error(sent.error ?? 'Email delivery failed.');

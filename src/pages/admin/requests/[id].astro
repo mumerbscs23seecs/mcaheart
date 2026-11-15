@@ -1,0 +1,346 @@
+---
+/**
+ * Reply to one request by email, from the request template library. Laid out
+ * like the paper email page: pick a template on the left, fill in a few
+ * details, edit the draft on the right, then send.
+ */
+import AppLayout from '../../../layouts/AppLayout.astro';
+import EmailChips from '../../../components/EmailChips.astro';
+import '../../../styles/admin.css';
+import { currentUser } from '../../../lib/auth';
+import { getRequest } from '../../../lib/requests';
+import { renderReplyEmail, recordReply, listReplies } from '../../../lib/request-replies';
+import { REQUEST_TEMPLATES, CATEGORY_FOR_INTENT } from '../../../lib/request-templates';
+import { sendEmail } from '../../../lib/email';
+import { intentRows } from '../../../lib/mailer';
+import { INTENT_LABELS } from '../../../lib/contact-schema';
+import { COPY_SUGGESTIONS, emailsFrom } from '../../../lib/copy-suggestions';
+import { site } from '../../../data/site';
+
+export const prerender = false;
+
+const me = currentUser(Astro.cookies);
+if (!me) return Astro.redirect('/login', 302);
+if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+const id = String(Astro.params.id ?? '');
+if (!/^[0-9a-f-]{36}$/i.test(id)) return Astro.redirect('/admin/requests', 302);
+const r = await getRequest(id).catch(() => undefined);
+if (!r) return Astro.redirect(`/admin/requests?err=${encodeURIComponent('That request no longer exists.')}`, 303);
+
+const ret = String(Astro.url.searchParams.get('from') ?? '');
+const back = /^\/admin\/requests(\?[\w=&%-]*)?$/.test(ret) ? ret : '/admin/requests';
+const backTo = (msg: string) => `${back}${back.includes('?') ? '&' : '?'}ok=${encodeURIComponent(msg)}&open=${encodeURIComponent(id)}#req-${id}`;
+
+let flashErr = '';
+let posted: null | { cc: string[]; bcc: string[]; subject: string; body: string; template: string } = null;
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const cc = emailsFrom(form, 'cc').filter((e) => e !== r.email.toLowerCase());
+  const bcc = emailsFrom(form, 'bcc').filter((e) => e !== r.email.toLowerCase() && !cc.includes(e));
+  const subject = String(form.get('subject') ?? '').trim().slice(0, 300);
+  const body = String(form.get('body') ?? '').trim().slice(0, 20000);
+  const template = String(form.get('template') ?? '').trim() || 'Custom reply';
+  posted = { cc, bcc, subject, body, template };
+
+  if (!subject || !body) flashErr = 'The subject and the email both need text.';
+  else if (/\[(Recipient name|Your name|topic area|what the letter is for|deadline|start date|end date)\]/.test(body)) flashErr = 'The email still has a placeholder in square brackets, such as [Recipient name]. Fill it in before sending.';
+  else {
+    const sent = await sendEmail({ to: r.email, cc, bcc, subject, html: renderReplyEmail(body, { signature: false }), replyTo: 'researchlab@mcaheart.com' })
+      .catch((e) => ({ ok: false as const, error: String(e) }));
+    if (!sent.ok) flashErr = `The email to ${r.email} could not be sent. ${'error' in sent ? sent.error ?? '' : ''}`.trim();
+    else if ('id' in sent && sent.id === 'logged-only') flashErr = 'Email sending is not set up on this server, so nothing was sent.';
+    else {
+      const recErr = await recordReply({ request_id: r.id, sent_by: me.name, to_email: r.email, subject, body, template });
+      return Astro.redirect(backTo(recErr
+        ? `Reply sent to ${r.email}, but it could not be saved to the history (${recErr}).`
+        : `Reply sent to ${r.email}.`), 303);
+    }
+  }
+}
+
+const { byRequest } = await listReplies();
+const earlier = byRequest.get(r.id) ?? [];
+
+const any = r as any;
+const values = {
+  recipient: (r.fullName || '').trim(),
+  sender: me.name,
+  topic: any.topicArea?.trim() ?? '',
+  purpose: any.recPurpose?.trim() ?? '',
+  deadline: any.recDeadline?.trim() ?? '',
+  start: any.obsStart?.trim() ?? '',
+  end: any.obsEnd?.trim() ?? '',
+  notes: '',
+  ideaLink: `${site.url}/submit-idea`,
+  joinLink: `${site.url}/join-lab`,
+};
+const startCategory = CATEGORY_FOR_INTENT[r.intent] ?? 'General';
+const fields: { key: keyof typeof values; label: string; placeholder?: string; show: boolean }[] = [
+  { key: 'recipient', label: 'Their name', show: true },
+  { key: 'sender', label: 'Your name', show: true },
+  { key: 'topic', label: 'Topic area', placeholder: 'e.g. heart failure outcomes', show: r.intent === 'topic' },
+  { key: 'purpose', label: 'What the letter is for', placeholder: 'e.g. the 2027 IM residency match', show: r.intent === 'recommendation' },
+  { key: 'deadline', label: 'Letter deadline', placeholder: 'e.g. 1 December 2026', show: r.intent === 'recommendation' },
+  { key: 'start', label: 'Observership from', placeholder: 'e.g. 1 July 2027', show: r.intent === 'observership' },
+  { key: 'end', label: 'Observership to', placeholder: 'e.g. 15 July 2027', show: r.intent === 'observership' },
+];
+const fmt = (t: number | string) => new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+---
+
+<AppLayout title={`Reply to ${r.fullName}`} user={me} active="requests">
+  <div class="adm rq">
+    <a class="rq__back" href={back}>Back to requests</a>
+    <h1 class="rq__title">Reply to {r.fullName}</h1>
+    <p class="rq__sub">{INTENT_LABELS[r.intent]} · received {fmt(r.submittedAt)}{earlier.length > 0 && ` · already replied ${earlier.length} time${earlier.length === 1 ? '' : 's'}`}</p>
+
+    {flashErr && <div class="adm-flash adm-flash--error" role="alert"><p>{flashErr}</p></div>}
+
+    <div class="rq__grid">
+      <aside class="rq__side">
+        <details class="rq__req" open>
+          <summary class="rq__h">Their request</summary>
+          <dl class="rq__dl">
+            <div><dt>Email</dt><dd>{r.email}</dd></div>
+            {intentRows(r).filter(([, v]) => v && v !== '-').map(([k, v]) => <div><dt>{k}</dt><dd>{v}</dd></div>)}
+          </dl>
+        </details>
+
+        <h2 class="rq__h rq__h--gap">Choose a template</h2>
+        <label class="rq__field"><span>Category</span><select data-rq-cat></select></label>
+        <label class="rq__field"><span>Template</span><select data-rq-tpl></select></label>
+        <p class="rq__desc" data-rq-desc></p>
+
+        <h2 class="rq__h rq__h--gap">Details</h2>
+        {fields.filter((f) => f.show).map((f) => (
+          <label class="rq__field"><span>{f.label}</span><input data-rq-val={f.key} value={values[f.key]} placeholder={f.placeholder ?? ''} /></label>
+        ))}
+        <label class="rq__field"><span>Anything to add</span><textarea data-rq-val="notes" rows="3" placeholder="A sentence or two specific to this person. It goes where the template allows."></textarea></label>
+      </aside>
+
+      <form method="post" class="rq__main" data-rq-form>
+        <input type="hidden" name="template" data-rq-template-name />
+        <p class="rq__tag" data-rq-tag></p>
+        <h2 class="rq__draft" data-rq-draft-title></h2>
+
+        <div class="rq__to"><span class="echips__label">To</span><span class="rq__to-v">{r.fullName} &lt;{r.email}&gt;</span></div>
+        <EmailChips name="cc" label="CC" initial={posted?.cc ?? []} listId="rq-none" recommended={COPY_SUGGESTIONS} />
+        <EmailChips name="bcc" label="BCC" initial={posted?.bcc ?? []} listId="rq-none" recommended={COPY_SUGGESTIONS} />
+        <datalist id="rq-none"></datalist>
+
+        <label class="rq__field"><span>Subject</span><input name="subject" class="rq__subject" data-rq-subject required maxlength="300" /></label>
+        <div class="rq__field">
+          <span class="rq__bodyhead">
+            <span>Email</span>
+            <span class="rq__tabs" role="tablist">
+              <button type="button" class="rq__tab is-on" role="tab" aria-selected="true" data-rq-tab="write">Write</button>
+              <button type="button" class="rq__tab" role="tab" aria-selected="false" data-rq-tab="preview">Preview</button>
+            </span>
+          </span>
+          <textarea name="body" class="rq__body" data-rq-body spellcheck="true" required aria-label="Email"></textarea>
+          <iframe class="rq__frame" title="Email preview" sandbox="" data-rq-frame hidden></iframe>
+        </div>
+
+        <div class="rq__actions">
+          <button type="submit" class="btn rq__send">Send reply</button>
+          <button type="button" class="rq__ghost" data-rq-reset>Reset to template</button>
+          <button type="button" class="rq__ghost" data-rq-copy>Copy</button>
+          <a class="rq__ghost" href={back}>Cancel</a>
+        </div>
+        <p class="rq__status" data-rq-status aria-live="polite">Sent from researchlab@mcaheart.com. Their reply comes back to that inbox.</p>
+      </form>
+    </div>
+
+    {earlier.length > 0 && (
+      <section class="rq__earlier">
+        <h2 class="rq__h">Earlier replies</h2>
+        {earlier.map((x) => (
+          <details class="rq__sent">
+            <summary><b>{x.subject}</b><span>{fmt(x.sent_at)} by {x.sent_by}</span></summary>
+            <p>{x.body}</p>
+          </details>
+        ))}
+      </section>
+    )}
+  </div>
+
+  <script type="application/json" id="rq-data" set:html={JSON.stringify({ templates: REQUEST_TEMPLATES, values, startCategory, posted }).replace(/</g, '\\u003c')} />
+</AppLayout>
+
+<script>
+  type Tpl = { category: string; title: string; description: string; subject: string; body: string };
+  const data = JSON.parse(document.getElementById('rq-data')!.textContent ?? '{}') as {
+    templates: Tpl[]; values: Record<string, string>; startCategory: string;
+    posted: null | { subject: string; body: string; template: string };
+  };
+  const T = data.templates;
+  const $ = <E extends Element>(s: string) => document.querySelector<E>(s)!;
+  const cat = $<HTMLSelectElement>('[data-rq-cat]');
+  const tpl = $<HTMLSelectElement>('[data-rq-tpl]');
+  const subject = $<HTMLInputElement>('[data-rq-subject]');
+  const body = $<HTMLTextAreaElement>('[data-rq-body]');
+  const frame = $<HTMLIFrameElement>('[data-rq-frame]');
+  const status = $<HTMLElement>('[data-rq-status]');
+  const tabs = [...document.querySelectorAll<HTMLButtonElement>('[data-rq-tab]')];
+  let active = T[0];
+  let edited = false;
+
+  const FALLBACK: Record<string, string> = {
+    recipient: '[Recipient name]', sender: '[Your name]', topic: '[topic area]', purpose: '[what the letter is for]',
+    deadline: '[deadline]', start: '[start date]', end: '[end date]',
+  };
+  function vals() {
+    const v: Record<string, string> = { ...data.values };
+    document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('[data-rq-val]').forEach((el) => { v[el.dataset.rqVal!] = el.value.trim(); });
+    for (const k in FALLBACK) if (!v[k]) v[k] = FALLBACK[k];
+    return v;
+  }
+  const fill = (s: string, v: Record<string, string>) =>
+    s.replace(/\{\{(\w+)\}\}/g, (_, k) => v[k] ?? '').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+
+  function load(t: Tpl) {
+    active = t;
+    const v = vals();
+    subject.value = fill(t.subject, v);
+    body.value = fill(t.body, v);
+    $<HTMLElement>('[data-rq-tag]').textContent = t.category;
+    $<HTMLElement>('[data-rq-draft-title]').textContent = t.title;
+    $<HTMLElement>('[data-rq-desc]').textContent = t.description;
+    $<HTMLInputElement>('[data-rq-template-name]').value = `${t.category}: ${t.title}`;
+    showTab('write');
+  }
+  function fillTemplates() {
+    tpl.innerHTML = '';
+    T.forEach((t, i) => {
+      if (t.category !== cat.value) return;
+      tpl.append(Object.assign(document.createElement('option'), { value: String(i), textContent: t.title }));
+    });
+    load(T[Number(tpl.value)]);
+  }
+  function confirmReplace() {
+    return !edited || confirm('Replace what you have written with this template?');
+  }
+
+  [...new Set(T.map((t) => t.category))].forEach((c) => cat.append(Object.assign(document.createElement('option'), { value: c, textContent: c })));
+  cat.value = data.startCategory;
+  let lastCat = cat.value;
+  let lastTpl = '';
+  cat.addEventListener('change', () => {
+    if (!confirmReplace()) { cat.value = lastCat; return; }
+    lastCat = cat.value; fillTemplates(); lastTpl = tpl.value; edited = false;
+  });
+  tpl.addEventListener('change', () => {
+    if (!confirmReplace()) { tpl.value = lastTpl; return; }
+    lastTpl = tpl.value; load(T[Number(tpl.value)]); edited = false;
+  });
+  [subject, body].forEach((el) => el.addEventListener('input', () => { edited = true; }));
+  document.querySelectorAll('[data-rq-val]').forEach((el) => el.addEventListener('input', () => {
+    if (!edited) { load(active); return; }
+    status.textContent = 'You have edited the email by hand, so the details were not applied. Press Reset to template to apply them.';
+  }));
+  $('[data-rq-reset]').addEventListener('click', () => {
+    if (!confirmReplace()) return;
+    load(active); edited = false; status.textContent = 'The email was reset from the template with the current details.';
+  });
+  $('[data-rq-copy]').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(`Subject: ${subject.value}\n\n${body.value}`); status.textContent = 'Copied.'; }
+    catch { status.textContent = 'Copying was blocked. Select the text and copy it yourself.'; }
+  });
+
+  async function showTab(which: string) {
+    tabs.forEach((t) => { const on = t.dataset.rqTab === which; t.classList.toggle('is-on', on); t.setAttribute('aria-selected', String(on)); });
+    const preview = which === 'preview';
+    body.hidden = preview;
+    frame.hidden = !preview;
+    if (preview) {
+      const fd = new FormData();
+      fd.set('body', body.value);
+      fd.set('signature', '0');
+      try {
+        const res = await fetch('/admin/requests/preview', { method: 'POST', body: fd });
+        if (res.ok) frame.srcdoc = await res.text();
+      } catch { /* keep the last preview */ }
+    }
+  }
+  tabs.forEach((t) => t.addEventListener('click', () => showTab(t.dataset.rqTab ?? 'write')));
+
+  $<HTMLFormElement>('[data-rq-form]').addEventListener('submit', (e) => {
+    const left = (subject.value + '\n' + body.value).match(/\[(Recipient name|Your name|topic area|what the letter is for|deadline|start date|end date)\]/);
+    if (left) {
+      e.preventDefault(); showTab('write');
+      status.textContent = `Fill in ${left[0]} before sending.`;
+      return;
+    }
+    if (!confirm('Send this reply now?')) { e.preventDefault(); return; }
+    const btn = $<HTMLButtonElement>('.rq__send');
+    setTimeout(() => { btn.disabled = true; btn.textContent = 'Sending…'; }, 0);
+  });
+
+  fillTemplates();
+  lastTpl = tpl.value;
+  // After a failed send, put back exactly what was written.
+  if (data.posted) {
+    const i = T.findIndex((t) => `${t.category}: ${t.title}` === data.posted!.template);
+    if (i >= 0) { cat.value = T[i].category; lastCat = cat.value; fillTemplates(); tpl.value = String(i); lastTpl = tpl.value; load(T[i]); }
+    subject.value = data.posted.subject;
+    body.value = data.posted.body;
+    edited = true;
+  }
+</script>
+
+<style>
+  .rq { max-width: 1180px; }
+  .rq__back { display: inline-flex; gap: 8px; margin-bottom: 14px; font-size: 0.9rem; font-weight: 600; color: var(--text-strong); }
+  .rq__back::before { content: '\2190'; }
+  .rq__back:hover { color: var(--blue); }
+  .rq__title { margin: 0; font-size: clamp(1.6rem, 1.2rem + 1.2vw, 2.2rem); line-height: 1.15; color: var(--text-strong); }
+  .rq__sub { margin: 6px 0 0; font-size: 0.92rem; color: var(--text-muted); }
+  .rq__grid { display: grid; grid-template-columns: minmax(260px, 350px) minmax(0, 1fr); gap: 22px; align-items: start; margin-top: 22px; }
+  .rq__side, .rq__main { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-soft); padding: 22px 24px; }
+  .rq__h { margin: 0 0 12px; font-size: 1rem; font-weight: 700; color: var(--text-strong); }
+  .rq__h--gap { margin-top: 22px; padding-top: 20px; box-shadow: 0 -1px 0 var(--border-soft); }
+  .rq__req summary { cursor: pointer; list-style: none; }
+  .rq__req summary::-webkit-details-marker { display: none; }
+  .rq__req summary::after { content: ' \25BE'; color: var(--text-muted); }
+  .rq__req:not([open]) summary { margin-bottom: 0; }
+  .rq__dl { margin: 0; display: grid; gap: 10px; }
+  .rq__dl dt { font-size: 0.76rem; font-weight: 700; color: var(--text-muted); }
+  .rq__dl dd { margin: 2px 0 0; font-size: 0.88rem; line-height: 1.55; color: var(--text); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 14em; overflow: auto; }
+  .rq__field { display: grid; gap: 6px; margin-bottom: 14px; }
+  .rq__field > span, .rq__bodyhead > span:first-child { font-size: 0.86rem; font-weight: 600; color: var(--text-strong); }
+  .rq__field input, .rq__field select, .rq__field textarea {
+    width: 100%; padding: 10px 12px; border: 1px solid var(--border-soft); background: var(--bg);
+    color: var(--text-strong); font: inherit; font-size: 0.94rem;
+  }
+  .rq__field input:focus, .rq__field select:focus, .rq__field textarea:focus { outline: 2px solid var(--blue); outline-offset: -1px; }
+  .rq__desc { margin: -4px 0 0; font-size: 0.84rem; line-height: 1.5; color: var(--text-muted); }
+  .rq__tag { display: inline-block; margin: 0 0 8px; padding: 4px 10px; font-size: 0.76rem; font-weight: 700; color: var(--blue); background: var(--accent-wash); }
+  .rq__draft { margin: 0 0 18px; font-size: 1.25rem; color: var(--text-strong); }
+  .rq__to { display: grid; gap: 6px; margin-bottom: 14px; }
+  .rq__to-v { padding: 10px 12px; background: var(--bg-tint); font-size: 0.92rem; color: var(--text-strong); overflow-wrap: anywhere; }
+  .rq__subject { font-weight: 600; }
+  .rq__bodyhead { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  .rq__tabs { display: flex; gap: 1rem; }
+  .rq__tab { border: 0; background: none; padding: 0.2rem 0; font: inherit; font-size: 0.84rem; font-weight: 700; color: var(--text-muted); cursor: pointer; box-shadow: inset 0 -2px 0 transparent; }
+  .rq__tab.is-on { color: var(--text-strong); box-shadow: inset 0 -2px 0 var(--blue); }
+  .rq__body { min-height: 440px; resize: vertical; line-height: 1.65; }
+  .rq__body[hidden], .rq__frame[hidden] { display: none; }
+  .rq__frame { display: block; width: 100%; height: 620px; border: 0; background: #f3f3f3; }
+  .rq__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; }
+  .rq__ghost { display: inline-flex; align-items: center; padding: 0.62rem 1rem; border: 0; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); font: inherit; font-size: 0.9rem; font-weight: 600; color: var(--text-strong); cursor: pointer; text-decoration: none; }
+  .rq__ghost:hover { box-shadow: inset 0 0 0 1px var(--blue); color: var(--blue); }
+  .rq__status { margin: 12px 0 0; font-size: 0.82rem; color: var(--text-muted); }
+  .rq__earlier { margin-top: 26px; display: grid; gap: 6px; }
+  .rq__sent { background: var(--ok-bg); padding: 0.65rem 0.9rem; }
+  .rq__sent summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 0.2rem 0.9rem; font-size: 0.88rem; color: var(--text-strong); list-style: none; }
+  .rq__sent summary::-webkit-details-marker { display: none; }
+  .rq__sent summary span { color: var(--text-muted); }
+  .rq__sent p { margin: 0.6rem 0 0.2rem; font-size: 0.86rem; line-height: 1.6; white-space: pre-wrap; color: var(--text); }
+  .rq :global(.echips) { margin-bottom: 14px; }
+  .rq :global(.echips__label) { font-size: 0.86rem; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text-strong); }
+  @media (max-width: 880px) {
+    .rq__grid { grid-template-columns: 1fr; }
+    .rq__side, .rq__main { padding: 18px 16px; }
+  }
+</style>

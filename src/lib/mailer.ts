@@ -1,7 +1,8 @@
 import type { ContactPayload } from './contact-schema';
 import { INTENT_LABELS } from './contact-schema';
 import { sendEmail, type Attachment } from './email';
-import { esc, p, heading, dataTable, emailShell, FOOTER_INTERNAL } from './email-layout';
+import { esc, p, heading, dataTable, emailShell, alertBlock, FOOTER_INTERNAL } from './email-layout';
+import { isLabMember, NOT_IN_LAB_TEXT } from './lab-members';
 
 /**
  * Contact-form delivery, sent from researchlab@ (src/lib/email.ts). Env:
@@ -55,9 +56,10 @@ export function intentRows(data: ContactPayload): Array<[string, string]> {
   ];
 }
 
-function renderEmail(data: ContactPayload, note: string): string {
+function renderEmail(data: ContactPayload, note: string, notInLab = false): string {
   const inner =
     heading(data.source === 'member' ? 'New request from a member' : 'New enquiry from the website') +
+    (notInLab ? alertBlock(NOT_IN_LAB_TEXT) : '') +
     dataTable([
       ['Name', data.fullName],
       ['Email', data.email],
@@ -79,6 +81,9 @@ export interface DeliverOpts {
   cvTooLarge?: boolean;
 }
 
+// Requests where it matters whether the sender is part of the lab.
+const MEMBER_CHECK: string[] = ['topic', 'recommendation'];
+
 export async function deliverEnquiry(data: ContactPayload, opts: DeliverOpts = {}): Promise<void> {
   const note = opts.cvTooLarge
     ? p(`${esc(opts.cvFilename ?? 'The CV')} was too large to attach. Please ask the sender for a copy directly.`, 'font-size:14px;margin-bottom:0')
@@ -90,7 +95,7 @@ export async function deliverEnquiry(data: ContactPayload, opts: DeliverOpts = {
     to: TO,
     replyTo: data.email,
     subject: `${data.source === 'member' ? 'Member request' : 'Website enquiry'} (${INTENT_LABELS[data.intent]}): ${data.fullName}`,
-    html: renderEmail(data, note),
+    html: renderEmail(data, note, MEMBER_CHECK.includes(data.intent) && (await isLabMember(data.email)) === false),
     attachments: opts.attachments,
   });
   if (!sent.ok) throw new Error(sent.error ?? 'Email delivery failed.');

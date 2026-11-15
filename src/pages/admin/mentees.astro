@@ -3,7 +3,7 @@ import AppLayout from '../../layouts/AppLayout.astro';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
 import { getPipelineSession } from '../../lib/pipeline-auth';
-import { listReviews, average, type MenteeReview } from '../../lib/mentee-reviews';
+import { listReviews, average, SCORE_FIELDS, fmtReviewDate, type MenteeReview } from '../../lib/mentee-reviews';
 import { SKILLS, SKILL_SHORT, isSkill } from '../../lib/skills';
 import { loadMemberships, dayNumber, shortDate, LOG_LABEL, STATUS_LABEL, type MemberRow } from '../../lib/membership';
 
@@ -178,6 +178,32 @@ const daysUntil = (d: string) => Math.round((Date.parse(`${d}T00:00:00Z`) - Date
 
 const boardMentees = mentees.filter((m) => m.flag_status !== 'blacklisted' && isCurrent(m.id));
 const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_id}`));
+
+// Ratings for the board: each mentee's averages and their rating on every paper.
+const refByProject = new Map<string, string>();
+for (const list of assignmentsByPerson.values()) for (const a of list) if (a.project?.ref) refByProject.set(a.project_id, a.project.ref);
+type Rating = {
+  overall: number | null; n: number;
+  fields: { label: string; value: number | null }[];
+  again: { yes: number; maybe: number; no: number };
+  papers: { ref: string; projectId: string; overall: number; date: string }[];
+};
+const ratingOf = new Map<string, Rating>();
+for (const m of boardMentees) {
+  const rs = allReviews.filter((r) => r.person_id === m.id);
+  const again = { yes: 0, maybe: 0, no: 0 };
+  for (const r of rs) if (r.work_again) again[r.work_again]++;
+  ratingOf.set(m.id, {
+    overall: average(rs, 'overall'),
+    n: rs.length,
+    fields: SCORE_FIELDS.map(([f, label]) => ({ label, value: average(rs, f) })),
+    again,
+    papers: rs.map((r) => ({ ref: refByProject.get(r.project_id) ?? 'Paper', projectId: r.project_id, overall: r.overall, date: fmtReviewDate(r.created_at) })),
+  });
+}
+const ratingJson = JSON.stringify(Object.fromEntries(
+  [...ratingOf].map(([id, r]) => [id, { ...r, name: menteeName.get(id) ?? '', projects: (assignmentsByPerson.get(id) ?? []).length }]),
+)).replace(/</g, '\\u003c');
 ---
 
 <AppLayout title="Mentees" heading="Mentees" user={me} active="mentees">
@@ -502,13 +528,21 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
                 <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
                 <input type="search" placeholder="Find a mentee" aria-label="Find a mentee" data-mb-psearch autocomplete="off" />
               </label>
-              <p class="mb__hint">Move a name onto a project to add them. On a phone, tap a name, then <b>Add here</b>.</p>
+              <p class="mb__hint">Move a name onto a project to add them. On a phone, tap a name, then <b>Add here</b>. Tap a name to see their ratings.</p>
+              {reviewsReady && (
+                <div class="mb__sort" role="group" aria-label="Order mentees by">
+                  <span>Order by</span>
+                  <button type="button" class="mb-sort is-on" data-mb-sort="name" aria-pressed="true">Name</button>
+                  <button type="button" class="mb-sort" data-mb-sort="rating" aria-pressed="false">Highest rated</button>
+                </div>
+              )}
               <ul class="mb__chips" data-mb-chips>
                 {boardMentees.map((m) => {
                   const count = (assignmentsByPerson.get(m.id) ?? []).length;
                   const sk = skillsOf(m);
+                  const rt = ratingOf.get(m.id);
                   return (
-                    <li data-mb-chip-row data-name={m.full_name.toLowerCase()} data-skills={sk.join('|')}>
+                    <li data-mb-chip-row data-name={m.full_name.toLowerCase()} data-skills={sk.join('|')} data-rating={rt?.overall ?? ''} data-reviews={rt?.n ?? 0}>
                       <button type="button" class:list={['mb-chip', !m.open_to_assignment && 'is-unavail', m.flag_status === 'red_flag' && 'is-flag']}
                         data-mb-chip data-id={m.id} data-label={m.full_name} data-skills={sk.join('|')} aria-pressed="false">
                         <span class="mb-chip__top">
@@ -516,6 +550,9 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
                           <span class="mb-chip__count" data-mb-count={count} title="Projects they're on">{count}</span>
                         </span>
                         {sk.length > 0 && <span class="mb-chip__skills">{sk.map((x) => SKILL_SHORT[x as keyof typeof SKILL_SHORT]).join(' · ')}</span>}
+                        {reviewsReady && (rt && rt.overall !== null
+                          ? <span class="mb-chip__rate"><span class="mb-dots" aria-hidden="true">{[1, 2, 3, 4, 5].map((k) => <i class:list={[k <= Math.round(rt.overall!) && 'on']} />)}</span><b>{rt.overall}</b> from {rt.n} review{rt.n === 1 ? '' : 's'}</span>
+                          : <span class="mb-chip__rate mb-chip__rate--none">Not reviewed yet</span>)}
                         {(!m.open_to_assignment || m.flag_status === 'red_flag') && (
                           <span class="mb-chip__warn">{!m.open_to_assignment ? 'Unavailable' : 'Red flag'}</span>
                         )}
@@ -532,6 +569,7 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
                 <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
                 <input type="search" placeholder={`Find one of ${boardProjects.length} ongoing projects`} aria-label="Find a project" data-mb-jsearch autocomplete="off" />
               </label>
+              <section class="mb-info" data-mb-info hidden aria-live="polite" aria-label="Ratings of the selected mentee"></section>
               {boardProjects.length === 0 && <p class="mb__empty">No ongoing projects right now.</p>}
               <div class="mb__grid" data-mb-grid>
                 {boardProjects.map((p) => {
@@ -565,6 +603,7 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
             </div>
           </div>
 
+          <script type="application/json" id="mb-ratings" set:html={ratingJson} />
           <div class="mb-toast" data-mb-toast role="status" aria-live="polite" hidden>
             <span data-mb-toast-text></span>
             <button type="button" class="mb-toast__undo" data-mb-undo hidden>Undo</button>
@@ -744,6 +783,69 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
       unassign(card, personId, name);
     });
 
+    // ---- Ratings of the picked mentee, and ordering by rating ----
+    type R = { name: string; projects: number; overall: number | null; n: number; fields: { label: string; value: number | null }[];
+      again: { yes: number; maybe: number; no: number }; papers: { ref: string; projectId: string; overall: number; date: string }[] };
+    let ratings: Record<string, R> = {};
+    try { ratings = JSON.parse(document.getElementById('mb-ratings')?.textContent ?? '{}'); } catch { ratings = {}; }
+    const info = board.querySelector<HTMLElement>('[data-mb-info]');
+    const el = (tag: string, cls: string, text?: string) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+    function showRatings(chip: HTMLButtonElement | null) {
+      if (!info) return;
+      const r = chip ? ratings[chip.dataset.id ?? ''] : undefined;
+      info.replaceChildren();
+      info.hidden = !r || !chip;
+      if (!r || !chip) return;
+      const head = el('div', 'mb-info__head');
+      const who = el('div', 'mb-info__who');
+      who.append(el('b', '', r.name), el('span', '', `${r.projects} project${r.projects === 1 ? '' : 's'} · ${r.n ? `${r.n} review${r.n === 1 ? '' : 's'}` : 'not reviewed yet'}`));
+      const big = el('div', 'mb-info__big');
+      big.append(el('b', '', r.overall === null ? '-' : String(r.overall)), el('span', '', r.overall === null ? 'no rating' : 'out of 5 overall'));
+      head.append(who, big);
+      info.append(head);
+      if (r.n) {
+        const bars = el('dl', 'mb-info__bars');
+        for (const f of r.fields) {
+          const row = el('div', 'mb-info__bar');
+          const track = el('span', 'mb-info__track');
+          const fill = el('span', 'mb-info__fill');
+          fill.style.width = `${f.value ? (f.value / 5) * 100 : 0}%`;
+          track.append(fill);
+          const dd = el('dd', '');
+          dd.append(track, el('b', '', f.value === null ? 'Not rated' : `${f.value}`));
+          row.append(el('dt', '', f.label), dd);
+          bars.append(row);
+        }
+        info.append(bars);
+        const papers = el('p', 'mb-info__papers');
+        papers.append(el('span', 'mb-info__k', 'By paper'));
+        for (const pp of r.papers) {
+          const a = el('a', 'mb-info__paper', `${pp.ref} ${pp.overall}/5`) as HTMLAnchorElement;
+          a.href = `/pipeline/projects/${pp.projectId}#mentees`;
+          a.title = `Reviewed ${pp.date}`;
+          papers.append(a);
+        }
+        info.append(papers);
+        info.append(el('p', 'mb-info__again', `Would work with them again: ${r.again.yes} yes, ${r.again.maybe} maybe, ${r.again.no} no`));
+      } else {
+        info.append(el('p', 'mb-info__again', 'No lead has reviewed them yet. Reviews are added on each paper page once they have worked on it.'));
+      }
+      const more = el('a', 'mb-info__more', 'See their full progress') as HTMLAnchorElement;
+      more.href = `/admin/mentees/${chip.dataset.id}`;
+      info.append(more);
+    }
+    const chipList = board.querySelector<HTMLElement>('[data-mb-chips]');
+    board.querySelectorAll<HTMLButtonElement>('[data-mb-sort]').forEach((b) => b.addEventListener('click', () => {
+      board.querySelectorAll<HTMLButtonElement>('[data-mb-sort]').forEach((x) => { const on = x === b; x.classList.toggle('is-on', on); x.setAttribute('aria-pressed', String(on)); });
+      if (!chipList) return;
+      const rows = [...chipList.querySelectorAll<HTMLElement>('[data-mb-chip-row]')];
+      const byName = (a: HTMLElement, c: HTMLElement) => (a.dataset.name ?? '').localeCompare(c.dataset.name ?? '');
+      rows.sort(b.dataset.mbSort === 'rating'
+        ? (a, c) => (Number(c.dataset.rating || -1) - Number(a.dataset.rating || -1)) || (Number(c.dataset.reviews) - Number(a.dataset.reviews)) || byName(a, c)
+        : byName);
+      chipList.append(...rows);
+    }));
+
     // ---- Tap / keyboard: pick a name, then "Add here" on a project ----
     function select(chip: HTMLButtonElement | null) {
       if (selected) { selected.classList.remove('is-picked'); selected.setAttribute('aria-pressed', 'false'); }
@@ -751,6 +853,7 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
       if (selected) { selected.classList.add('is-picked'); selected.setAttribute('aria-pressed', 'true'); }
       board.classList.toggle('has-pick', !!selected);
       markMatches(selected);
+      showRatings(selected);
       for (const card of cards) {
         const add = card.querySelector<HTMLButtonElement>('[data-mb-add]')!;
         add.hidden = !selected;
@@ -887,7 +990,7 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
   .mb__people {
     position: sticky; top: 1rem; display: grid; gap: 0.7rem; padding: 1rem;
     background: var(--bg-tint); border-radius: 18px;
-    max-height: calc(100vh - 2rem); min-height: 0; grid-template-rows: auto auto minmax(0, 1fr) auto;
+    max-height: calc(100vh - 2rem); min-height: 0; grid-template-rows: auto auto auto minmax(0, 1fr) auto;
   }
   .mb__search {
     display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.8rem;
@@ -920,6 +1023,43 @@ const reviewedPairs = new Set(allReviews.map((r) => `${r.project_id}:${r.person_
   .mb-chip.is-picked .mb-chip__skills, .mb-chip.is-picked .mb-chip__warn { color: rgba(255, 255, 255, 0.85); }
   .mb-chip.is-picked .mb-chip__count { background: rgba(255, 255, 255, 0.2); color: #fff; }
   .mb-chip.is-dragged { opacity: 0.4; }
+  .mb-chip__rate { display: flex; align-items: center; gap: 0.4rem; font-size: 0.74rem; color: var(--text-muted); }
+  .mb-chip__rate b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
+  .mb-chip__rate--none { font-style: italic; }
+  .mb-dots { display: inline-flex; gap: 2px; }
+  .mb-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
+  .mb-dots i.on { background: var(--blue); }
+  .mb-chip.is-picked .mb-chip__rate, .mb-chip.is-picked .mb-chip__rate b { color: #fff; }
+  .mb-chip.is-picked .mb-dots i { background: rgba(255, 255, 255, 0.35); }
+  .mb-chip.is-picked .mb-dots i.on { background: #fff; }
+  .mb__sort { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; font-size: 0.76rem; color: var(--text-muted); }
+  .mb-sort { border: 0; padding: 0.3rem 0.65rem; border-radius: 999px; background: var(--surface); font: inherit; font-size: 0.76rem; font-weight: 700; color: var(--text-muted); cursor: pointer; }
+  .mb-sort.is-on { background: var(--text-strong); color: var(--bg); }
+  .mb-sort:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  /* ratings of the picked mentee */
+  .mb-info { display: grid; gap: 0.8rem; padding: 1rem 1.1rem; background: var(--surface); border-radius: 18px; box-shadow: inset 0 0 0 2px var(--blue); }
+  .mb-info[hidden] { display: none; }
+  :global(.mb-info__head) { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+  :global(.mb-info__who) { display: grid; gap: 2px; min-width: 0; }
+  :global(.mb-info__who b) { font-size: 1.05rem; color: var(--text-strong); }
+  :global(.mb-info__who span) { font-size: 0.8rem; color: var(--text-muted); }
+  :global(.mb-info__big) { display: grid; justify-items: end; }
+  :global(.mb-info__big b) { font-size: 1.9rem; line-height: 1; color: var(--blue); font-variant-numeric: tabular-nums; }
+  :global(.mb-info__big span) { font-size: 0.72rem; color: var(--text-muted); }
+  :global(.mb-info__bars) { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem 1.2rem; }
+  :global(.mb-info__bar) { display: grid; gap: 3px; }
+  :global(.mb-info__bar dt) { font-size: 0.76rem; color: var(--text); }
+  :global(.mb-info__bar dd) { margin: 0; display: flex; align-items: center; gap: 0.5rem; }
+  :global(.mb-info__bar dd b) { font-size: 0.76rem; color: var(--text-strong); min-width: 3.5rem; font-variant-numeric: tabular-nums; }
+  :global(.mb-info__track) { flex: 1; height: 6px; border-radius: 999px; background: var(--bg-tint); overflow: hidden; }
+  :global(.mb-info__fill) { display: block; height: 100%; background: var(--blue); }
+  :global(.mb-info__papers) { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
+  :global(.mb-info__k) { font-size: 0.76rem; color: var(--text-muted); margin-right: 0.2rem; }
+  :global(.mb-info__paper) { padding: 0.2rem 0.55rem; border-radius: 999px; background: var(--accent-wash); color: var(--blue); font-size: 0.76rem; font-weight: 700; text-decoration: none; }
+  :global(.mb-info__paper:hover) { background: var(--blue); color: #fff; }
+  :global(.mb-info__again) { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
+  :global(.mb-info__more) { justify-self: start; font-size: 0.82rem; font-weight: 700; color: var(--blue); }
+  @media (max-width: 560px) { :global(.mb-info__bars) { grid-template-columns: 1fr; } }
   .mb__empty { margin: 0; font-size: 0.84rem; color: var(--text-muted); }
   .mb__projects { display: grid; gap: 0.9rem; min-width: 0; }
   .mb__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.8rem; }

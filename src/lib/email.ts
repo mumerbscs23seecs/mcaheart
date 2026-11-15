@@ -52,6 +52,11 @@ async function getTransport(): Promise<Transporter> {
     port: 465,
     secure: true,
     auth: { user: SMTP_USER, pass: SMTP_PASS },
+    // Fail within seconds instead of leaving a page loading if the mail
+    // server is slow or unreachable.
+    connectionTimeout: 15_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
   });
   return transport;
 }

@@ -76,6 +76,9 @@ if (Astro.request.method === 'POST') {
         if (!sent.ok) {
           sentOk = false;
           flashErr = `The email could not be sent (${sent.error ?? 'unknown error'}). Nothing was changed. Please try again.`;
+        } else if ('id' in sent && sent.id === 'logged-only') {
+          sentOk = false;
+          flashErr = 'Email sending is not set up on this server, so nothing was sent and nothing was changed.';
         }
       }
       if (sentOk) {

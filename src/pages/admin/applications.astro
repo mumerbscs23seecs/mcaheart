@@ -58,6 +58,7 @@ let openId = '';
 const myReviewer = reviewerFor(me.email);
 const VOTE_LABEL: Record<Vote, string> = { accept: 'Accept', withhold: 'Withhold', reject: 'Reject' };
 const RESULT_LABEL = { approved: 'Accept', withheld: 'Withhold', declined: 'Reject' } as const;
+const STATUS_DONE: Record<Decision, string> = { approved: 'Accepted', withheld: 'On hold', declined: 'Rejected' };
 
 // Votes need mca-pipeline/add-application-votes.sql. Until it's run, the page
 // falls back to the old single-click decision so nothing breaks.
@@ -451,34 +452,45 @@ const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.end
             myReviewer && !votes.get(a.id)?.[myReviewer] ? 'mine' : '',
           ].filter(Boolean).join(' ')}
           data-lf-days={Math.floor((Date.now() - a.submittedAt) / 86_400_000)}>
-          <summary class="idea__summary">
-            <span class:list={['idea__pill', `idea__pill--${a.status}`]}>{a.status}</span>
+          <summary class="idea__summary ar">
             <span class="idea__title">{a.name}</span>
-            {a.status === 'pending' && votesReady && (() => {
-              const v = votes.get(a.id) ?? {};
-              const result = scoreVotes(v);
-              const mine = myReviewer ? v[myReviewer]?.vote : undefined;
-              return (
-                <span class="quick" data-quick>
-                  {myReviewer && (
-                    <span class="quick__votes" role="group" aria-label={`Your vote for ${a.name}`} data-quick-votes data-app={a.id} data-current={mine ?? ''}>
-                      {(['accept', 'withhold', 'reject'] as Vote[]).map((opt) => (
-                        <button type="button" class:list={['quick__vote', `quick__vote--${opt}`, mine === opt && 'is-on']} data-vote={opt} aria-pressed={mine === opt ? 'true' : 'false'}>{VOTE_LABEL[opt]}</button>
-                      ))}
-                    </span>
-                  )}
-                  {result && (
-                    <label class="quick__send">
-                      <input type="checkbox" data-quick-send value={a.id} />
-                      Send: {RESULT_LABEL[result.decision]}
-                    </label>
-                  )}
-                </span>
-              );
-            })()}
             <span class="idea__meta">
               {a.jobStatus} · {a.expertise} · {ago(a.submittedAt)}
-              {votesReady && a.status === 'pending' && <> · <b class="idea__votes">{voteCount(a.id)}/2 voted</b></>}
+            </span>
+            <span class="ar__side">
+              {a.status !== 'pending' && (
+                <span class:list={['ar__status', `ar__status--${a.status}`]}>{STATUS_DONE[a.status as Decision]}</span>
+              )}
+              {a.status === 'pending' && votesReady && (() => {
+                const v = votes.get(a.id) ?? {};
+                const result = scoreVotes(v);
+                const mine = myReviewer ? v[myReviewer]?.vote : undefined;
+                const other = REVIEWERS.find((r) => r.key !== myReviewer);
+                return (
+                  <span class="quick" data-quick data-app={a.id}>
+                    {myReviewer && (
+                      <span class="quick__votes" role="group" aria-label={`Your vote for ${a.name}`} data-quick-votes data-current={mine ?? ''}>
+                        {(['accept', 'withhold', 'reject'] as Vote[]).map((opt) => (
+                          <button type="button" class:list={['quick__vote', `quick__vote--${opt}`, mine === opt && 'is-on']} data-vote={opt} aria-pressed={mine === opt ? 'true' : 'false'}>{VOTE_LABEL[opt]}</button>
+                        ))}
+                      </span>
+                    )}
+                    <span class="quick__info">
+                      <span class="quick__state" data-quick-state aria-live="polite">{myReviewer ? (mine ? 'Your vote is saved' : 'Your vote') : `${voteCount(a.id)} of 2 votes`}</span>
+                      {myReviewer && other && (
+                        <span class="quick__other" data-quick-other>{v[other.key] ? `${other.name.split(' ')[0]} has voted` : `${other.name.split(' ')[0]} has not voted`}</span>
+                      )}
+                    </span>
+                    <span class="quick__result" data-quick-result hidden={!result}>
+                      <span class="quick__score" data-quick-score>{result ? `Score ${result.score} of 4: ${RESULT_LABEL[result.decision]}` : ''}</span>
+                      <label class="quick__send">
+                        <input type="checkbox" data-quick-send value={a.id} />
+                        <span>Send the <span data-quick-decision>{result ? RESULT_LABEL[result.decision] : ''}</span> email</span>
+                      </label>
+                    </span>
+                  </span>
+                );
+              })()}
             </span>
             <span class="idea__chev" aria-hidden="true">▾</span>
           </summary>
@@ -601,13 +613,6 @@ const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.end
     </div>
 
     <div class="bbar" data-bbar hidden>
-      <form method="post" class="bbar__part" data-bbar-votes hidden>
-        <input type="hidden" name="action" value="batch-vote" />
-        <input type="hidden" name="votes" value="{}" data-bbar-votes-json />
-        <span data-bbar-votes-text></span>
-        <button class="btn" type="submit">Save votes</button>
-        <button class="bbar__undo" type="button" data-bbar-votes-reset>Undo changes</button>
-      </form>
       <form method="post" class="bbar__part" data-bbar-send hidden>
         <input type="hidden" name="action" value="batch-preview" />
         <span data-bbar-send-text></span>
@@ -621,85 +626,98 @@ const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.end
 </AppLayout>
 
 <script>
-  // Quick votes and "send" ticks in the collapsed rows. Nothing is saved until
-  // "Save votes" / "Review & send emails" in the bar at the bottom.
+  // Quick votes save straight away. "Send" ticks collect into the bar at the
+  // bottom, which opens the review screen for those emails.
   const bar = document.querySelector<HTMLElement>('[data-bbar]');
-  if (bar) {
-    const votesForm = bar.querySelector<HTMLFormElement>('[data-bbar-votes]')!;
-    const votesJson = bar.querySelector<HTMLInputElement>('[data-bbar-votes-json]')!;
-    const votesText = bar.querySelector<HTMLElement>('[data-bbar-votes-text]')!;
-    const sendForm = bar.querySelector<HTMLFormElement>('[data-bbar-send]')!;
-    const sendText = bar.querySelector<HTMLElement>('[data-bbar-send-text]')!;
-    const sendIds = bar.querySelector<HTMLElement>('[data-bbar-send-ids]')!;
-    const changes = new Map<string, string>();
-    const MAX = 25;
+  const sendForm = bar?.querySelector<HTMLFormElement>('[data-bbar-send]') ?? null;
+  const sendText = bar?.querySelector<HTMLElement>('[data-bbar-send-text]') ?? null;
+  const sendIds = bar?.querySelector<HTMLElement>('[data-bbar-send-ids]') ?? null;
+  const MAX = 25;
+  const LABEL: Record<string, string> = { approved: 'Accept', withheld: 'Withhold', declined: 'Reject' };
 
-    // Clicks on the quick controls must not open or close the row.
-    document.querySelectorAll<HTMLElement>('[data-quick]').forEach((q) => {
-      q.addEventListener('click', (e) => {
-        const t = e.target as HTMLElement;
-        if (t.closest('label') && t.tagName === 'INPUT') { e.stopPropagation(); return; }
-        if (t.closest('label')) { e.preventDefault(); const cb = t.closest('label')!.querySelector('input'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); } return; }
-        e.preventDefault();
-      });
-      q.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') e.stopPropagation(); });
+  // Clicks on the quick controls must not open or close the row.
+  document.querySelectorAll<HTMLElement>('[data-quick]').forEach((q) => {
+    q.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement;
+      if (t.closest('label') && t.tagName === 'INPUT') { e.stopPropagation(); return; }
+      if (t.closest('label')) { e.preventDefault(); const cb = t.closest('label')!.querySelector('input'); if (cb) { cb.checked = !cb.checked; cb.dispatchEvent(new Event('change', { bubbles: true })); } return; }
+      e.preventDefault();
     });
+    q.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') e.stopPropagation(); });
+  });
 
-    document.querySelectorAll<HTMLElement>('[data-quick-votes]').forEach((group) => {
-      const app = group.dataset.app!;
-      const current = group.dataset.current ?? '';
-      group.querySelectorAll<HTMLButtonElement>('[data-vote]').forEach((b) => {
-        b.addEventListener('click', () => {
-          const v = b.dataset.vote!;
-          const next = changes.get(app) === v || (!changes.has(app) && current === v) ? current : v;
-          if (next === current) changes.delete(app); else changes.set(app, v);
-          const shown = changes.get(app) ?? current;
-          group.querySelectorAll<HTMLButtonElement>('[data-vote]').forEach((x) => {
-            x.classList.toggle('is-on', x.dataset.vote === shown);
-            x.setAttribute('aria-pressed', String(x.dataset.vote === shown));
-          });
-          group.classList.toggle('is-changed', changes.has(app));
+  document.querySelectorAll<HTMLElement>('[data-quick-votes]').forEach((group) => {
+    const quick = group.closest<HTMLElement>('[data-quick]')!;
+    const app = quick.dataset.app!;
+    const state = quick.querySelector<HTMLElement>('[data-quick-state]')!;
+    const show = (v: string) => group.querySelectorAll<HTMLButtonElement>('[data-vote]').forEach((x) => {
+      x.classList.toggle('is-on', x.dataset.vote === v);
+      x.setAttribute('aria-pressed', String(x.dataset.vote === v));
+    });
+    group.querySelectorAll<HTMLButtonElement>('[data-vote]').forEach((b) => {
+      b.addEventListener('click', async () => {
+        const v = b.dataset.vote!;
+        const before = group.dataset.current ?? '';
+        if (v === before || group.classList.contains('is-saving')) return;
+        show(v);
+        group.classList.add('is-saving');
+        state.classList.remove('is-error');
+        state.textContent = 'Saving…';
+        const fd = new FormData();
+        fd.set('appId', app);
+        fd.set('vote', v);
+        try {
+          const res = await fetch('/admin/applications/vote', { method: 'POST', body: fd });
+          const out = await res.json().catch(() => ({ ok: false, error: 'The server did not answer.' }));
+          if (!out.ok) throw new Error(out.error || 'Could not save your vote.');
+          group.dataset.current = v;
+          state.textContent = 'Saved';
+          setTimeout(() => { if (state.textContent === 'Saved') state.textContent = 'Your vote is saved'; }, 2500);
+          // The filter "Needs my vote" no longer applies to this row.
+          const item = quick.closest<HTMLElement>('[data-lf-item]');
+          if (item) {
+            const tags = (item.dataset.lfVotes ?? '').split(' ').filter((t) => t && t !== 'mine' && t !== 'waiting' && t !== 'ready');
+            tags.push(out.result ? 'ready' : 'waiting');
+            item.dataset.lfVotes = tags.join(' ');
+          }
+          const result = quick.querySelector<HTMLElement>('[data-quick-result]')!;
+          if (out.result) {
+            quick.querySelector<HTMLElement>('[data-quick-score]')!.textContent = `Score ${out.result.score} of 4: ${LABEL[out.result.decision]}`;
+            quick.querySelector<HTMLElement>('[data-quick-decision]')!.textContent = LABEL[out.result.decision];
+            result.hidden = false;
+          } else {
+            result.hidden = true;
+          }
+        } catch (err) {
+          show(before);
+          state.classList.add('is-error');
+          state.textContent = err instanceof Error ? err.message : 'Could not save your vote.';
+        } finally {
+          group.classList.remove('is-saving');
           update();
-        });
+        }
       });
     });
+  });
 
-    document.addEventListener('change', (e) => {
-      if ((e.target as HTMLElement).matches?.('[data-quick-send]')) update();
-    });
-    document.addEventListener('lf:change', update);
+  document.addEventListener('change', (e) => {
+    if ((e.target as HTMLElement).matches?.('[data-quick-send]')) update();
+  });
+  document.addEventListener('lf:change', update);
 
-    bar.querySelector('[data-bbar-votes-reset]')?.addEventListener('click', () => {
-      changes.clear();
-      document.querySelectorAll<HTMLElement>('[data-quick-votes]').forEach((group) => {
-        const cur = group.dataset.current ?? '';
-        group.classList.remove('is-changed');
-        group.querySelectorAll<HTMLButtonElement>('[data-vote]').forEach((x) => {
-          x.classList.toggle('is-on', x.dataset.vote === cur);
-          x.setAttribute('aria-pressed', String(x.dataset.vote === cur));
-        });
-      });
-      update();
-    });
-
-    function update() {
-      votesJson.value = JSON.stringify(Object.fromEntries(changes));
-      votesText.textContent = `${changes.size} vote${changes.size === 1 ? '' : 's'} not saved yet`;
-      votesForm.hidden = changes.size === 0;
-      // Only ticked rows that are still visible go to the review screen.
-      const ticked = [...document.querySelectorAll<HTMLInputElement>('[data-quick-send]:checked')]
-        .filter((cb) => !cb.closest<HTMLElement>('[data-lf-item]')?.hidden);
-      sendIds.replaceChildren(...ticked.slice(0, MAX).map((cb) => Object.assign(document.createElement('input'), { type: 'hidden', name: 'ids', value: cb.value })));
-      sendText.textContent = ticked.length > MAX
-        ? `${ticked.length} ticked - the first ${MAX} go in this batch`
-        : `${ticked.length} decision${ticked.length === 1 ? '' : 's'} ready to send`;
-      sendForm.hidden = ticked.length === 0;
-      bar.hidden = votesForm.hidden && sendForm.hidden;
-    }
-    window.addEventListener('beforeunload', (e) => { if (changes.size) { e.preventDefault(); } });
-    votesForm.addEventListener('submit', () => { changes.clear(); });
-    update();
+  function update() {
+    if (!bar || !sendForm || !sendText || !sendIds) return;
+    // Only ticked rows that are still visible go to the review screen.
+    const ticked = [...document.querySelectorAll<HTMLInputElement>('[data-quick-send]:checked')]
+      .filter((cb) => !cb.closest<HTMLElement>('[data-lf-item]')?.hidden && !cb.closest<HTMLElement>('[data-quick-result]')?.hidden);
+    sendIds.replaceChildren(...ticked.slice(0, MAX).map((cb) => Object.assign(document.createElement('input'), { type: 'hidden', name: 'ids', value: cb.value })));
+    sendText.textContent = ticked.length > MAX
+      ? `${ticked.length} ticked - the first ${MAX} go in this batch`
+      : `${ticked.length} decision email${ticked.length === 1 ? '' : 's'} ready to send`;
+    sendForm.hidden = ticked.length === 0;
+    bar.hidden = sendForm.hidden;
   }
+  update();
 
   // The review screen: one click sends, so stop a double submit.
   document.querySelector<HTMLFormElement>('[data-bprev]')?.addEventListener('submit', (e) => {
@@ -712,15 +730,42 @@ const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.end
 </script>
 
 <style>
-  .quick { grid-column: 2 / 3; display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.8rem; margin-top: 0.35rem; }
-  .quick__votes { display: inline-flex; border: 1px solid var(--border-soft); }
-  .quick__votes.is-changed { outline: 2px solid var(--blue); outline-offset: 1px; }
-  .quick__vote { border: 0; background: var(--bg); padding: 0.3rem 0.6rem; font: inherit; font-size: 0.74rem; font-weight: 700; color: var(--text-muted); cursor: pointer; }
-  .quick__vote + .quick__vote { border-left: 1px solid var(--border-soft); }
-  .quick__vote--accept.is-on { background: var(--ok); color: #fff; }
-  .quick__vote--withhold.is-on { background: var(--warn); color: #fff; }
-  .quick__vote--reject.is-on { background: var(--red); color: #fff; }
-  .quick__send { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.78rem; font-weight: 700; color: var(--text-strong); cursor: pointer; }
+  /* ---------- applicant rows ---------- */
+  .idea__summary.ar { grid-template-columns: minmax(0, 1fr) auto auto; grid-template-areas: 'title side chev' 'meta side chev'; grid-template-rows: auto 1fr; align-items: start; gap: 0.2rem 1.2rem; }
+  .idea__summary.ar .idea__chev { align-self: center; }
+  .ar__side { grid-area: side; display: flex; align-items: center; }
+  .ar__status { font-size: 0.78rem; font-weight: 700; padding: 0.3rem 0.65rem; }
+  .ar__status--approved { color: var(--ok); background: var(--ok-bg); }
+  .ar__status--withheld { color: var(--warn); background: var(--warn-bg); }
+  .ar__status--declined { color: var(--red); background: var(--red-wash); }
+  .quick { display: grid; justify-items: end; gap: 0.35rem; cursor: default; }
+  .quick__votes { display: inline-flex; gap: 0.3rem; transition: opacity 0.15s; }
+  .quick__votes.is-saving { opacity: 0.6; pointer-events: none; }
+  .quick__vote {
+    border: 0; padding: 0.42rem 0.85rem; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border);
+    font: inherit; font-size: 0.8rem; font-weight: 700; color: var(--text); cursor: pointer;
+    transition: background 0.12s, color 0.12s, box-shadow 0.12s;
+  }
+  .quick__vote--accept:hover { box-shadow: inset 0 0 0 1.5px var(--ok); color: var(--ok); }
+  .quick__vote--withhold:hover { box-shadow: inset 0 0 0 1.5px var(--warn); color: var(--warn); }
+  .quick__vote--reject:hover { box-shadow: inset 0 0 0 1.5px var(--red); color: var(--red); }
+  .quick__vote:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .quick__vote--accept.is-on { background: var(--ok); color: #fff; box-shadow: none; }
+  .quick__vote--withhold.is-on { background: var(--warn); color: #fff; box-shadow: none; }
+  .quick__vote--reject.is-on { background: var(--red); color: #fff; box-shadow: none; }
+  .quick__info { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.1rem 0.8rem; font-size: 0.74rem; color: var(--text-muted); }
+  .quick__state.is-error { color: var(--red); font-weight: 700; }
+  .quick__result { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 0.3rem 0.8rem; padding-top: 0.15rem; }
+  .quick__result[hidden] { display: none; }
+  .quick__score { font-size: 0.78rem; font-weight: 700; color: var(--text-strong); }
+  .quick__send { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; font-weight: 700; color: var(--blue); cursor: pointer; }
+  .quick__send input { width: 15px; height: 15px; accent-color: var(--blue); }
+  @media (max-width: 720px) {
+    .idea__summary.ar { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'title chev' 'meta chev' 'side side'; grid-template-rows: auto auto auto; }
+    .ar__side { margin-top: 0.55rem; }
+    .quick { justify-items: start; }
+    .quick__info, .quick__result { justify-content: flex-start; }
+  }
   .bbar {
     position: sticky; bottom: 0; z-index: 20; margin-top: var(--space-m);
     display: flex; flex-wrap: wrap; gap: 0.6rem 1.4rem; align-items: center;

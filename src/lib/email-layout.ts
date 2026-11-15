@@ -37,6 +37,10 @@ export const noteBlock = (note: string | null | undefined, label = 'Note from th
     ? `<div style="margin:0 0 24px;padding:16px 18px;background:#f6f6f6;border-left:3px solid ${RED};color:${TEXT};font-family:${FONT};font-size:14px;line-height:1.6;white-space:pre-wrap"><strong>${label}:</strong><br>${esc(note)}</div>`
     : '';
 
+/** A red-edged warning line at the top of an internal email. Escapes `text`. */
+export const alertBlock = (text: string) =>
+  `<div style="margin:0 0 22px;padding:12px 16px;background:#fbeeee;border-left:3px solid ${RED};color:${RED};font-family:${FONT};font-size:14px;font-weight:600;line-height:1.5">${esc(text)}</div>`;
+
 /** Grey panel for secondary information (e.g. "Important information"). `html` is trusted. */
 export const infoBox = (html: string) =>
   `<div style="margin:4px 0 24px;padding:18px 20px;background:#f6f6f6;color:${TEXT};font-family:${FONT};font-size:13px;line-height:1.6">${html}</div>`;

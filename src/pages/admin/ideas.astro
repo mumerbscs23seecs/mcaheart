@@ -16,6 +16,7 @@ import { deliverIdeaDecision, renderIdeaDecisionEmail } from '../../lib/idea-mai
 import { CONFERENCE_LABELS, COMMITMENT_LABELS, type Conference } from '../../lib/idea-schema';
 import type { IdeaRecord } from '../../lib/ideas';
 import ListFilter from '../../components/ListFilter.astro';
+import { labEmailSet } from '../../lib/lab-members';
 
 export const prerender = false;
 
@@ -285,6 +286,9 @@ try {
   dbError = err instanceof Error ? err.message : 'Could not load ideas.';
 }
 const pending = ideas.filter((i) => i.status === 'pending').length;
+// Ideas from people who are not on the member list get flagged.
+const lab = await labEmailSet();
+const notInLab = (email: string) => lab.ok && !lab.emails.has(String(email).toLowerCase());
 
 const fmtDate = (t: number | null) =>
   t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
@@ -416,7 +420,7 @@ const decidedLabel = (i: IdeaRecord) =>
             <span class:list={['idea__pill', `idea__pill--${i.status}`]}>{i.status}</span>
             <span class="idea__title">{i.title}</span>
             <span class="idea__meta">
-              {i.leadName} · {i.researchType} · {i.conference === 'none' ? 'no conference' : i.conference === 'flexible' ? 'conf. flexible' : i.conference} · {ago(i.submittedAt)}
+              {notInLab(i.leadEmail) && <><b class="idea__nolab">Not in the lab database</b> · </>}{i.leadName} · {i.researchType} · {i.conference === 'none' ? 'no conference' : i.conference === 'flexible' ? 'conf. flexible' : i.conference} · {ago(i.submittedAt)}
               {reviewsReady && i.status === 'pending' && (
                 <> · <b class="idea__stage">{(reviews.get(i.id) ?? []).length ? 'Reviewed, awaiting final decision' : 'Awaiting decision'}</b></>
               )}
@@ -470,6 +474,7 @@ const decidedLabel = (i: IdeaRecord) =>
                         <p class="prop__contact">
                           <a href={`mailto:${i.leadEmail}`}>{i.leadEmail}</a>
                           <span>{i.contactNumber}</span>
+                          {notInLab(i.leadEmail) && <span class="idea__nolab">Not in the lab database: this email is not on the member list</span>}
                         </p>
                       </div>
                       <div class="prop__chips">
@@ -788,6 +793,7 @@ const decidedLabel = (i: IdeaRecord) =>
     list-style: none;
   }
   .idea__summary::-webkit-details-marker { display: none; }
+  .idea__nolab { color: var(--red); font-weight: 700; }
   .idea__summary:hover { background: var(--bg-tint); }
 
   .idea__pill {
