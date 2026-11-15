@@ -64,8 +64,27 @@ const WORDMARK = `<table role="presentation" cellpadding="0" cellspacing="0" bor
       </tr>
     </table>`;
 
-/** Wrap `inner` (already-built paragraphs) in the frame. `footer` is trusted HTML; '' for none. */
+// The lab's accounts as a row of small logos under the card. PNGs, not SVG:
+// Gmail and Outlook don't show SVG images. Each logo carries its name as alt
+// text, so mail apps that hold back images still show a readable link.
+const SOCIALS: Array<{ href: string; img: string; name: string }> = [
+  { href: 'https://mcaheart.com', img: 'website', name: 'Website' },
+  { href: 'https://x.com/mca_heart', img: 'x', name: 'X' },
+  { href: 'https://www.instagram.com/mca_heart_lab/', img: 'instagram', name: 'Instagram' },
+  { href: 'https://www.youtube.com/channel/UCR1U9EROhLsdeuCB4hlAw4w', img: 'youtube', name: 'YouTube' },
+];
+const SOCIAL_ROW = `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:24px auto 0">
+      <tr>${SOCIALS.map(
+        (s) =>
+          `<td style="padding:0 10px"><a href="${s.href}" style="color:${MUTED};font-family:${FONT};font-size:12px;text-decoration:none"><img src="https://mcaheart.com/assets/email/${s.img}.png" width="24" height="24" alt="${s.name}" title="${s.name}" style="display:block;border:0;width:24px;height:24px"></a></td>`,
+      ).join('')}</tr>
+    </table>`;
+
+/** Wrap `inner` (already-built paragraphs) in the frame. `footer` is trusted HTML; '' for none.
+ *  Every email gets the lab's social logos under the card, except the internal
+ *  notifications the site sends to the lab's own inbox. */
 export function emailShell(inner: string, footer: string): string {
+  const social = footer === FOOTER_INTERNAL ? '' : SOCIAL_ROW;
   return `<style>@import url('https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Merriweather:wght@700&display=swap');</style>
 <div style="background:#f3f3f3;padding:40px 16px;font-family:${FONT}">
   <div style="max-width:640px;margin:0 auto">
@@ -73,6 +92,7 @@ export function emailShell(inner: string, footer: string): string {
     <div style="background:#ffffff;padding:44px 48px 36px">
       ${inner}
     </div>
+    ${social}
     ${footer ? `<p style="margin:20px 0 0;text-align:center;color:${MUTED};font-family:${FONT};font-size:12px;line-height:1.6">${footer}</p>` : ''}
   </div>
 </div>`;

@@ -68,13 +68,7 @@ export interface ApplicationDecisionOpts {
 // Sign-off shared by every decision letter, with the lab's contact details.
 const SIGNOFF =
   p('Best regards,<br>Operations Team<br>MCA Heart Research Lab') +
-  p(
-    `Email: ${link(`mailto:${LAB_EMAIL}`, LAB_EMAIL)}<br>
-     Website: ${link(site.url)}<br>
-     X: ${link(site.x)}<br>
-     Instagram: ${link(site.instagram)}`,
-    'font-size:14px',
-  );
+  p(`Email: ${link(`mailto:${LAB_EMAIL}`, LAB_EMAIL)}`, 'font-size:14px');
 
 /** Build the approve/withhold/decline email (template + reviewer note) without sending. */
 export function renderApplicationDecisionEmail(
