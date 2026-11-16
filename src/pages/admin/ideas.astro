@@ -212,6 +212,23 @@ if (Astro.request.method === 'POST') {
   const outcome = OUTCOMES.find((o) => o === form.get('outcome')) ?? null;
   openId = ideaId;
 
+  // --- Send a decided idea's email again (e.g. after a mail outage) -----------
+  if (action === 'resend-email') {
+    const idea = await getIdea(ideaId);
+    if (!idea) flash = { tone: 'error', text: 'That idea no longer exists.' };
+    else if (idea.status === 'pending' || !idea.decisionOutcome) flash = { tone: 'error', text: 'This idea has no decision email to send.' };
+    else {
+      try {
+        const sent = await deliverIdeaDecision({ to: idea.leadEmail, title: idea.title, outcome: idea.decisionOutcome, note: idea.decisionNote });
+        flash = sent
+          ? { tone: 'ok', text: `The decision email was sent again to ${idea.leadEmail}.` }
+          : { tone: 'error', text: 'Email sending is not set up on this server, so nothing was sent.' };
+      } catch (err) {
+        flash = { tone: 'error', text: `The email to ${idea.leadEmail} could not be sent. ${err instanceof Error ? err.message : ''}`.trim() };
+      }
+    }
+  }
+
   // --- Step 1: the initial review ---------------------------------------------
   if (action === 'review') {
     const rec = String(form.get('recommendation') ?? '') as Recommendation;
@@ -620,6 +637,12 @@ const decidedLabel = (i: IdeaRecord) =>
                               <iframe class="mailwin__frame" srcdoc={sent.html} title="Email that was sent" sandbox=""></iframe>
                             </div>
                           </details>
+                          <form method="post" class="resend" onsubmit={`return confirm('Send this decision email again to ${i.leadEmail}?')`}>
+                            <input type="hidden" name="action" value="resend-email" />
+                            <input type="hidden" name="ideaId" value={i.id} />
+                            <button type="submit" class="resend__btn">Resend this email</button>
+                            <span class="resend__hint">Sends the same email to {i.leadEmail} again.</span>
+                          </form>
                         );
                       })()}
                     </div>
@@ -793,6 +816,10 @@ const decidedLabel = (i: IdeaRecord) =>
     list-style: none;
   }
   .idea__summary::-webkit-details-marker { display: none; }
+  .resend { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; margin-top: 0.7rem; }
+  .resend__btn { border: 0; padding: 0.45rem 0.85rem; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border); font: inherit; font-size: 0.82rem; font-weight: 700; color: var(--text-strong); cursor: pointer; }
+  .resend__btn:hover { box-shadow: inset 0 0 0 1px var(--blue); color: var(--blue); }
+  .resend__hint { font-size: 0.78rem; color: var(--text-muted); }
   .idea__nolab { color: var(--red); font-weight: 700; }
   .idea__summary:hover { background: var(--bg-tint); }
 
