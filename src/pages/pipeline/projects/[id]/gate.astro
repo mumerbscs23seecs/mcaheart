@@ -94,7 +94,9 @@ if (gate === '1') {
   const nextJournal = String(form.get('next_journal') ?? '').trim() || null;
   // Which rejected-* stage label to land on - only meaningful when outcome
   // is 'rejected' with no resubmission; the RPC ignores it otherwise.
-  const rejectStage = String(form.get('reject_stage') ?? '').trim() || undefined;
+  // Always send p_reject_stage (null when unused): the DB has a 3-arg and a 4-arg
+  // overload, and PostgREST can't pick one if the key is left out.
+  const rejectStage = String(form.get('reject_stage') ?? '').trim() || null;
   rpc = {
     fn: 'record_journal_outcome',
     args: { p_attempt: attempt, p_outcome: outcome, p_next_journal: nextJournal, p_reject_stage: rejectStage },
