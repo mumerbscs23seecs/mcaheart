@@ -144,7 +144,7 @@ const TEMPLATES: Record<EmailStep, { subject: string; body: string }> = {
     subject: 'First notice regarding your participation at MCA Heart Research Lab',
     body: `Dear {name},
 
-We are writing regarding your participation as a Remote Research Collaborator at MCA Heart Research Lab. Our records show no activity from you since {lastActive}, a period of more than three months.
+We are writing regarding your participation as a Research Collaborator at MCA Heart Research Lab. Our records show no activity from you since {lastActive}, a period of more than three months.
 
 As set out in your appointment letter, continued affiliation with the lab requires active participation and meaningful contributions, such as:
 - Completing assigned project tasks on time
@@ -188,7 +188,7 @@ We thank you for the time you have spent with the lab and wish you every success
     subject: 'Renewal of your appointment at MCA Heart Research Lab',
     body: `Dear {name},
 
-Following a review of your contributions during your appointment, we are pleased to renew your position as a Remote Research Collaborator at MCA Heart Research Lab for a further six months, from {termStart} to {termEnd}.
+Following a review of your contributions during your appointment, we are pleased to renew your position as a Research Collaborator at MCA Heart Research Lab for a further six months, from {termStart} to {termEnd}.
 
 Thank you for your commitment and for the work you have contributed to the lab. We look forward to continuing to work with you.
 
@@ -198,7 +198,7 @@ As before, continued affiliation depends on active participation, and your contr
     subject: 'Completion of your appointment at MCA Heart Research Lab',
     body: `Dear {name},
 
-Your appointment as a Remote Research Collaborator at MCA Heart Research Lab, which began on {joined}, has now come to an end. Following a review of your contributions, your time with the lab is now complete, and your appointment will not be extended for a further term.
+Your appointment as a Research Collaborator at MCA Heart Research Lab, which began on {joined}, has now come to an end. Following a review of your contributions, your time with the lab is now complete, and your appointment will not be extended for a further term.
 
 On behalf of Dr. Chadi Alraies and the team, thank you for the time and effort you have given to the lab during your appointment.
 

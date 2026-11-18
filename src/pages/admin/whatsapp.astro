@@ -1,12 +1,14 @@
 ---
 /**
- * Manage > WhatsApp: accepted applicants still to be added to the lab's
- * WhatsApp group. Copy the number, add them, click Added.
+ * Manage > WhatsApp:
+ *   New members  accepted applicants still to be added to the lab's group.
+ *   Idea groups  accepted ideas, so it's clear which already have a group.
  */
 import AppLayout from '../../layouts/AppLayout.astro';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
 import { listWhatsapp, setWhatsappAdded } from '../../lib/applications';
+import { listIdeaGroups, setIdeaGroupMade } from '../../lib/ideas';
 
 export const prerender = false;
 
@@ -25,12 +27,20 @@ if (Astro.request.method === 'POST') {
   let err: string | null = 'Unknown action.';
   if (action === 'added') err = await setWhatsappAdded(ids, me.name);
   if (action === 'undo') err = await setWhatsappAdded(ids, null);
+  if ((action === 'group' || action === 'ungroup') && ids.length === 1) {
+    const r = await setIdeaGroupMade(ids[0], action === 'group', me.name);
+    err = r.ok ? null : r.error ?? 'Could not save that.';
+  }
   if (wantsJson) return err ? json({ ok: false, error: err }, 400) : json({ ok: true });
-  const msg = err ?? (action === 'added' ? `Marked ${ids.length === 1 ? 'as' : `${ids.length} people as`} added.` : 'Put back on the list.');
+  const msg = err ?? (action === 'added' ? `Marked ${ids.length === 1 ? 'as' : `${ids.length} people as`} added.`
+    : action === 'group' ? 'Marked as group made.' : 'Put back on the list.');
   return Astro.redirect(`/admin/whatsapp?${err ? 'err' : 'ok'}=${encodeURIComponent(msg)}`, 303);
 }
 
 const { ready, error, toAdd, added } = await listWhatsapp();
+const ideaGroups = await listIdeaGroups();
+const groupsToMake = ideaGroups.rows.filter((r) => !r.groupAt);
+const groupsMade = ideaGroups.rows.filter((r) => r.groupAt).slice(0, 30);
 const flashOk = Astro.url.searchParams.get('ok');
 const flashErr = Astro.url.searchParams.get('err');
 
@@ -44,7 +54,7 @@ const ago = (t: number | null) => {
 const waDigits = (phone: string) => phone.replace(/[^\d]/g, '').replace(/^00/, '');
 ---
 
-<AppLayout title="Add to WhatsApp" heading="Add to WhatsApp" user={me} active="whatsapp">
+<AppLayout title="WhatsApp" heading="WhatsApp" user={me} active="whatsapp">
   <div class="adm wa">
     {flashOk && <div class="adm-flash adm-flash--ok" role="status"><p>{flashOk}</p></div>}
     {flashErr && <div class="adm-flash adm-flash--error" role="alert"><p>{flashErr}</p></div>}
@@ -55,6 +65,12 @@ const waDigits = (phone: string) => phone.replace(/[^\d]/g, '').replace(/^00/, '
       </div>
     )}
 
+    <nav class="wa__jump" aria-label="On this page">
+      <a href="#members">New members <span>{ready ? toAdd.length : 0}</span></a>
+      <a href="#ideas">Idea groups <span>{groupsToMake.length}</span></a>
+    </nav>
+
+    <h2 class="wa__h2" id="members">New members to add to the lab group</h2>
     {ready && (
       <>
         <div class="wa__head">
@@ -113,6 +129,60 @@ const waDigits = (phone: string) => phone.replace(/[^\d]/g, '').replace(/^00/, '
       </>
     )}
 
+    <h2 class="wa__h2" id="ideas">Accepted ideas: WhatsApp group made?</h2>
+    {!ideaGroups.ready && (
+      <div class="adm-flash adm-flash--error">
+        <p>This list isn't switched on yet. Run <code>mca-pipeline/add-help-and-learning.sql</code> in the Supabase SQL editor, then reload.</p>
+      </div>
+    )}
+    {ideaGroups.ready && (
+      <>
+        <p class="wa__lead wa__lead--ideas"><b>{groupsToMake.length}</b> accepted idea{groupsToMake.length === 1 ? '' : 's'} without a group yet. Click <b>Group made</b> once the idea's WhatsApp group exists.</p>
+        <p class="wa__empty" data-wa-empty-ideas hidden={groupsToMake.length > 0}>Every accepted idea has a group.</p>
+        <ul class="wa__list">
+          {groupsToMake.map((r) => (
+            <li class="wa__row wa__row--idea" data-wa-row data-kind="idea" data-id={r.id} data-phone={r.phone}>
+              <div class="wa__who">
+                <b class="wa__name wa__idea">{r.title}</b>
+                <span class="wa__by">{r.leadName}{r.leadEmail && <> · <a class="wa__email" href={`mailto:${r.leadEmail}`}>{r.leadEmail}</a></>}</span>
+                <span class="wa__when">Accepted {fmt(r.reviewedAt)} · {ago(r.reviewedAt)}</span>
+              </div>
+              <div class="wa__phone">
+                {r.phone ? <span class="wa__num">{r.phone}</span> : <span class="wa__num wa__num--none">No number given</span>}
+                <span class="wa__phone-actions">
+                  {r.phone && <button type="button" class="wa__ghost" data-wa-copy={r.phone}>Copy number</button>}
+                  <button type="button" class="wa__ghost" data-wa-copy={r.title}>Copy title</button>
+                </span>
+              </div>
+              <form method="post" class="wa__done" data-wa-form>
+                <input type="hidden" name="action" value="group" />
+                <input type="hidden" name="id" value={r.id} />
+                <button class="btn wa__added" type="submit">Group made</button>
+              </form>
+            </li>
+          ))}
+        </ul>
+        {groupsMade.length > 0 && (
+          <details class="wa__past">
+            <summary>Groups made ({groupsMade.length})</summary>
+            <ul class="wa__plist">
+              {groupsMade.map((r) => (
+                <li>
+                  <span><b>{r.title}</b> · {r.leadName}</span>
+                  <span class="wa__pmeta">Marked {fmt(r.groupAt)}{r.groupBy && ` by ${r.groupBy}`}</span>
+                  <form method="post">
+                    <input type="hidden" name="action" value="ungroup" />
+                    <input type="hidden" name="id" value={r.id} />
+                    <button type="submit" class="wa__link">Put back</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </>
+    )}
+
     <div class="wa__toast" data-wa-toast role="status" aria-live="polite" hidden>
       <span data-wa-toast-text></span>
       <button type="button" class="wa__undo" data-wa-undo hidden>Undo</button>
@@ -121,7 +191,6 @@ const waDigits = (phone: string) => phone.replace(/[^\d]/g, '').replace(/^00/, '
 </AppLayout>
 
 <script>
-  const list = document.querySelector<HTMLElement>('[data-wa-list]');
   const toast = document.querySelector<HTMLElement>('[data-wa-toast]')!;
   const toastText = document.querySelector<HTMLElement>('[data-wa-toast-text]')!;
   const undoBtn = document.querySelector<HTMLButtonElement>('[data-wa-undo]')!;
@@ -153,12 +222,15 @@ const waDigits = (phone: string) => phone.replace(/[^\d]/g, '').replace(/^00/, '
   });
 
   function recount() {
-    const n = document.querySelectorAll('[data-wa-row]:not([hidden])').length;
+    const n = document.querySelectorAll('[data-wa-row]:not([data-kind]):not([hidden])').length;
     if (count) count.textContent = String(n);
     if (noun) noun.textContent = n === 1 ? 'person' : 'people';
     if (empty) empty.hidden = n > 0;
+    const ideasLeft = document.querySelectorAll('[data-wa-row][data-kind="idea"]:not([hidden])').length;
+    const emptyIdeas = document.querySelector<HTMLElement>('[data-wa-empty-ideas]');
+    if (emptyIdeas) emptyIdeas.hidden = ideasLeft > 0;
   }
-  async function send(action: 'added' | 'undo', id: string) {
+  async function send(action: string, id: string) {
     const fd = new FormData();
     fd.set('action', action);
     fd.set('id', id);
@@ -167,20 +239,21 @@ const waDigits = (phone: string) => phone.replace(/[^\d]/g, '').replace(/^00/, '
     if (!out.ok) throw new Error(out.error || 'Something went wrong.');
   }
 
-  list?.querySelectorAll<HTMLFormElement>('[data-wa-form]').forEach((form) => {
+  document.querySelectorAll<HTMLFormElement>('[data-wa-form]').forEach((form) => {
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const row = form.closest<HTMLElement>('[data-wa-row]')!;
       const id = row.dataset.id!;
-      const name = row.querySelector('.wa__name')?.textContent ?? 'They';
+      const isIdea = row.dataset.kind === 'idea';
+      const name = isIdea ? 'That idea' : row.querySelector('.wa__name')?.textContent ?? 'They';
       const btn = form.querySelector<HTMLButtonElement>('button')!;
       btn.disabled = true;
       try {
-        await send('added', id);
+        await send(isIdea ? 'group' : 'added', id);
         row.hidden = true;
         recount();
         say(`${name} is off the list.`, async () => {
-          try { await send('undo', id); row.hidden = false; btn.disabled = false; recount(); say(`${name} is back on the list.`); }
+          try { await send(isIdea ? 'ungroup' : 'undo', id); row.hidden = false; btn.disabled = false; recount(); say(`${name} is back on the list.`); }
           catch (err) { say(err instanceof Error ? err.message : 'Could not put them back.'); }
         });
       } catch (err) {
@@ -192,7 +265,16 @@ const waDigits = (phone: string) => phone.replace(/[^\d]/g, '').replace(/^00/, '
 </script>
 
 <style>
-  .wa { max-width: 980px; }
+  .wa { max-width: none; }
+  .wa__jump { display: flex; gap: 0.5rem; margin: 0 0 1.4rem; }
+  .wa__jump a { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.85rem; box-shadow: inset 0 0 0 1px var(--border); font-size: 0.86rem; font-weight: 700; color: var(--text-strong); text-decoration: none; }
+  .wa__jump a:hover { box-shadow: inset 0 0 0 1px var(--blue); color: var(--blue); }
+  .wa__jump span { min-width: 1.4rem; padding: 0 0.35rem; background: var(--blue); color: #fff; font-size: 0.74rem; text-align: center; }
+  .wa__h2 { margin: 0 0 0.8rem; font-size: 1.15rem; font-weight: 800; color: var(--text-strong); scroll-margin-top: 90px; }
+  #ideas { margin-top: 2.6rem; padding-top: 1.6rem; border-top: 1px solid var(--border-soft); }
+  .wa__lead--ideas { margin-bottom: 1rem; }
+  .wa__idea { line-height: 1.35; }
+  .wa__by { font-size: 0.84rem; color: var(--text); }
   .wa__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.8rem 1.4rem; margin-bottom: 1.1rem; }
   .wa__lead { margin: 0; max-width: 64ch; font-size: 0.92rem; line-height: 1.55; color: var(--text); }
   .wa__lead b { color: var(--text-strong); }

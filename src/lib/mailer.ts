@@ -3,6 +3,32 @@ import { INTENT_LABELS } from './contact-schema';
 import { sendEmail, type Attachment } from './email';
 import { esc, p, heading, dataTable, emailShell, alertBlock, FOOTER_INTERNAL } from './email-layout';
 import { isLabMember, NOT_IN_LAB_TEXT } from './lab-members';
+import { TOPIC_ROLE_LABEL, AI_PLAN_LABEL } from './contact-schema';
+
+const yes = (v: string | undefined) => (v === 'yes' ? 'Yes' : 'No');
+const dmy = (d: string | undefined) => {
+  if (!d) return '';
+  const t = new Date(`${d}T00:00:00Z`);
+  return Number.isNaN(t.getTime()) ? d : t.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+};
+
+/** A "Join a new topic" request, as label / value rows. */
+export function topicRows(data: ContactPayload): Array<[string, string]> {
+  const roles = (data.topicRoles ?? []).map((r) =>
+    r === 'Other' ? `Other: ${data.topicOther || '-'}` : (TOPIC_ROLE_LABEL as Record<string, string>)[r] ?? r);
+  return [
+    ['Can help with', roles.join('\n') || '-'],
+    ['Area of interest', data.topicArea || '-'],
+    ['Hours per week', data.topicHours || '-'],
+    ['Available', `${dmy(data.topicFrom) || '?'}${data.topicUntil ? ` to ${dmy(data.topicUntil)}` : ' onwards'}`],
+    ['AI use', (AI_PLAN_LABEL as Record<string, string>)[data.aiPlan ?? ''] ?? '-'],
+    ...(data.aiPlan && data.aiPlan !== 'none' ? [['AI would help with', data.aiPlanParts || '-'] as [string, string]] : []),
+    ...(data.aiPlan && data.aiPlan !== 'none' ? [['Accepted the AI declaration', yes(data.aiDeclaration ?? data.aiProofread)] as [string, string]] : []),
+    ['Accepted the deadline declaration', yes(data.deadlineAck)],
+    ['Has texted Muhammad Burhan', yes(data.textedCoordinator)],
+    ['Note', data.topicNote || '-'],
+  ];
+}
 
 /**
  * Contact-form delivery, sent from researchlab@ (src/lib/email.ts). Env:
@@ -30,12 +56,17 @@ export function intentRows(data: ContactPayload): Array<[string, string]> {
     ];
   }
   if (data.intent === 'topic') {
-    return [
-      ['Area or kind of topic', data.topicArea || '-'],
-      ['Would like to help with', data.topicRole || '-'],
-      ['Hours per week', data.topicHours || '-'],
-      ['Note', data.topicNote || '-'],
-    ];
+    // Older requests had one "topicRole"; newer ones a list, plus availability
+    // and an AI disclosure.
+    if (!data.topicRoles?.length) {
+      return [
+        ['Area or kind of topic', data.topicArea || '-'],
+        ['Would like to help with', data.topicRole || '-'],
+        ['Hours per week', data.topicHours || '-'],
+        ['Note', data.topicNote || '-'],
+      ];
+    }
+    return topicRows(data);
   }
   if (data.intent === 'trending') {
     return [['Message', data.trendingMessage || '-']];

@@ -1,11 +1,21 @@
 ---
 import AppLayout from '../../layouts/AppLayout.astro';
 import '../../styles/admin.css';
-import { currentUser } from '../../lib/auth';
+import '../../styles/calm.css';
+import { icon } from '../../lib/calm';
+import { resolveRequest, deleteRequest } from '../../lib/requests';
+import { SKILL_SHORT as SHORT } from '../../lib/skills';
+import { currentUser, audit, listAudit } from '../../lib/auth';
+import { supabaseAdmin } from '../../lib/supabase';
+import { listAuthUsers, ensureAuthUser, resetToDefaultPassword, sendResetLink, hasRealEmail } from '../../lib/accounts';
 import { getPipelineSession } from '../../lib/pipeline-auth';
 import { listReviews, average, SCORE_FIELDS, fmtReviewDate, type MenteeReview } from '../../lib/mentee-reviews';
 import { SKILLS, SKILL_SHORT, isSkill } from '../../lib/skills';
 import { loadMemberships, dayNumber, shortDate, LOG_LABEL, STATUS_LABEL, type MemberRow } from '../../lib/membership';
+import { HELP_COLS, ASSIGNMENT_COLS, HELP_LABEL, roleLabel, longDay, daysLeft, type HelpRequest, type Assignment } from '../../lib/help';
+import { emailAppointment, MAIL_NOTE } from '../../lib/appoint';
+import { listRequests } from '../../lib/requests';
+import { TOPIC_ROLE_LABEL, AI_PLAN_LABEL } from '../../lib/contact-schema';
 
 export const prerender = false;
 
@@ -36,15 +46,61 @@ if (supabase && Astro.request.method === 'POST') {
   const action = String(form.get('action') ?? '');
   const personId = String(form.get('personId') ?? '');
 
+  // ---- Accounts (what used to be Manage > Members).
+  if (['add-person', 'reset-link', 'reset-default', 'deactivate', 'activate', 'role'].includes(action)) {
+    const admin = supabaseAdmin();
+    try {
+      if (action === 'add-person') {
+        const name = String(form.get('name') ?? '').trim();
+        const email = String(form.get('email') ?? '').trim().toLowerCase();
+        const role = String(form.get('role') ?? 'member') === 'admin' ? 'admin' : 'member';
+        const { data: created, error } = await supabase.rpc('create_person', { p_full_name: name, p_email: email, p_role: role });
+        if (error) throw error;
+        await resetToDefaultPassword(created);
+        audit(me.email, 'added member', email, role);
+        flash = { tone: 'ok', text: `Added ${name}. They sign in with the starting password and then choose their own.` };
+      } else {
+        const { data: target } = await admin.from('people').select('id,full_name,email,auth_id,role,active').eq('id', personId).maybeSingle();
+        if (!target) flash = { tone: 'error', text: 'That person was not found.' };
+        else if (target.email === me.email && ['deactivate', 'role'].includes(action)) flash = { tone: 'error', text: 'You cannot change your own access or role.' };
+        else if (action === 'reset-link') {
+          const res = await sendResetLink(target.email, Astro.url.origin);
+          flash = res.sent ? { tone: 'ok', text: `Reset link emailed to ${target.email}.` } : { tone: 'error', text: res.error ? `Could not send: ${res.error}` : 'No email could be sent to this address.' };
+          if (res.sent) audit(me.email, 'sent reset link', target.email);
+        } else if (action === 'reset-default') {
+          await resetToDefaultPassword(target);
+          audit(me.email, 'reset to starting password', target.email);
+          flash = { tone: 'ok', text: `${target.full_name} is back on the starting password and chooses a new one at next sign-in.` };
+        } else if (action === 'deactivate' || action === 'activate') {
+          const { error } = await admin.from('people').update({ active: action === 'activate' }).eq('id', target.id);
+          if (error) throw error;
+          audit(me.email, action === 'activate' ? 'restored access' : 'revoked access', target.email);
+          flash = { tone: 'ok', text: `${target.full_name}: access ${action === 'activate' ? 'restored' : 'revoked'}.` };
+        } else if (action === 'role') {
+          const role = String(form.get('role') ?? '') === 'admin' ? 'admin' : 'member';
+          const { error } = await admin.from('people').update({ role }).eq('id', target.id);
+          if (error) throw error;
+          if (role === 'admin') await ensureAuthUser(target);
+          audit(me.email, 'changed role', target.email, role);
+          flash = { tone: 'ok', text: `${target.full_name} is now ${role === 'admin' ? 'an admin' : 'a member'}.` };
+        }
+      }
+    } catch (e) {
+      flash = { tone: 'error', text: e instanceof Error ? e.message : String((e as any)?.message ?? e) };
+    }
+  }
+
   if (action === 'set-expertise') {
     const tags = form.getAll('expertise').map(String);
-    const { error } = await supabase.rpc('set_mentee_expertise', { p_person: personId, p_expertise: tags });
+    let { error } = await supabase.rpc('set_mentee_expertise', { p_person: personId, p_expertise: tags });
+    if (error && /No such mentee/.test(error.message)) ({ error } = await supabaseAdmin().from('people').update({ expertise: tags }).eq('id', personId));
     flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Skills updated.' };
   }
 
   if (action === 'set-availability') {
     const available = form.get('available') === '1';
-    const { error } = await supabase.rpc('set_mentee_availability', { p_person: personId, p_available: available });
+    let { error } = await supabase.rpc('set_mentee_availability', { p_person: personId, p_available: available });
+    if (error && /No such mentee/.test(error.message)) ({ error } = await supabaseAdmin().from('people').update({ open_to_assignment: available }).eq('id', personId));
     flash = error
       ? { tone: 'error', text: error.message }
       : { tone: 'ok', text: available ? 'Marked available for assignment.' : 'Marked unavailable.' };
@@ -65,14 +121,59 @@ if (supabase && Astro.request.method === 'POST') {
       flash = { tone: 'error', text: 'Choose a project to assign them to.' };
     } else {
       const { error } = await supabase.rpc('assign_mentee', { p_project: projectId, p_person: personId });
-      flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Mentee assigned to the project.' };
+      flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Added to the paper.' };
     }
   }
 
   if (action === 'unassign') {
     const projectId = String(form.get('projectId') ?? '');
     const { error } = await supabase.rpc('unassign_mentee', { p_project: projectId, p_person: personId });
-    flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Mentee unassigned.' };
+    flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Taken off the paper.' };
+  }
+
+  // Help requests and analysts (add-help-and-learning.sql).
+  if (action === 'appoint-request') {
+    const projectId = String(form.get('projectId') ?? '');
+    const requestId = String(form.get('requestId') ?? '');
+    if (!personId) {
+      flash = { tone: 'error', text: 'Choose who to appoint.' };
+    } else {
+      const { error } = await supabase.rpc('appoint', { p_project: projectId, p_person: personId, p_role: null, p_request: requestId });
+      if (error) flash = { tone: 'error', text: error.message };
+      else {
+        const mail = await emailAppointment(Astro.url.origin, projectId, personId);
+        flash = { tone: mail === 'failed' ? 'error' : 'ok', text: 'Appointed.' + MAIL_NOTE[mail] };
+      }
+    }
+  }
+  if (action === 'resolve-offer' || action === 'delete-offer') {
+    const id = String(form.get('requestId') ?? '');
+    const err = action === 'resolve-offer' ? await resolveRequest(id, me.name, '') : await deleteRequest(id, me.name);
+    flash = err ? { tone: 'error', text: err } : { tone: 'ok', text: action === 'resolve-offer' ? 'Resolved. No email was sent.' : 'Deleted.' };
+  }
+  if (action === 'delete-request') {
+    const { error } = await supabase.rpc('delete_help_request', { p_id: String(form.get('requestId') ?? '') });
+    flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Request deleted. Nobody was emailed.' };
+  }
+  if (action === 'close-request') {
+    const { error } = await supabase.rpc('close_help_request', { p_id: String(form.get('requestId') ?? '') });
+    flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Marked as resolved. Nobody was emailed.' };
+  }
+  if (action === 'make-analyst') {
+    const projectId = String(form.get('projectId') ?? '');
+    if (!personId) {
+      flash = { tone: 'error', text: 'Choose an analyst first.' };
+    } else {
+      let { error } = await supabase.rpc('board_assign', { p_project: projectId, p_person: personId, p_slot: 'analyst', p_role: null });
+      if (error && (error.code === 'PGRST202' || /p_role/.test(error.message ?? ''))) {
+        ({ error } = await supabase.rpc('board_assign', { p_project: projectId, p_person: personId, p_slot: 'analyst' }));
+      }
+      if (error) flash = { tone: 'error', text: error.message };
+      else {
+        const mail = await emailAppointment(Astro.url.origin, projectId, personId);
+        flash = { tone: mail === 'failed' ? 'error' : 'ok', text: 'Analyst appointed.' + MAIL_NOTE[mail] };
+      }
+    }
   }
 
   if (action === 'rate') {
@@ -94,6 +195,7 @@ if (supabase && Astro.request.method === 'POST') {
 }
 
 let mentees: any[] = [];
+let everyone: any[] = [];
 type OpenProject = {
   id: string; ref: string; title: string; phase: string; stage: string; study_type: string;
   lead_id: string | null; colead_id: string | null; analyst_id: string | null; presenter_id: string | null;
@@ -106,13 +208,15 @@ let dbError = '';
 
 if (supabase) {
   try {
-    const { data: menteeRows, error: mErr } = await supabase
+    // Everyone, mentees and members alike (inactive too, for the Revoked filter).
+    const { data: personRows, error: mErr } = await supabaseAdmin()
       .from('people')
-      .select('id,full_name,email,expertise,open_to_assignment,flag_status,flag_reason')
-      .eq('is_mentee', true)
+      .select('id,full_name,email,role,active,auth_id,is_mentee,expertise,open_to_assignment,flag_status,flag_reason')
+      .neq('role', 'viewer')
       .order('full_name');
     if (mErr) throw mErr;
-    mentees = menteeRows ?? [];
+    everyone = personRows ?? [];
+    mentees = everyone.filter((x) => x.is_mentee && x.active);
 
     const { data: projRows, error: pErr } = await supabase
       .from('projects')
@@ -155,9 +259,19 @@ const reviewsFor = (personId: string, projectId?: string) =>
 const ANALYSIS_SKILL: Record<string, string> = { NIS: 'Analysis for NIS/NRD', NRD: 'Analysis for NIS/NRD', TriNetX: 'Analysis for TriNetX' };
 const analystNeededFor = (p: OpenProject): string =>
   !p.analyst_id && p.phase !== 'journal' && ANALYSIS_SKILL[p.study_type] ? ANALYSIS_SKILL[p.study_type] : '';
+// Every open paper can take people (not only Ongoing); the phase buttons
+// choose which show. Published papers are left out.
 const boardProjects = openProjects
-  .filter((p) => p.phase === 'manuscript' || analystNeededFor(p))
+  .filter((p) => !(p.phase === 'journal' && p.stage === 'published'))
   .sort((a, b) => Number(!!analystNeededFor(b)) - Number(!!analystNeededFor(a)) || a.ref.localeCompare(b.ref));
+const PHASES = [
+  { key: 'manuscript', label: 'Ongoing' },
+  { key: 'conference', label: 'Conferences' },
+  { key: 'journal', label: 'Submissions' },
+  { key: 'idea', label: 'New papers' },
+  { key: 'all', label: 'All' },
+] as const;
+const phaseCount = (k: string) => (k === 'all' ? boardProjects.length : boardProjects.filter((p) => p.phase === k).length);
 const needsById = new Map<string, string[]>();
 if (supabase && boardProjects.length) {
   const { data: needRows, error: needErr } = await supabase.from('projects').select('id,needed_skills').in('id', boardProjects.map((p) => p.id));
@@ -250,58 +364,166 @@ for (const m of boardMentees) {
     papers: rs.map((r) => ({ ref: refByProject.get(r.project_id) ?? 'Paper', projectId: r.project_id, overall: r.overall, date: fmtReviewDate(r.created_at) })),
   });
 }
+// ---- Help requests from first authors, and members who offered to help.
+let helpReady = false;
+let openHelp: HelpRequest[] = [];
+let allAssignments: Assignment[] = [];
+if (supabase && dbReady) {
+  const [h, a] = await Promise.all([
+    supabase.from('help_requests').select(HELP_COLS).is('closed_at', null).order('created_at'),
+    supabase.from('assignments').select(ASSIGNMENT_COLS),
+  ]);
+  helpReady = !h.error && !a.error;
+  openHelp = (h.data ?? []) as HelpRequest[];
+  allAssignments = (a.data ?? []) as Assignment[];
+}
+const projById = new Map(openProjects.map((p) => [p.id, p]));
+openHelp = openHelp.filter((h) => projById.has(h.project_id));
+const filledFor = (reqId: string) => allAssignments.filter((a) => a.request_id === reqId);
+const personById = new Map(labPeople.map((m: any) => [m.id, m]));
+const personByEmail = new Map(labPeople.map((m: any) => [String(m.email).toLowerCase(), m]));
+const requesterIds = [...new Set(openHelp.map((h) => h.requested_by).filter(Boolean))] as string[];
+const nameOf = (id: string | null) => (id ? personById.get(id)?.full_name ?? leadName.get(id) ?? 'Member' : 'Member');
+// Open parts nobody has finished, for the "busy" hint.
+const openPartsOf = (pid: string) => allAssignments.filter((a) => a.person_id === pid && !a.done_at);
+
+type Volunteer = { id: string; person: any | null; name: string; email: string; roles: string[]; other: string; hours: string; from: string; until: string; ai: string; aiParts: string; when: number; appointedSince: string | null };
+let volunteers: Volunteer[] = [];
+try {
+  const since = Date.now() - 120 * 86400000;
+  volunteers = (await listRequests('topic'))
+    .filter((r) => r.source === 'member' && !r.resolvedAt && r.submittedAt >= since && (r.topicRoles?.length || r.topicRole))
+    .map((r) => {
+      const pr = personByEmail.get(r.email.toLowerCase()) ?? null;
+      const later = pr ? allAssignments.filter((a) => a.person_id === pr.id && Date.parse(a.assigned_at) >= r.submittedAt) : [];
+      return {
+        id: r.id, person: pr, name: r.fullName, email: r.email,
+        roles: r.topicRoles ?? [], other: r.topicOther ?? (r.topicRole ?? ''), hours: r.topicHours ?? '',
+        from: r.topicFrom ?? '', until: r.topicUntil ?? '', ai: r.aiPlan ?? '', aiParts: r.aiPlanParts ?? '',
+        when: r.submittedAt,
+        appointedSince: later.length ? later.map((a) => projById.get(a.project_id)?.ref ?? 'a paper').join(', ') : null,
+      };
+    });
+} catch { volunteers = []; }
+const waitingVolunteers = volunteers.filter((v) => !v.appointedSince);
+const topicLabel = (r: string) => (TOPIC_ROLE_LABEL as Record<string, string>)[r] ?? r;
+const aiLabel = (a: string) => (AI_PLAN_LABEL as Record<string, string>)[a] ?? a;
+const volunteerRoles = new Map<string, Set<string>>();
+for (const v of waitingVolunteers) if (v.person) volunteerRoles.set(v.person.id, new Set([...(volunteerRoles.get(v.person.id) ?? []), ...v.roles]));
+
+/** People to suggest for a request: offered that kind of help, then have the skill, then least busy. */
+function suggestFor(h: HelpRequest) {
+  const proj = projById.get(h.project_id);
+  const taken = new Set([proj?.lead_id, ...filledFor(h.id).map((a) => a.person_id)]);
+  return boardMentees
+    .filter((m) => !taken.has(m.id) && (m.is_mentee ? m.open_to_assignment : true))
+    .map((m) => ({
+      m,
+      offered: volunteerRoles.get(m.id)?.has(h.role) ?? false,
+      skilled: boardSkills(m).includes(h.role),
+      load: projectCount(m.id),
+      rating: ratingOf.get(m.id)?.overall ?? null,
+    }))
+    .filter((x) => x.offered || x.skilled)
+    .sort((a, b) => Number(b.offered) - Number(a.offered) || a.load - b.load || (b.rating ?? 0) - (a.rating ?? 0))
+    .slice(0, 6);
+}
+const helpCountOpen = openHelp.length;
+
+// ---- Analysts: who does TriNetX and NIS / NRD analysis, and papers waiting for one.
+const ANALYSIS_GROUPS = [
+  { skill: 'Analysis for TriNetX', label: 'TriNetX', types: ['TriNetX'] },
+  { skill: 'Analysis for NIS/NRD', label: 'NIS / NRD', types: ['NIS', 'NRD'] },
+] as const;
+const analystLoad = (pid: string) => openProjects.filter((p) => p.analyst_id === pid && !(p.phase === 'journal' && p.stage === 'published')).length;
+const analystsFor = (skill: string) =>
+  boardMentees
+    .filter((m) => boardSkills(m).includes(skill))
+    .map((m) => ({ m, load: analystLoad(m.id), rating: ratingOf.get(m.id)?.overall ?? null, past: doneAnalysis.get(m.id)?.has(skill) ?? false }))
+    .sort((a, b) => a.load - b.load || String(a.m.full_name).localeCompare(String(b.m.full_name)));
+const waitingFor = (skill: string) => boardProjects.filter((p) => analystNeededFor(p) === skill);
+
+// Sign-in state for each person (from Supabase auth).
+const authUsers = dbReady ? await listAuthUsers().catch(() => new Map()) : new Map();
+const loginOf = (x: any): 'own' | 'starting' | 'none' | 'no-email' => {
+  if (!hasRealEmail(x.email)) return 'no-email';
+  const a = x.auth_id ? authUsers.get(x.auth_id) : undefined;
+  return !a ? 'none' : a.mustChange ? 'starting' : 'own';
+};
+const lastSignIn = (x: any) => {
+  const t = x.auth_id ? authUsers.get(x.auth_id)?.lastSignIn : null;
+  return t ? new Date(t).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : null;
+};
+// Mentees and members are one group: everyone is a member, some are admins.
+const kindOf = (x: any) => (x.role === 'admin' ? 'admin' : 'member');
+const KIND_LABEL: Record<string, string> = { admin: 'Admin', member: 'Member' };
+const activePeople = everyone.filter((x) => x.active);
+const peopleChips = [
+  { key: 'all', label: 'All', n: activePeople.length },
+  { key: 'available', label: 'Unavailable', n: activePeople.filter((x) => !(x.open_to_assignment && x.flag_status === 'none' && (!x.is_mentee || isCurrent(x.id)))).length },
+  { key: 'flagged', label: 'Flagged', n: activePeople.filter((x) => x.flag_status !== 'none').length },
+  { key: 'admin', label: 'Admins', n: activePeople.filter((x) => kindOf(x) === 'admin').length },
+  { key: 'nologin', label: 'Not signed in yet', n: activePeople.filter((x) => ['starting', 'none'].includes(loginOf(x))).length },
+  { key: 'revoked', label: 'Access revoked', n: everyone.filter((x) => !x.active).length },
+];
+const rolesOn = (pid: string) => openProjects.flatMap((p) => {
+  const r = [p.lead_id === pid && 'First author', p.colead_id === pid && 'Co-lead', p.analyst_id === pid && 'Analyst', p.presenter_id === pid && 'Presenter', p.corresponding_id === pid && 'Corresponding', (p.team_member_ids ?? []).includes(pid) && 'Team'].filter(Boolean) as string[];
+  return r.length ? [{ p, roles: r }] : [];
+});
+const auditRows = listAudit().slice(0, 25);
+
+const TONE_COLOR: Record<string, string> = { available: '#166534', unavailable: '#5b6472', red_flag: '#b06a0a', blacklisted: '#a12a2a' };
+
 const ratingJson = JSON.stringify(Object.fromEntries(
   [...ratingOf].map(([id, r]) => [id, { ...r, name: menteeName.get(id) ?? '', projects: projectCount(id) }]),
 )).replace(/</g, '\\u003c');
 ---
 
-<AppLayout title="Mentees" heading="Mentees" user={me} active="mentees">
-  <div class="adm">
+<AppLayout title="Members" user={me} active="mentees">
+  <div class="adm cv mt">
     {flash && (
-      <div class:list={['adm-flash', `adm-flash--${flash.tone}`]} role="status">
-        <p>{flash.text}</p>
-      </div>
+      <p class:list={['cv-flash', flash.tone === 'error' && 'cv-flash--err']} role="status">
+        <Fragment set:html={icon(flash.tone === 'error' ? 'x' : 'check')} />{flash.text}
+      </p>
     )}
 
     {supabase && !dbReady && (
-      <div class="adm-flash adm-flash--error">
-        <p>
-          The mentees table isn't set up yet in Supabase. Run <code>mca-pipeline/add-mentees.sql</code> in the SQL
-          editor, then reload this page.
-          {dbError && <><br /><span class="adm-hint">({dbError})</span></>}
-        </p>
-      </div>
+      <p class="cv-flash cv-flash--err">The mentees table isn't set up yet. Run add-mentees.sql in Supabase, then reload.{dbError && ` (${dbError})`}</p>
     )}
-
-    {!supabase && (
-      <div class="adm-flash adm-flash--error">
-        <p>Could not reach the pipeline database - the mentees list needs Supabase access.</p>
-      </div>
-    )}
+    {!supabase && <p class="cv-flash cv-flash--err">Could not reach the workflow database.</p>}
 
     {dbReady && (
       <>
-        <div class="mnt-head">
-          <div>
-            <h2 class="mnt-head__title">Mentees</h2>
-            <div class="mnt-views" role="tablist" aria-label="View">
-              <button type="button" class="mnt-view is-on" role="tab" aria-selected="true" data-mnt-view-btn="list">List</button>
-              <button type="button" class="mnt-view" role="tab" aria-selected="false" data-mnt-view-btn="board">Assign to projects</button>
-              <button type="button" class="mnt-view" role="tab" aria-selected="false" data-mnt-view-btn="checkins">Check-ins{checkinCount > 0 && <span class="mnt-view__n">{checkinCount}</span>}</button>
-            </div>
-          </div>
-          <label class="mnt-search" data-mnt-view="list">
-            <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
-            <input type="search" data-mnt-search placeholder="Search mentees…" aria-label="Search mentees" />
+        <div class="cv-bar mt-bar">
+          <h1 class="cv-h1">Members <span>({activePeople.length})</span></h1>
+          <button type="button" class="cv-btn cv-btn--pri" data-pp-add data-mnt-view="list"><Fragment set:html={icon('plus')} /> Add a member</button>
+          <label class="cv-sbox" data-mnt-view="list">
+            <Fragment set:html={icon('search')} />
+            <input type="search" data-mnt-search placeholder="Search name, email or skill" aria-label="Search members" autocomplete="off" />
           </label>
         </div>
+        <nav class="cv-tabs" role="tablist" aria-label="View">
+          <button type="button" class="cv-tab is-on" role="tab" aria-selected="true" data-mnt-view-btn="list">All members</button>
+          <button type="button" class="cv-tab" role="tab" aria-selected="false" data-mnt-view-btn="board">Assign to papers</button>
+          <button type="button" class="cv-tab" role="tab" aria-selected="false" data-mnt-view-btn="help">Help requests{helpCountOpen > 0 && <span class="cv-tab__n is-due">{helpCountOpen}</span>}</button>
+          <button type="button" class="cv-tab" role="tab" aria-selected="false" data-mnt-view-btn="analysts">Analysts</button>
+          <button type="button" class="cv-tab" role="tab" aria-selected="false" data-mnt-view-btn="checkins">Check-ins{checkinCount > 0 && <span class="cv-tab__n is-due">{checkinCount}</span>}</button>
+        </nav>
 
-        {mentees.length === 0 && (
-          <p class="mnt-empty">No mentees yet. Approve an applicant to add one.</p>
+        {everyone.length === 0 && (
+          <p class="cv-empty-box" data-mnt-view="list">No members yet.</p>
         )}
 
         <div class="mnt-list" data-mnt-list data-mnt-view="list">
-          {mentees.map((m) => {
+          <div class="cv-filters pp-chips" data-pp-chips>
+            {peopleChips.filter((c, i) => i === 0 || c.n > 0).map((c, i) => <button type="button" class:list={[i === 0 && 'on']} data-pp-f={c.key}>{c.label}<b>{c.n}</b></button>)}
+          </div>
+          {everyone.length > 0 && (
+            <div class="mt-cols" aria-hidden="true"><span>Name</span><span>Role</span><span>Skills</span><span class="r">Papers</span><span class="r">In the lab</span><span>Status</span></div>
+          )}
+          {everyone.map((m) => {
+            const kind = kindOf(m);
+            const login = loginOf(m);
             const tags: string[] = m.expertise ?? [];
             const assigned = assignmentsByPerson.get(m.id) ?? [];
             const assignedProjectIds = new Set(assigned.map((a: any) => a.project_id));
@@ -309,48 +531,58 @@ const ratingJson = JSON.stringify(Object.fromEntries(
             const badgeTone = m.flag_status === 'blacklisted' ? 'blacklisted' : m.flag_status === 'red_flag' ? 'red_flag' : m.open_to_assignment ? 'available' : 'unavailable';
             const badgeLabel = m.flag_status !== 'none' ? m.flag_status.replace('_', ' ') : m.open_to_assignment ? 'Available' : 'Unavailable';
             return (
-              <article class="mnt-card" data-mnt-name={m.full_name.toLowerCase()}>
+              <article class="mnt-card" data-mnt-name={`${m.full_name} ${m.email} ${tags.join(' ')}`.toLowerCase()} data-kind={kind} data-login={login} data-avail={m.open_to_assignment && m.flag_status === 'none' && (!m.is_mentee || isCurrent(m.id)) ? '1' : '0'} data-flag={m.flag_status !== 'none' ? '1' : '0'} data-active={m.active ? '1' : '0'} hidden={!m.active}>
                 <details class="mnt-row">
-                  <summary class="mnt-row__head">
-                    <span class="mnt-avatar" data-tone={avatarTone(m.id)}>{initials(m.full_name)}</span>
-                    <span class="mnt-row__id">
-                      <span class="mnt-row__name">{m.full_name}</span>
-                      <span class="mnt-row__meta">{tags.length ? tags.join(' · ') : 'No skills listed'} · {assigned.length} project{assigned.length === 1 ? '' : 's'}{(() => {
-                        const r = msById.get(m.id);
-                        if (!r) return '';
-                        return r.membership_status === 'active' ? ` · Day ${dayNumber(r.member_since)} in the lab` : '';
-                      })()}</span>
-                      <span class="mnt-row__pills">
-                        {isCurrent(m.id)
-                          ? <span class="mnt-pill" data-tone={badgeTone}><i /> {badgeLabel}</span>
-                          : <span class="mnt-pill" data-tone="unavailable"><i /> {STATUS_LABEL[msById.get(m.id)!.membership_status]}</span>}
-                        {msById.get(m.id)?.review_due && isCurrent(m.id) && <span class="mnt-pill" data-tone="red_flag"><i /> Term review due</span>}
-                        {msById.get(m.id)?.next_step && <span class="mnt-pill" data-tone="red_flag"><i /> Inactive {msById.get(m.id)!.days_inactive} days</span>}
-                      </span>
+                  <summary class="mt-row">
+                    <span class="mt-who">
+                      <span class="mt-av" data-tone={avatarTone(m.id)}>{initials(m.full_name)}</span>
+                      <span class="mt-who__t"><b>{m.full_name}</b><small>{hasRealEmail(m.email) ? m.email : "No email on file"}</small></span>
                     </span>
-                    <svg class="mnt-row__chev" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="m5 7.5 5 5 5-5" /></svg>
+                    <span class="mt-role"><span class:list={['mt-kind', `is-${kind}`]}>{KIND_LABEL[kind]}</span></span>
+                    <span class="mt-skills">{tags.length ? tags.map((t) => SHORT[t as keyof typeof SHORT] ?? t).join(', ') : <span class="cv-muted">None listed</span>}</span>
+                    <span class="mt-n r">{projectCount(m.id)}</span>
+                    <span class="mt-n r">{(() => {
+                      const r = msById.get(m.id);
+                      return m.is_mentee && r && r.membership_status === 'active' && r.member_since ? `Day ${dayNumber(r.member_since)}` : '-';
+                    })()}</span>
+                    <span class="mt-status">
+                      {!m.active ? <span class="cv-dot" style="--c:#a12a2a">Access revoked</span>
+                      : m.flag_status !== 'none' ? <span class="cv-dot" style={`--c:${TONE_COLOR[badgeTone]}`}>{badgeLabel[0].toUpperCase() + badgeLabel.slice(1)}</span>
+                      : m.is_mentee && !isCurrent(m.id) ? <span class="cv-dot" style="--c:#5b6472">{STATUS_LABEL[msById.get(m.id)!.membership_status]}</span>
+                      : login === 'starting' ? <span class="cv-dot" style="--c:#b06a0a">Starting password</span>
+                      : login === 'none' ? <span class="cv-dot" style="--c:#b06a0a">Not signed in yet</span>
+                      : <span class="cv-dot" style={`--c:${TONE_COLOR[badgeTone]}`}>{badgeLabel}</span>}
+                      {m.is_mentee && m.active && msById.get(m.id)?.review_due && isCurrent(m.id) && <small class="mt-warn">Term review due</small>}
+                      {m.is_mentee && m.active && msById.get(m.id)?.next_step && <small class="mt-warn">Inactive {msById.get(m.id)!.days_inactive} days</small>}
+                    </span>
+                    <svg class="mt-chev" viewBox="0 0 20 20" width="14" height="14" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" d="m5 7.5 5 5 5-5" /></svg>
                   </summary>
 
                   <div class="mnt-row__body">
-                    <div class="mnt-cols">
-                      <div>
-                        <p class="mnt-label">Email</p>
-                        <p class="mnt-value">{m.email}</p>
-                        <a class="mnt-progress" href={`/admin/mentees/${m.id}`}>See progress and reviews</a>
-                        {m.flag_status !== 'none' && (
-                          <p class="mnt-value mnt-value--danger">{m.flag_status.replace('_', ' ')}: {m.flag_reason}</p>
-                        )}
+                    <div class="pp-body">
+                      <dl class="pp-facts">
+                        <div><dt>Email</dt><dd>{hasRealEmail(m.email) ? m.email : 'None on file'}</dd></div>
+                        <div><dt>Last sign-in</dt><dd>{lastSignIn(m) ?? 'Never'}</dd></div>
+                        <div><dt>Password</dt><dd>{login === 'own' ? 'Their own' : login === 'starting' ? 'Starting password' : login === 'none' ? 'No login yet' : '-'}</dd></div>
+                      </dl>
+                      {m.flag_status !== 'none' && <p class="mnt-value mnt-value--danger">{m.flag_status.replace('_', ' ')}: {m.flag_reason}</p>}
+                      <p class="mnt-label">Skills</p>
+                      <div class="mnt-chips mnt-chips--static">
+                        {tags.length ? tags.map((t) => <span class="mnt-chip-pill">{t}</span>) : <span class="cv-muted">None listed</span>}
                       </div>
-                      <div>
-                        <p class="mnt-label">Skills</p>
-                        <div class="mnt-chips mnt-chips--static">
-                          {tags.length ? tags.map((t) => <span class="mnt-chip-pill">{t}</span>) : <span class="mnt-value">None listed</span>}
-                        </div>
-                      </div>
+                      <p class="mnt-label">Papers</p>
+                      {rolesOn(m.id).length === 0 ? <p class="cv-muted pp-none">Not on an open paper.</p> : (
+                        <ul class="pp-papers">
+                          {rolesOn(m.id).map(({ p, roles }) => (
+                            <li><a href={`/pipeline/projects/${p.id}`}><b>{p.ref}</b> {p.title}</a><span class="cv-muted">{roles.join(', ')}</span></li>
+                          ))}
+                        </ul>
+                      )}
+                      {m.is_mentee && <a class="mnt-progress" href={`/admin/mentees/${m.id}`}>See progress and reviews</a>}
                     </div>
-
+                    {m.is_mentee && assigned.length > 0 && (<>
                     <div class="mnt-projects-head">
-                      <h3>Assigned projects</h3>
+                      <h3>Reviews on papers</h3>
                       {assignable.length > 0 && (
                         <details class="mnt-assign">
                           <summary><svg viewBox="0 0 20 20" width="13" height="13" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" d="M10 4v12M4 10h12" /></svg> Assign project</summary>
@@ -454,11 +686,12 @@ const ratingJson = JSON.stringify(Object.fromEntries(
                         );
                       })}
                     </div>
+                    </>)}
                   </div>
                 </details>
 
                 <div class="mnt-row__tools">
-                  <a class="mnt-icon-btn" href={`mailto:${m.email}`} title="Email mentee" aria-label="Email mentee">
+                  <a class="mnt-icon-btn" href={`mailto:${m.email}`} title="Email" aria-label={`Email ${m.full_name}`}>
                     <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5" d="M3 5h14v10H3z" /><path fill="none" stroke="currentColor" stroke-width="1.5" d="m3.5 5.5 6.5 5.5 6.5-5.5" /></svg>
                   </a>
                   <details class="mnt-menu">
@@ -466,6 +699,7 @@ const ratingJson = JSON.stringify(Object.fromEntries(
                       <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><circle cx="4" cy="10" r="1.4" fill="currentColor" /><circle cx="10" cy="10" r="1.4" fill="currentColor" /><circle cx="16" cy="10" r="1.4" fill="currentColor" /></svg>
                     </summary>
                     <div class="mnt-menu__panel">
+                      {(<>
                       <form method="post">
                         <input type="hidden" name="personId" value={m.id} />
                         <input type="hidden" name="available" value={m.open_to_assignment ? '0' : '1'} />
@@ -491,7 +725,7 @@ const ratingJson = JSON.stringify(Object.fromEntries(
                       </details>
 
                       <details class="mnt-menu__sub">
-                        <summary>Flag mentee</summary>
+                        <summary>Flag</summary>
                         <form method="post" class="mnt-menu__subform">
                           <input type="hidden" name="personId" value={m.id} />
                           <select class="mnt-select" name="flag">
@@ -503,6 +737,18 @@ const ratingJson = JSON.stringify(Object.fromEntries(
                           <button class="mnt-btn mnt-btn--danger" type="submit" name="action" value="set-flag">Update flag</button>
                         </form>
                       </details>
+                      <hr class="pp-sep" />
+                      </>)}
+                      <form method="post" class="pp-acct">
+                        <input type="hidden" name="personId" value={m.id} />
+                        {hasRealEmail(m.email) && m.active && <button class="mnt-menu__item" type="submit" name="action" value="reset-link">Email a password reset link</button>}
+                        {hasRealEmail(m.email) && m.active && m.role !== 'admin' && <button class="mnt-menu__item" type="submit" name="action" value="reset-default">Reset to the starting password</button>}
+                        {m.email !== me.email && <input type="hidden" name="role" value={m.role === 'admin' ? 'member' : 'admin'} />}
+                        {m.email !== me.email && <button class="mnt-menu__item" type="submit" name="action" value="role">{m.role === 'admin' ? 'Make a member (not admin)' : 'Make an admin'}</button>}
+                        {m.email !== me.email && (m.active
+                          ? <button class="mnt-menu__item mnt-menu__item--danger" type="submit" name="action" value="deactivate" data-pp-confirm={`Revoke ${m.full_name}'s access?`}>Revoke access</button>
+                          : <button class="mnt-menu__item" type="submit" name="action" value="activate">Restore access</button>)}
+                      </form>
                     </div>
                   </details>
                 </div>
@@ -510,6 +756,222 @@ const ratingJson = JSON.stringify(Object.fromEntries(
             );
           })}
         </div>
+
+        {auditRows.length > 0 && (
+          <details class="pp-audit" data-mnt-view="list">
+            <summary>Recent account activity</summary>
+            <ul>
+              {auditRows.map((e) => (
+                <li><time>{new Date(e.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}</time><span><b>{e.actor}</b> {e.action}{e.target && <> · {e.target}</>}{e.detail && <> ({e.detail})</>}</span></li>
+              ))}
+            </ul>
+          </details>
+        )}
+
+        <dialog class="cv-dialog" data-pp-dialog aria-labelledby="pp-dlg-title">
+          <form method="post">
+            <input type="hidden" name="action" value="add-person" />
+            <div class="cv-dialog__head">
+              <div>
+                <h2 class="cv-dialog__title" id="pp-dlg-title">Add a member</h2>
+                <p class="cv-dialog__sub">They sign in with this email and the starting password, then choose their own. Applicants are added when you accept their application.</p>
+              </div>
+              <button type="button" class="cv-ib" data-pp-close aria-label="Close"><Fragment set:html={icon('x')} /></button>
+            </div>
+            <div class="cv-dialog__body">
+              <label class="cv-field"><span>Name</span><input name="name" required maxlength="120" /></label>
+              <label class="cv-field"><span>Email</span><input name="email" type="email" required maxlength="200" /></label>
+              <label class="cv-field"><span>Role</span><select name="role"><option value="member">Member</option><option value="admin">Admin</option></select></label>
+            </div>
+            <div class="cv-dialog__foot">
+              <button type="button" class="cv-btn" data-pp-close>Cancel</button>
+              <button type="submit" class="cv-btn cv-btn--pri">Add</button>
+            </div>
+          </form>
+        </dialog>
+
+        <section class="hq" data-mnt-view="help" data-hq hidden aria-label="Help requests">
+          {!helpReady && <p class="cv-flash">Help requests switch on once add-help-and-learning.sql is run in Supabase.</p>}
+
+          <div class="cv-section">
+            <h2 class="cv-h2">From first authors <span>{openHelp.length}</span></h2>
+            {openHelp.length === 0 ? (
+              <p class="cv-empty-box">No open requests.</p>
+            ) : (
+              <table class="cv-table hq-table">
+                <colgroup><col /><col style="width:250px" /><col style="width:330px" /><col style="width:84px" /></colgroup>
+                <thead><tr><th>Paper</th><th>Needs</th><th>Appoint</th><th class="x"><span class="sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                  {openHelp.map((h) => {
+                    const proj = projById.get(h.project_id)!;
+                    const filled = filledFor(h.id);
+                    const sugg = suggestFor(h);
+                    const suggIds = new Set(sugg.map((x) => x.m.id));
+                    const takenIds = new Set([proj.lead_id, ...filled.map((a) => a.person_id)]);
+                    return (
+                      <tr>
+                        <td class="t">
+                          <a href={`/pipeline/projects/${proj.id}#team`}>{proj.title}</a>
+                          <div class="cv-sub"><span class="cv-num">{proj.ref}</span><span class="hq-gap">{proj.lead_id ? nameOf(proj.lead_id) : 'No first author'}</span><span class="hq-gap cv-muted">{shortDate(h.created_at)}</span></div>
+                          {h.note && <p class="cv-note">{h.note}</p>}
+                        </td>
+                        <td>
+                          <div class="hq-need"><b>{roleLabel(h.role)}</b></div>
+                          <div class="hq-fill">
+                            <span class="hq-meter">{Array.from({ length: h.spots }, (_, i) => <i class:list={[i < filled.length && 'on']} />)}</span>
+                            <span class="cv-muted">{filled.length} of {h.spots}</span>
+                          </div>
+                          {filled.length > 0 && <div class="hq-names">{filled.map((a) => nameOf(a.person_id)).join(', ')}</div>}
+                        </td>
+                        <td>
+                          <form method="post" action="?view=help" class="hq-appoint">
+                            <input type="hidden" name="action" value="appoint-request" />
+                            <input type="hidden" name="projectId" value={proj.id} />
+                            <input type="hidden" name="requestId" value={h.id} />
+                            <select name="personId" required aria-label={`Who to appoint for ${roleLabel(h.role)}`}>
+                              <option value="">Choose someone</option>
+                              {sugg.length > 0 && (
+                                <optgroup label="Suggested">
+                                  {sugg.map((x) => <option value={x.m.id}>{x.m.full_name}  ·  {x.load} paper{x.load === 1 ? '' : 's'}{x.offered ? ', offered' : ''}{x.rating !== null ? `, rated ${x.rating}` : ''}</option>)}
+                                </optgroup>
+                              )}
+                              <optgroup label="Everyone">
+                                {boardMentees.filter((m) => !takenIds.has(m.id) && !suggIds.has(m.id)).map((m) => (
+                                  <option value={m.id}>{m.full_name}  ·  {projectCount(m.id)} paper{projectCount(m.id) === 1 ? '' : 's'}</option>
+                                ))}
+                              </optgroup>
+                            </select>
+                            <button type="submit" class="cv-btn cv-btn--pri cv-btn--sm">Appoint</button>
+                          </form>
+                          {sugg.some((x) => x.offered) && <p class="hq-hint">{sugg.filter((x) => x.offered).map((x) => x.m.full_name).join(', ')} offered to help with this.</p>}
+                        </td>
+                        <td class="x">
+                          <div class="cv-acts hq-acts">
+                            <form method="post" action="?view=help" data-confirm="Mark this request resolved? Nobody is emailed.">
+                              <input type="hidden" name="action" value="close-request" /><input type="hidden" name="requestId" value={h.id} />
+                              <button type="submit" class="cv-ib" data-tip="Resolve, no email" aria-label="Resolve without emailing"><Fragment set:html={icon('check')} /></button>
+                            </form>
+                            <form method="post" action="?view=help" data-confirm="Delete this request? Nobody is emailed.">
+                              <input type="hidden" name="action" value="delete-request" /><input type="hidden" name="requestId" value={h.id} />
+                              <button type="submit" class="cv-ib hq-del" data-tip="Delete" aria-label="Delete request"><Fragment set:html={icon('trash')} /></button>
+                            </form>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <div class="cv-section">
+            <h2 class="cv-h2">Offered to help <span>{waitingVolunteers.length}</span></h2>
+            <p class="cv-lede">From Join a new topic, until they are appointed or you resolve it.</p>
+            {waitingVolunteers.length === 0 ? (
+              <p class="cv-empty-box">Nobody is waiting.</p>
+            ) : (
+              <table class="cv-table hq-table">
+                <colgroup><col /><col style="width:300px" /><col style="width:170px" /><col style="width:190px" /><col style="width:84px" /></colgroup>
+                <thead><tr><th>Member</th><th>Can help with</th><th>Time</th><th>AI use</th><th class="x"><span class="sr-only">Actions</span></th></tr></thead>
+                <tbody>
+                  {waitingVolunteers.map((v) => (
+                    <tr>
+                      <td class="t">
+                        {v.person ? <a href={`/admin/mentees/${v.person.id}`}>{v.name}</a> : <span class="hq-name">{v.name}</span>}
+                        <div class="cv-sub">{v.person ? `${projectCount(v.person.id)} paper${projectCount(v.person.id) === 1 ? '' : 's'}` : <span class="hq-nolab">Not in the lab database</span>}<span class="hq-gap cv-muted">asked {shortDate(new Date(v.when).toISOString())}</span></div>
+                      </td>
+                      <td>
+                        <div class="cv-tags">
+                          {v.roles.length
+                            ? v.roles.map((r) => <span class="cv-tag">{r === 'Other' ? (v.other || 'Other') : (SHORT[r as keyof typeof SHORT] ?? topicLabel(r))}</span>)
+                            : <span class="cv-tag">{v.other}</span>}
+                        </div>
+                      </td>
+                      <td class="sm">
+                        {v.hours ? <div>{v.hours} h a week</div> : <div class="cv-muted">-</div>}
+                        {v.from && <div class="cv-muted">from {shortDate(v.from)}{v.until ? ` to ${shortDate(v.until)}` : ''}</div>}
+                      </td>
+                      <td class="sm">{v.ai ? aiLabel(v.ai) : <span class="cv-muted">-</span>}{v.aiParts && <div class="cv-muted">{v.aiParts}</div>}</td>
+                      <td class="x">
+                        <div class="cv-acts hq-acts">
+                          <form method="post" action="?view=help" data-confirm={`Resolve ${v.name}'s request? They won't get an email.`}>
+                            <input type="hidden" name="action" value="resolve-offer" /><input type="hidden" name="requestId" value={v.id} />
+                            <button type="submit" class="cv-ib" data-tip="Resolve, no email" aria-label={`Resolve ${v.name}'s request without emailing`}><Fragment set:html={icon('check')} /></button>
+                          </form>
+                          <form method="post" action="?view=help" data-confirm={`Delete ${v.name}'s request? They won't get an email.`}>
+                            <input type="hidden" name="action" value="delete-offer" /><input type="hidden" name="requestId" value={v.id} />
+                            <button type="submit" class="cv-ib hq-del" data-tip="Delete" aria-label={`Delete ${v.name}'s request`}><Fragment set:html={icon('trash')} /></button>
+                          </form>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </section>
+
+        <section class="an" data-mnt-view="analysts" data-an hidden aria-label="Analysts">
+          <p class="an-all"><a class="cv-btn cv-btn--sm" href="/pipeline/analysis">Change or remove an analyst on any TriNetX, NIS, NRD or DMC PCI paper</a></p>
+          <div class="an__cols">
+            {ANALYSIS_GROUPS.map((g) => {
+              const people = analystsFor(g.skill);
+              const waiting = waitingFor(g.skill);
+              return (
+                <section class="an-col">
+                  <h2 class="cv-h2">{g.label} <span>{people.length} analysts</span></h2>
+                  {waiting.length > 0 && (
+                    <div class="an-wait">
+                      <p class="an-wait__h"><span class="cv-dot" style="--c:#a12a2a">{waiting.length} paper{waiting.length === 1 ? '' : 's'} without an analyst</span></p>
+                      <ul data-an-list>
+                        {waiting.map((p) => (
+                          <li>
+                            <a href={`/pipeline/projects/${p.id}`} class="an-wait__t">{p.title}</a>
+                            <div class="cv-sub"><span class="cv-num">{p.ref}</span><span class="hq-gap">{p.study_type}</span>{p.lead_id && <span class="hq-gap cv-muted">{nameOf(p.lead_id)}</span>}</div>
+                            <form method="post" action="?view=analysts" class="hq-appoint">
+                              <input type="hidden" name="action" value="make-analyst" />
+                              <input type="hidden" name="projectId" value={p.id} />
+                              <select name="personId" required aria-label={`Analyst for ${p.ref}`}>
+                                <option value="">Choose an analyst</option>
+                                <optgroup label={`${g.label} analysts`}>
+                                  {people.filter((x) => x.m.id !== p.lead_id).map((x) => <option value={x.m.id}>{x.m.full_name}  ·  analyst on {x.load}</option>)}
+                                </optgroup>
+                                <optgroup label="Everyone else">
+                                  {boardMentees.filter((m) => !people.some((x) => x.m.id === m.id) && m.id !== p.lead_id).map((m) => <option value={m.id}>{m.full_name}</option>)}
+                                </optgroup>
+                              </select>
+                              <button type="submit" class="cv-btn cv-btn--pri cv-btn--sm">Appoint</button>
+                            </form>
+                          </li>
+                        ))}
+                      </ul>
+                      {waiting.length > 3 && <button type="button" class="cv-link an-more" data-an-more>Show {waiting.length - 3} more</button>}
+                    </div>
+                  )}
+                  {people.length === 0 ? (
+                    <p class="cv-empty-box">Nobody lists this skill yet.</p>
+                  ) : (
+                    <table class="cv-table an-table">
+                      <colgroup><col /><col style="width:112px" /><col style="width:80px" /></colgroup>
+                      <thead><tr><th>Name</th><th class="r">Analyst on</th><th class="r">Rating</th></tr></thead>
+                      <tbody>
+                        {people.map((x) => (
+                          <tr>
+                            <td>{x.m.is_mentee ? <a class="an-name" href={`/admin/mentees/${x.m.id}`}>{x.m.full_name}</a> : <span class="an-name">{x.m.full_name}</span>}</td>
+                            <td class="r"><span class:list={['an-load', x.load === 0 && 'is-free']}>{x.load}</span></td>
+                            <td class="r sm">{x.rating !== null ? x.rating : <span class="cv-muted">-</span>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </section>
+              );
+            })}
+          </div>
+        </section>
 
         <section class="ci" data-mnt-view="checkins" data-ci hidden aria-label="Check-ins">
           {!msReady && (
@@ -567,7 +1029,7 @@ const ratingJson = JSON.stringify(Object.fromEntries(
           <div class="mb__skills" role="group" aria-label="Show by skill">
             <button type="button" class="mb-skill is-on" data-mb-skill="" aria-pressed="true">All skills</button>
             {SKILLS.map((sk) => (
-              <button type="button" class="mb-skill" data-mb-skill={sk} aria-pressed="false">{sk}</button>
+              <button type="button" class="mb-skill" data-mb-skill={sk} aria-pressed="false">{SKILL_SHORT[sk]}</button>
             ))}
           </div>
 
@@ -575,14 +1037,13 @@ const ratingJson = JSON.stringify(Object.fromEntries(
             <aside class="mb__people">
               <label class="mb__search">
                 <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
-                <input type="search" placeholder={`Find anyone of ${boardMentees.length}`} aria-label="Find a person" data-mb-psearch autocomplete="off" />
+                <input type="search" placeholder={`Search ${boardMentees.length} people`} aria-label="Find a person" data-mb-psearch autocomplete="off" />
               </label>
-              <p class="mb__hint">Everyone in the lab, with the number of projects they are on. People on no project come first. Move a name onto a project to add them, or tap a name, then <b>Add here</b>.</p>
               <div class="mb__sort" role="group" aria-label="Order people by">
-                <span>Order by</span>
-                <button type="button" class="mb-sort is-on" data-mb-sort="count" aria-pressed="true">Fewest projects</button>
+                <span>Sort</span>
+                <button type="button" class="mb-sort is-on" data-mb-sort="count" aria-pressed="true">Least busy</button>
                 <button type="button" class="mb-sort" data-mb-sort="name" aria-pressed="false">Name</button>
-                {reviewsReady && <button type="button" class="mb-sort" data-mb-sort="rating" aria-pressed="false">Highest rated</button>}
+                {reviewsReady && <button type="button" class="mb-sort" data-mb-sort="rating" aria-pressed="false">Rating</button>}
               </div>
               <ul class="mb__chips" data-mb-chips>
                 {boardMentees.map((m) => {
@@ -597,7 +1058,7 @@ const ratingJson = JSON.stringify(Object.fromEntries(
                           <span class="mb-chip__name">{m.full_name}</span>
                           <span class="mb-chip__count" data-mb-count={count} title="Open projects they are on">{count}</span>
                         </span>
-                        <span class="mb-chip__load" data-mb-load>{count === 0 ? 'Not on any project' : `On ${count} project${count === 1 ? '' : 's'}`}{m.is_mentee ? ' · mentee' : ''}</span>
+                        <span class="mb-chip__load" data-mb-load>{count === 0 ? 'Not on any project' : `On ${count} project${count === 1 ? '' : 's'}`}</span>
                         {sk.length > 0 && <span class="mb-chip__skills">{sk.map((x) => SKILL_SHORT[x as keyof typeof SKILL_SHORT]).join(' · ')}</span>}
                         {reviewsReady && m.is_mentee && (rt && rt.overall !== null
                           ? <span class="mb-chip__rate"><span class="mb-dots" aria-hidden="true">{[1, 2, 3, 4, 5].map((k) => <i class:list={[k <= Math.round(rt.overall!) && 'on']} />)}</span><b>{rt.overall}</b> from {rt.n} review{rt.n === 1 ? '' : 's'}</span>
@@ -614,10 +1075,26 @@ const ratingJson = JSON.stringify(Object.fromEntries(
             </aside>
 
             <div class="mb__projects">
+              <div class="mb-pick" data-mb-pick hidden aria-live="polite">
+                <span class="mb-pick__who">Adding <b data-mb-pick-name></b> as</span>
+                <select class="mb-pick__role" data-mb-role aria-label="Their role on the paper">
+                  {SKILLS.filter((sk) => !sk.startsWith('Analysis')).map((sk) => <option value={sk}>{SKILL_SHORT[sk]}</option>)}
+                  <option value="">General help</option>
+                </select>
+                <span class="mb-pick__hint">Press Add on a paper, or drag the name onto it.</span>
+                <button type="button" class="mb-pick__x" data-mb-pick-cancel>Cancel</button>
+              </div>
+              <div class="mb__toolbar">
               <label class="mb__search mb__search--wide">
                 <svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" d="M9 15.5A6.5 6.5 0 1 0 9 2.5a6.5 6.5 0 0 0 0 13Zm9 2-4.3-4.3" /></svg>
-                <input type="search" placeholder={`Find one of ${boardProjects.filter((p) => p.phase === 'manuscript').length} ongoing projects`} aria-label="Find a project" data-mb-jsearch autocomplete="off" />
+                <input type="search" placeholder={`Find any of ${boardProjects.length} open papers`} aria-label="Find a project" data-mb-jsearch autocomplete="off" />
               </label>
+              <div class="mb__phases" role="group" aria-label="Show papers in">
+                {PHASES.map((ph) => (
+                  <button type="button" class:list={['mb-sort', ph.key === 'manuscript' && 'is-on']} data-mb-phase={ph.key} aria-pressed={ph.key === 'manuscript' ? 'true' : 'false'}>{ph.label} <small>{phaseCount(ph.key)}</small></button>
+                ))}
+              </div>
+              </div>
               <section class="mb-info" data-mb-info hidden aria-live="polite" aria-label="Ratings of the selected mentee"></section>
               {boardProjects.length === 0 && <p class="mb__empty">No ongoing projects right now.</p>}
               <div class="mb__grid" data-mb-grid>
@@ -627,14 +1104,14 @@ const ratingJson = JSON.stringify(Object.fromEntries(
                   return (
                     <article class:list={['mb-proj', analystFor && 'has-slot']} data-mb-proj data-id={p.id} data-ref={p.ref}
                       data-name={`${p.ref} ${p.title} ${p.study_type}`.toLowerCase()} data-needs={needs.join('|')}
-                      data-analyst-for={analystFor} data-only-skill={p.phase !== 'manuscript' ? analystFor : ''} hidden={p.phase !== 'manuscript'}>
+                      data-analyst-for={analystFor} data-phase={p.phase} hidden={p.phase !== 'manuscript'}>
                       <div class="mb-proj__head">
                         <a class="mb-proj__title" href={`/pipeline/projects/${p.id}`} draggable="false"><b>{p.ref}</b> {p.title}</a>
                         <span class="mb-proj__match">Good match</span>
                       </div>
                       <p class="mb-proj__lead">
                         <span>{p.study_type}</span>
-                        {p.phase !== 'manuscript' && <span>{p.phase === 'idea' ? 'New paper' : p.phase === 'conference' ? 'Conference' : p.phase}</span>}
+                        {p.phase !== 'manuscript' && <span>{p.phase === 'idea' ? 'New paper' : p.phase === 'conference' ? 'Conference' : p.phase === 'journal' ? 'Submission' : p.phase}</span>}
                         {p.lead_id && leadName.get(p.lead_id) && <span>Lead: {leadName.get(p.lead_id)}</span>}
                       </p>
                       {needs.length > 0 && (
@@ -643,9 +1120,9 @@ const ratingJson = JSON.stringify(Object.fromEntries(
                       {analystFor && (
                         <div class="mb-slot" data-mb-slot="analyst">
                           <span class="mb-slot__k">Analyst</span>
-                          <span class="mb-slot__empty" data-mb-slot-empty>Needed. Drop a name here.</span>
+                          <span class="mb-slot__empty" data-mb-slot-empty>needed</span>
                           <span class="mb-slot__filled" data-mb-slot-filled hidden></span>
-                          <button type="button" class="mb-slot__add" data-mb-add-analyst hidden>Make <span data-mb-add-name></span> the analyst</button>
+                          <button type="button" class="mb-slot__add" data-mb-add-analyst hidden>Make analyst</button>
                         </div>
                       )}
                       <ul class="mb-proj__people" data-mb-assigned>
@@ -664,7 +1141,7 @@ const ratingJson = JSON.stringify(Object.fromEntries(
                           </li>
                         ))}
                       </ul>
-                      <button type="button" class="mb-proj__add" data-mb-add hidden>Add <span data-mb-add-name></span> here</button>
+                      <button type="button" class="mb-proj__add" data-mb-add hidden>Add here</button>
                     </article>
                   );
                 })}
@@ -685,6 +1162,13 @@ const ratingJson = JSON.stringify(Object.fromEntries(
 </AppLayout>
 
 <script>
+  document.querySelectorAll<HTMLButtonElement>('[data-an-more]').forEach((b) =>
+    b.addEventListener('click', () => { b.closest('.an-wait')?.classList.add('is-all'); b.remove(); }));
+
+  // Quiet actions ask first (no email goes out either way).
+  document.querySelectorAll<HTMLFormElement>('form[data-confirm]').forEach((f) =>
+    f.addEventListener('submit', (e) => { if (!confirm(f.dataset.confirm ?? 'Are you sure?')) e.preventDefault(); }));
+
   // ---------- List / board switch (remembered for this browser) ----------
   const views = document.querySelectorAll<HTMLElement>('[data-mnt-view]');
   const viewBtns = document.querySelectorAll<HTMLButtonElement>('[data-mnt-view-btn]');
@@ -701,7 +1185,10 @@ const ratingJson = JSON.stringify(Object.fromEntries(
   let saved = 'list';
   try { saved = localStorage.getItem('mnt-view') ?? 'list'; } catch { /* storage blocked */ }
   const asked = new URLSearchParams(location.search).get('view');
-  if (asked === 'board' || asked === 'checkins') saved = asked;
+  if (asked === 'list' || asked === 'board' || asked === 'checkins' || asked === 'help' || asked === 'analysts') saved = asked;
+  if (saved === 'list') showView('list');
+  if (saved === 'help' && document.querySelector('[data-hq]')) showView('help');
+  if (saved === 'analysts' && document.querySelector('[data-an]')) showView('analysts');
   if (saved === 'board' && document.querySelector('[data-mb]')) showView('board');
   if (saved === 'checkins' && document.querySelector('[data-ci]')) showView('checkins');
 
@@ -742,7 +1229,10 @@ const ratingJson = JSON.stringify(Object.fromEntries(
       // analyst slot is empty for that kind of analysis.
       for (const c of cards) {
         const analyst = !!skill && c.dataset.analystFor === skill && !c.classList.contains('slot-filled');
-        const visibleNow = skill ? has(c, 'data-needs') || analyst || (c.dataset.analystFor === skill) : !c.dataset.onlySkill;
+        const phaseOk = phase === 'all' || c.dataset.phase === phase;
+        // A search finds any open paper. Otherwise the phase buttons decide,
+        // except that papers waiting for an analyst show under that analysis skill.
+        const visibleNow = jq ? true : skill ? (has(c, 'data-needs') && phaseOk) || c.dataset.analystFor === skill : phaseOk;
         const ok = (!jq || (c.dataset.name ?? '').includes(jq)) && visibleNow;
         c.hidden = !ok; if (ok) js++;
         c.classList.toggle('is-analyst-match', analyst);
@@ -750,6 +1240,13 @@ const ratingJson = JSON.stringify(Object.fromEntries(
       if (pempty) pempty.hidden = ps > 0 || chipRows.length === 0;
       if (jempty) jempty.hidden = js > 0 || cards.length === 0;
     }
+    let phase = 'manuscript';
+    const phaseBtns = [...board.querySelectorAll<HTMLButtonElement>('[data-mb-phase]')];
+    phaseBtns.forEach((b) => b.addEventListener('click', () => {
+      phase = b.dataset.mbPhase ?? 'manuscript';
+      phaseBtns.forEach((x) => { const on = x === b; x.classList.toggle('is-on', on); x.setAttribute('aria-pressed', String(on)); });
+      applyFilters();
+    }));
     psearch?.addEventListener('input', applyFilters);
     jsearch?.addEventListener('input', applyFilters);
     skillBtns.forEach((b) => b.addEventListener('click', () => {
@@ -799,15 +1296,30 @@ const ratingJson = JSON.stringify(Object.fromEntries(
     }
 
     type Slot = 'helper' | 'analyst';
+    let lastMail = '';
+    let lastRole = '';
+    let pendingRole = '';
+    // A person's role on a paper: the skill picked at the top, else their own first skill.
+    const defaultRole = (chip: HTMLElement) => {
+      const own = (chip.dataset.skills ?? '').split('|').filter((x) => x && !x.startsWith('Analysis'));
+      return skill && !skill.startsWith('Analysis') ? skill : own[0] ?? 'Manuscript writing';
+    };
     async function post(action: 'assign' | 'unassign', projectId: string, personId: string, slot: Slot): Promise<string | null> {
       const body = new FormData();
       body.set('action', action);
       body.set('projectId', projectId);
       body.set('personId', personId);
       body.set('slot', slot);
+      // The skill picked at the top is their role on the paper.
+      if (slot === 'helper') {
+        const r = pendingRole;
+        if (r) body.set('role', r);
+        lastRole = r;
+      }
       try {
         const res = await fetch('/admin/mentees/assign', { method: 'POST', body, headers: { accept: 'application/json' } });
         const out = await res.json().catch(() => ({ ok: false, error: 'Something went wrong. Reload the page and try again.' }));
+        lastMail = out.mail ?? '';
         return res.ok && out.ok ? null : out.error || 'Something went wrong.';
       } catch {
         return 'Could not reach the server. Check your connection and try again.';
@@ -877,7 +1389,8 @@ const ratingJson = JSON.stringify(Object.fromEntries(
       card.classList.add('is-flash');
       setTimeout(() => card.classList.remove('is-flash'), 900);
       const what = slot === 'analyst' ? `${name} is now the analyst on ${ref}.` : `Added ${name} to ${ref}.`;
-      say(fromUndo ? `${name} is back on ${ref}.` : `${what} They've been notified.`, fromUndo ? null : () => unassign(card, personId, name, slot, true));
+      const asWhat = slot === 'helper' && lastRole ? ` (${lastRole})` : '';
+      say(fromUndo ? `${name} is back on ${ref}.` : `${what.replace(/\.$/, asWhat + '.')} ${lastMail || "They've been notified."}`, fromUndo ? null : () => unassign(card, personId, name, slot, true));
     }
 
     async function unassign(card: HTMLElement, personId: string, name: string, slot: Slot = 'helper', fromUndo = false) {
@@ -916,8 +1429,9 @@ const ratingJson = JSON.stringify(Object.fromEntries(
       if (!info) return;
       const r = chip ? ratings[chip.dataset.id ?? ''] : undefined;
       info.replaceChildren();
-      info.hidden = !r || !chip;
-      if (!r || !chip) return;
+      // Only worth the space once someone has reviewed them.
+      info.hidden = !r || !chip || !r.n;
+      if (!r || !chip || !r.n) return;
       const head = el('div', 'mb-info__head');
       const who = el('div', 'mb-info__who');
       who.append(el('b', '', r.name), el('span', '', `${r.projects} project${r.projects === 1 ? '' : 's'} · ${r.n ? `${r.n} review${r.n === 1 ? '' : 's'}` : 'not reviewed yet'}`));
@@ -977,6 +1491,15 @@ const ratingJson = JSON.stringify(Object.fromEntries(
       selected = chip && (refresh || chip !== selected) ? chip : null;
       if (selected) { selected.classList.add('is-picked'); selected.setAttribute('aria-pressed', 'true'); }
       board.classList.toggle('has-pick', !!selected);
+      if (pickBar) {
+        pickBar.hidden = !selected;
+        if (selected) {
+          pickName!.textContent = selected.dataset.label ?? '';
+          // Their role: the skill picked at the top, else their own first skill.
+          const want = defaultRole(selected);
+          if ([...roleSel!.options].some((o) => o.value === want)) roleSel!.value = want;
+        }
+      }
       markMatches(selected);
       showRatings(selected);
       for (const card of cards) {
@@ -992,6 +1515,10 @@ const ratingJson = JSON.stringify(Object.fromEntries(
         }
       }
     }
+    const pickBar = board.querySelector<HTMLElement>('[data-mb-pick]');
+    const pickName = board.querySelector<HTMLElement>('[data-mb-pick-name]');
+    const roleSel = board.querySelector<HTMLSelectElement>('[data-mb-role]');
+    board.querySelector('[data-mb-pick-cancel]')?.addEventListener('click', () => select(null));
     let suppressClick = false;
     chips.forEach((chip) => chip.addEventListener('click', () => {
       if (suppressClick) { suppressClick = false; return; }
@@ -1000,6 +1527,7 @@ const ratingJson = JSON.stringify(Object.fromEntries(
     cards.forEach((card) => card.querySelector('[data-mb-add]')?.addEventListener('click', () => {
       if (!selected) return;
       const chip = selected;
+      pendingRole = roleSel?.value ?? defaultRole(chip);
       select(null);
       assign(card, chip.dataset.id!, chip.dataset.label ?? 'Member');
     }));
@@ -1049,7 +1577,7 @@ const ratingJson = JSON.stringify(Object.fromEntries(
       if (started) {
         suppressClick = true;
         setTimeout(() => { suppressClick = false; }, 0);
-        if (drop && over) assign(over, chip.dataset.id!, chip.dataset.label ?? 'Member', slot ? 'analyst' : 'helper');
+        if (drop && over) { pendingRole = defaultRole(chip); assign(over, chip.dataset.id!, chip.dataset.label ?? 'Member', slot ? 'analyst' : 'helper'); }
       }
     }
     chips.forEach((chip) => {
@@ -1097,17 +1625,37 @@ const ratingJson = JSON.stringify(Object.fromEntries(
 </script>
 
 <script>
-  const input = document.querySelector('[data-mnt-search]');
+  // Everyone: search plus the role / sign-in chips.
+  const input = document.querySelector<HTMLInputElement>('[data-mnt-search]');
   const list = document.querySelector('[data-mnt-list]');
-  if (input && list) {
-    input.addEventListener('input', () => {
-      const q = input.value.trim().toLowerCase();
-      list.querySelectorAll('.mnt-card').forEach((card) => {
-        const name = card.getAttribute('data-mnt-name') ?? '';
-        card.style.display = !q || name.includes(q) ? '' : 'none';
-      });
+  let ppFilter = 'all';
+  const ppMatch = (card: HTMLElement) => {
+    const active = card.dataset.active === '1';
+    if (ppFilter === 'revoked') return !active;
+    if (!active) return false;
+    if (ppFilter === 'all') return true;
+    if (ppFilter === 'nologin') return card.dataset.login === 'starting' || card.dataset.login === 'none';
+    if (ppFilter === 'available') return card.dataset.avail === '0';
+    if (ppFilter === 'flagged') return card.dataset.flag === '1';
+    return card.dataset.kind === ppFilter;
+  };
+  function ppApply() {
+    const q = input?.value.trim().toLowerCase() ?? '';
+    list?.querySelectorAll<HTMLElement>('.mnt-card').forEach((card) => {
+      card.hidden = !(ppMatch(card) && (!q || (card.dataset.mntName ?? '').includes(q)));
     });
   }
+  input?.addEventListener('input', ppApply);
+  document.querySelectorAll<HTMLButtonElement>('[data-pp-f]').forEach((b) => b.addEventListener('click', () => {
+    ppFilter = b.dataset.ppF ?? 'all';
+    document.querySelectorAll('[data-pp-f]').forEach((x) => x.classList.toggle('on', x === b));
+    ppApply();
+  }));
+  const ppDlg = document.querySelector<HTMLDialogElement>('[data-pp-dialog]');
+  document.querySelector('[data-pp-add]')?.addEventListener('click', () => ppDlg?.showModal());
+  ppDlg?.querySelectorAll('[data-pp-close]').forEach((b) => b.addEventListener('click', () => ppDlg.close()));
+  document.querySelectorAll<HTMLButtonElement>('[data-pp-confirm]').forEach((b) =>
+    b.addEventListener('click', (e) => { if (!confirm(b.dataset.ppConfirm ?? 'Are you sure?')) e.preventDefault(); }));
 </script>
 
 <style>
@@ -1127,165 +1675,155 @@ const ratingJson = JSON.stringify(Object.fromEntries(
   [data-mnt-view][hidden] { display: none !important; }
 
   /* ---------- board (no rules or borders: shape comes from fills) ---------- */
-  .mb { display: grid; gap: 1.1rem; }
-  .mb__skills { display: flex; flex-wrap: wrap; gap: 0.45rem; }
-  .mb-skill {
-    border: 0; border-radius: 999px; padding: 0.5rem 0.95rem; cursor: pointer;
-    background: var(--bg-tint); color: var(--text); font: inherit; font-size: 0.82rem; font-weight: 600;
-  }
-  .mb-skill:hover { color: var(--text-strong); }
-  .mb-skill.is-on { background: var(--text-strong); color: var(--bg); }
-  .mb-skill:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-  .mb__cols { display: grid; grid-template-columns: minmax(240px, 300px) 1fr; gap: 1.25rem; align-items: start; }
-  .mb__people {
-    position: sticky; top: 1rem; display: grid; gap: 0.7rem; padding: 1rem;
-    background: var(--bg-tint); border-radius: 18px;
-    max-height: calc(100vh - 2rem); min-height: 0; grid-template-rows: auto auto auto minmax(0, 1fr) auto;
-  }
-  .mb__search {
-    display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem 0.8rem;
-    background: var(--surface); border-radius: 12px; color: var(--text-muted);
-  }
-  .mb__search input { border: 0; background: none; outline: none; font: inherit; font-size: 0.88rem; color: var(--text-strong); width: 100%; min-width: 0; }
-  .mb__search:focus-within { box-shadow: 0 0 0 2px var(--blue); }
-  .mb__search--wide { max-width: 460px; background: var(--bg-tint); }
-  .mb__hint { margin: 0; font-size: 0.76rem; line-height: 1.5; color: var(--text-muted); }
-  .mb__chips { list-style: none; margin: 0; padding: 0 2px 2px 0; display: grid; gap: 0.45rem; overflow-y: auto; min-height: 0; }
+  /* ---------- Assign to papers (calm board) ---------- */
+  .mb { display: grid; gap: 18px; }
+  .mb__skills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .mb-skill, .mb-sort { border: 0; background: none; padding: 6px 12px; border-radius: 999px; font: inherit; font-size: 0.8125rem; font-weight: 500; color: var(--cv-ink); cursor: pointer; }
+  .mb-skill:hover, .mb-sort:hover { background: var(--cv-soft); }
+  .mb-skill.is-on, .mb-sort.is-on { background: var(--cv-tint); font-weight: 700; }
+  .mb-skill:focus-visible, .mb-sort:focus-visible, .mb-chip:focus-visible, .mb-proj__add:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--cv-tint), 0 0 0 1px var(--cv-accent); }
+  .mb-sort small { font-weight: 600; opacity: 0.6; margin-left: 3px; font-size: inherit; }
+  .mb__cols { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 32px; align-items: start; }
+
+  .mb__people { position: sticky; top: 84px; max-height: calc(100vh - 104px); display: flex; flex-direction: column; gap: 10px; padding: 12px 12px 0; border: 1px solid var(--cv-line); border-radius: 12px; background: var(--cv-bg); }
+  .mb__search { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--cv-line); border-radius: 8px; background: var(--cv-bg); color: var(--cv-ink); }
+  .mb__search svg { opacity: 0.6; flex: none; }
+  .mb__search input { width: 100%; min-width: 0; border: 0; outline: none; background: none; font: inherit; font-size: 0.875rem; color: var(--cv-ink); }
+  .mb__search:focus-within { border-color: var(--cv-accent); box-shadow: 0 0 0 3px var(--cv-tint); }
+  .mb__search--wide { flex: 1 1 260px; max-width: 360px; }
+  .mb__sort { display: flex; align-items: center; gap: 2px; font-size: 0.8125rem; }
+  .mb__sort > span { opacity: 0.55; margin-right: 6px; }
+  .mb__sort .mb-sort { padding: 4px 10px; }
+  .mb__chips { list-style: none; margin: 0 -12px; padding: 0; overflow-y: auto; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid var(--cv-line); }
+  .mb__chips li { border-bottom: 1px solid var(--cv-line); }
+  .mb__chips li:last-child { border-bottom: 0; }
   .mb__chips li[hidden] { display: none; }
-  .mb__chips li.is-dim { order: 1; opacity: 0.5; }
+  .mb__chips li.is-dim { order: 1; opacity: 0.45; }
   .mb__chips li.is-dim:hover { opacity: 1; }
-  .mb-chip {
-    width: 100%; display: grid; gap: 3px; text-align: left; padding: 0.65rem 0.8rem;
-    background: var(--surface); border: 0; border-radius: 12px;
-    font: inherit; color: var(--text-strong); cursor: grab; user-select: none; -webkit-user-select: none;
-    transition: transform 0.12s, background-color 0.12s;
-  }
-  .mb-chip:hover { transform: translateX(2px); }
-  .mb-chip:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-  .mb-chip__top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
-  .mb-chip__name { font-size: 0.9rem; font-weight: 700; }
-  .mb-chip__count {
-    min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center;
-    background: var(--bg-tint); font-size: 0.72rem; font-weight: 700; color: var(--text-muted); font-variant-numeric: tabular-nums;
-  }
-  .mb-chip__skills { font-size: 0.74rem; color: var(--text-muted); line-height: 1.4; }
-  .mb-chip__warn { font-size: 0.72rem; font-weight: 700; color: var(--warn); }
-  .mb-chip.is-unavail .mb-chip__name { color: var(--text-muted); }
-  .mb-chip.is-picked { background: var(--blue); color: #fff; }
-  .mb-chip.is-picked .mb-chip__skills, .mb-chip.is-picked .mb-chip__warn { color: rgba(255, 255, 255, 0.85); }
-  .mb-chip.is-picked .mb-chip__count { background: rgba(255, 255, 255, 0.2); color: #fff; }
-  .mb-chip.is-dragged { opacity: 0.4; }
-  .mb-chip__load { font-size: 0.74rem; color: var(--text-muted); }
-  .mb-chip.is-free .mb-chip__load { color: var(--ok); font-weight: 700; }
-  .mb-chip.is-free .mb-chip__count { background: var(--ok-bg); color: var(--ok); }
-  .mb-chip.is-picked .mb-chip__load { color: rgba(255, 255, 255, 0.85); }
-  .mb-chip__rate { display: flex; align-items: center; gap: 0.4rem; font-size: 0.74rem; color: var(--text-muted); }
-  .mb-chip__rate b { color: var(--text-strong); font-variant-numeric: tabular-nums; }
-  .mb-chip__rate--none { font-style: italic; }
+  .mb-chip { width: 100%; display: grid; gap: 1px; padding: 10px 14px; border: 0; background: none; text-align: left; font: inherit; color: var(--cv-ink); cursor: grab; transition: background 0.12s; }
+  .mb-chip:hover { background: var(--cv-soft); }
+  .mb-chip__top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .mb-chip__name { font-size: 0.9375rem; font-weight: 600; }
+  .mb-chip__count { flex: none; min-width: 26px; padding: 1px 8px; border-radius: 999px; background: var(--cv-soft); border: 1px solid var(--cv-line); text-align: center; font-size: 0.75rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .mb-chip.is-free .mb-chip__count { background: #e6f2ea; border-color: #c5e0cf; color: #1f6b3a; }
+  .mb-chip__load { display: none; }
+  .mb-chip__skills, .mb-chip__rate { font-size: 0.75rem; opacity: 0.65; }
+  .mb-chip__rate { display: flex; align-items: center; gap: 6px; }
+  .mb-chip__rate b { font-variant-numeric: tabular-nums; }
+  .mb-chip__rate--none { display: none; }
+  .mb-chip__warn { font-size: 0.75rem; font-weight: 600; color: #8a5a00; }
   .mb-dots { display: inline-flex; gap: 2px; }
-  .mb-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
-  .mb-dots i.on { background: var(--blue); }
-  .mb-chip.is-picked .mb-chip__rate, .mb-chip.is-picked .mb-chip__rate b { color: #fff; }
+  .mb-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--cv-line); }
+  .mb-dots i.on { background: var(--cv-accent); }
+  .mb-chip.is-unavail .mb-chip__name { opacity: 0.55; }
+  .mb-chip.is-picked { background: var(--cv-accent); color: #fff; }
+  .mb-chip.is-picked :is(.mb-chip__skills, .mb-chip__rate, .mb-chip__warn) { color: #fff; opacity: 0.85; }
+  .mb-chip.is-picked .mb-chip__count { background: rgba(255, 255, 255, 0.18); border-color: transparent; color: #fff; }
   .mb-chip.is-picked .mb-dots i { background: rgba(255, 255, 255, 0.35); }
   .mb-chip.is-picked .mb-dots i.on { background: #fff; }
-  .mb__sort { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; font-size: 0.76rem; color: var(--text-muted); }
-  .mb-sort { border: 0; padding: 0.3rem 0.65rem; border-radius: 999px; background: var(--surface); font: inherit; font-size: 0.76rem; font-weight: 700; color: var(--text-muted); cursor: pointer; }
-  .mb-sort.is-on { background: var(--text-strong); color: var(--bg); }
-  .mb-sort:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
-  /* ratings of the picked mentee */
-  .mb-info { display: grid; gap: 0.8rem; padding: 1rem 1.1rem; background: var(--surface); border-radius: 18px; box-shadow: inset 0 0 0 2px var(--blue); }
+  .mb-chip.is-dragged { opacity: 0.4; }
+
+  .mb__projects { display: grid; gap: 14px; min-width: 0; }
+  .mb__toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+  .mb__phases { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; }
+  .mb-pick { position: sticky; top: 76px; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px 10px 16px; border-radius: 12px; background: var(--cv-accent); color: #fff; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18); }
+  .mb-pick[hidden] { display: none; }
+  .mb-pick__who { font-size: 0.9375rem; }
+  .mb-pick__role { padding: 6px 10px; border: 0; border-radius: 8px; background: #fff; color: #111; font: inherit; font-size: 0.875rem; font-weight: 600; }
+  .mb-pick__hint { font-size: 0.8125rem; opacity: 0.8; }
+  .mb-pick__x { margin-left: auto; padding: 6px 12px; border: 1px solid rgba(255, 255, 255, 0.45); border-radius: 8px; background: none; color: #fff; font: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer; }
+  .mb-pick__x:hover { background: rgba(255, 255, 255, 0.12); }
+
+  .mb-info { display: grid; gap: 12px; padding: 14px 16px; border: 1px solid var(--cv-line); border-radius: 12px; background: var(--cv-bg); box-shadow: none; }
   .mb-info[hidden] { display: none; }
-  :global(.mb-info__head) { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-  :global(.mb-info__who) { display: grid; gap: 2px; min-width: 0; }
-  :global(.mb-info__who b) { font-size: 1.05rem; color: var(--text-strong); }
-  :global(.mb-info__who span) { font-size: 0.8rem; color: var(--text-muted); }
-  :global(.mb-info__big) { display: grid; justify-items: end; }
-  :global(.mb-info__big b) { font-size: 1.9rem; line-height: 1; color: var(--blue); font-variant-numeric: tabular-nums; }
-  :global(.mb-info__big span) { font-size: 0.72rem; color: var(--text-muted); }
-  :global(.mb-info__bars) { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem 1.2rem; }
-  :global(.mb-info__bar) { display: grid; gap: 3px; }
-  :global(.mb-info__bar dt) { font-size: 0.76rem; color: var(--text); }
-  :global(.mb-info__bar dd) { margin: 0; display: flex; align-items: center; gap: 0.5rem; }
-  :global(.mb-info__bar dd b) { font-size: 0.76rem; color: var(--text-strong); min-width: 3.5rem; font-variant-numeric: tabular-nums; }
-  :global(.mb-info__track) { flex: 1; height: 6px; border-radius: 999px; background: var(--bg-tint); overflow: hidden; }
-  :global(.mb-info__fill) { display: block; height: 100%; background: var(--blue); }
-  :global(.mb-info__papers) { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; }
-  :global(.mb-info__k) { font-size: 0.76rem; color: var(--text-muted); margin-right: 0.2rem; }
-  :global(.mb-info__paper) { padding: 0.2rem 0.55rem; border-radius: 999px; background: var(--accent-wash); color: var(--blue); font-size: 0.76rem; font-weight: 700; text-decoration: none; }
-  :global(.mb-info__paper:hover) { background: var(--blue); color: #fff; }
-  :global(.mb-info__again) { margin: 0; font-size: 0.8rem; color: var(--text-muted); }
-  :global(.mb-info__more) { justify-self: start; font-size: 0.82rem; font-weight: 700; color: var(--blue); }
-  @media (max-width: 560px) { :global(.mb-info__bars) { grid-template-columns: 1fr; } }
-  .mb__empty { margin: 0; font-size: 0.84rem; color: var(--text-muted); }
-  .mb__projects { display: grid; gap: 0.9rem; min-width: 0; }
-  .mb__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.8rem; }
+  :global(.mt .mb-info__head) { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+  :global(.mt .mb-info__who) { display: grid; gap: 2px; min-width: 0; }
+  :global(.mt .mb-info__who span) { font-size: 0.8125rem; opacity: 0.65; }
+  :global(.mt .mb-info__big) { display: grid; justify-items: end; }
+  :global(.mt .mb-info__big span) { font-size: 0.75rem; opacity: 0.6; }
+  :global(.mt .mb-info__bars) { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 24px; }
+  :global(.mt .mb-info__bar) { display: grid; gap: 4px; }
+  :global(.mt .mb-info__bar dt) { font-size: 0.8125rem; }
+  :global(.mt .mb-info__bar dd) { margin: 0; display: flex; align-items: center; gap: 8px; }
+  :global(.mt .mb-info__bar dd b) { min-width: 3.5rem; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+  :global(.mt .mb-info__track) { flex: 1; height: 6px; border-radius: 999px; background: var(--cv-soft); overflow: hidden; }
+  :global(.mt .mb-info__fill) { display: block; height: 100%; }
+  :global(.mt .mb-info__papers) { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  :global(.mt .mb-info__k) { font-size: 0.8125rem; opacity: 0.6; margin-right: 2px; }
+  :global(.mt .mb-info__paper) { padding: 2px 9px; border-radius: 999px; font-size: 0.75rem; font-weight: 700; }
+  :global(.mt .mb-info__again) { margin: 0; font-size: 0.8125rem; opacity: 0.7; }
+  :global(.mt .mb-info__more) { justify-self: start; font-size: 0.8125rem; font-weight: 700; }
+  :global(.mt .mb-info__who b) { color: var(--cv-ink) !important; font-size: 1rem; }
+  :global(.mt .mb-info__big b) { color: var(--cv-accent) !important; font-size: 1.6rem !important; }
+  :global(.mt .mb-info__fill) { background: var(--cv-accent) !important; }
+  :global(.mt .mb-info__paper) { background: var(--cv-tint) !important; color: var(--cv-accent) !important; }
+  :global(.mt .mb-info__paper:hover) { background: var(--cv-accent) !important; color: #fff !important; }
+  :global(.mt .mb-info__more) { color: var(--cv-accent) !important; }
+
+  .mb__empty { margin: 0; padding: 20px; border: 1px dashed var(--cv-line); border-radius: 8px; text-align: center; font-size: 0.875rem; opacity: 0.75; }
+  .mb__empty[hidden] { display: none; }
+  .mb__grid { display: flex; flex-direction: column; border-top: 2px solid var(--cv-ink); }
   .mb-proj {
-    display: grid; gap: 0.5rem; align-content: start; padding: 1rem 1.05rem; min-height: 128px;
-    background: var(--surface); border-radius: 16px;
-    box-shadow: 0 0 0 0 transparent; transition: box-shadow 0.12s, background-color 0.12s;
+    display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) 128px;
+    grid-template-areas: "head people add" "lead people add" "needs people add" "slot people add";
+    column-gap: 24px; row-gap: 4px; align-items: start;
+    padding: 16px 12px; border-bottom: 1px solid var(--cv-line); background: none; border-radius: 0; box-shadow: none; transition: background 0.15s;
   }
   .mb-proj[hidden] { display: none; }
-  .mb-proj__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
-  .mb-proj__title { font-size: 0.88rem; line-height: 1.4; color: var(--text-strong); }
-  .mb-proj__title:hover { color: var(--blue); }
-  .mb-proj__match { display: none; flex-shrink: 0; padding: 0.15rem 0.5rem; border-radius: 999px; background: var(--ok-bg); color: var(--ok); font-size: 0.68rem; font-weight: 700; }
+  .mb-proj:hover { background: var(--cv-soft); }
+  .mb-proj__head { grid-area: head; display: flex; align-items: baseline; gap: 10px; }
+  .mb-proj__title { font-size: 0.9375rem; font-weight: 500; line-height: 1.4; color: var(--cv-ink); }
+  .mb-proj__title b { font-weight: 700; margin-right: 6px; font-variant-numeric: tabular-nums; }
+  .mb-proj__title:hover { color: var(--cv-accent); text-decoration: underline; text-underline-offset: 3px; }
+  .mb-proj__match { display: none; flex: none; padding: 1px 8px; border-radius: 999px; background: #e6f2ea; color: #1f6b3a; font-size: 0.6875rem; font-weight: 700; }
   .mb-proj.is-match .mb-proj__match { display: inline-block; }
-  .mb-proj__lead { margin: 0; display: flex; flex-wrap: wrap; gap: 0.15rem 0.7rem; font-size: 0.76rem; color: var(--text-muted); }
-  .mb-proj__lead span:first-child { font-weight: 700; color: var(--text); }
-  .mb-proj.is-analyst-match { order: -1; box-shadow: inset 0 0 0 2px var(--blue); }
-  /* the analyst slot */
-  .mb-slot { display: grid; gap: 0.35rem; padding: 0.6rem 0.7rem; border-radius: 12px; background: var(--accent-wash); transition: box-shadow 0.12s, background-color 0.12s; }
-  .mb-slot__k { font-size: 0.72rem; font-weight: 700; color: var(--blue); }
-  .mb-slot__empty { font-size: 0.8rem; font-weight: 600; color: var(--text-strong); }
+  .mb-proj__lead { grid-area: lead; margin: 0; display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 0.8125rem; opacity: 0.7; }
+  .mb-proj__needs { grid-area: needs; margin: 2px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; font-size: 0.75rem; }
+  .mb-proj__needs span { opacity: 0.6; margin-right: 2px; }
+  .mb-proj__needs i { font-style: normal; padding: 1px 8px; border-radius: 999px; background: var(--cv-tint); color: var(--cv-accent); font-weight: 600; }
+  .an-all { margin: 0 0 18px; }
+  .mb-proj.is-analyst-match { order: -1; background: var(--cv-soft); }
+  .mb-slot { grid-area: slot; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 4px; font-size: 0.8125rem; }
+  .mb-slot__k { font-weight: 700; }
+  .mb-slot__empty { display: inline-flex; align-items: center; gap: 6px; color: #a12a2a; font-weight: 600; }
+  .mb-slot__empty::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
   .mb-slot__empty[hidden], .mb-slot__filled[hidden], .mb-slot__add[hidden] { display: none; }
-  .mb-slot__filled { justify-self: start; display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.25rem 0.3rem 0.25rem 0.65rem; background: var(--surface); border-radius: 999px; font-size: 0.78rem; font-weight: 700; color: var(--text-strong); }
-  .mb-proj.slot-filled .mb-slot { background: var(--bg-tint); }
-  .mb-proj.slot-filled .mb-slot__k { color: var(--text-muted); }
-  .mb.is-dragging .mb-proj:not(.slot-filled) .mb-slot { box-shadow: inset 0 0 0 1.5px var(--blue); }
-  .mb.is-dragging .mb-slot.is-over { background: var(--blue); }
-  .mb.is-dragging .mb-slot.is-over .mb-slot__k, .mb.is-dragging .mb-slot.is-over .mb-slot__empty { color: #fff; }
-  .mb-slot__add { justify-self: start; padding: 0.4rem 0.75rem; border: 0; border-radius: 10px; background: var(--text-strong); color: var(--bg); font: inherit; font-size: 0.78rem; font-weight: 700; cursor: pointer; }
-  .mb-proj__needs { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; font-size: 0.72rem; }
-  .mb-proj__needs span { color: var(--text-muted); font-weight: 600; }
-  .mb-proj__needs i { font-style: normal; padding: 0.15rem 0.5rem; border-radius: 999px; background: var(--accent-wash); color: var(--blue); font-weight: 600; }
-  .mb.is-dragging .mb-proj { background: var(--bg-tint); }
-  .mb.is-dragging .mb-proj.is-match { background: var(--ok-bg); }
-  .mb.is-dragging .mb-proj.is-over { box-shadow: 0 0 0 3px var(--blue); background: var(--surface); }
-  .mb-proj.is-busy { opacity: 0.6; }
-  .mb-proj.is-flash { background: var(--ok-bg); }
-  .mb-proj__people { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
-  .mb :global(.mb-tag) {
-    display: inline-flex; align-items: center; gap: 0.2rem; padding: 0.25rem 0.3rem 0.25rem 0.65rem;
-    background: var(--bg-tint); border-radius: 999px; font-size: 0.78rem; font-weight: 600; color: var(--text-strong);
-  }
-  .mb :global(.mb-tag__x) {
-    border: 0; background: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center;
-    font-size: 0.95rem; line-height: 1; color: var(--text-muted); cursor: pointer; padding: 0;
-  }
-  .mb :global(.mb-tag__x:hover) { background: var(--red-wash); color: var(--red); }
-  .mb :global(.mb-tag:not(:has(.mb-tag__x))) { padding-right: 0.65rem; }
-  .mb-proj__add {
-    justify-self: start; margin-top: 0.15rem; padding: 0.45rem 0.85rem; border: 0; border-radius: 10px;
-    background: var(--blue); color: #fff; font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer;
-  }
+  .mb-slot__filled { display: inline-flex; align-items: center; gap: 4px; padding: 2px 4px 2px 10px; border-radius: 999px; background: var(--cv-soft); border: 1px solid var(--cv-line); font-weight: 600; }
+  .mb-slot__add { padding: 4px 10px; border: 1px solid var(--cv-accent); border-radius: 8px; background: var(--cv-bg); color: var(--cv-accent); font: inherit; font-size: 0.8125rem; font-weight: 700; cursor: pointer; }
+  .mb-slot__add:hover { background: var(--cv-accent); color: #fff; }
+  .mb.is-dragging .mb-proj:not(.slot-filled) .mb-slot { outline: 1px dashed var(--cv-accent); outline-offset: 4px; border-radius: 6px; }
+  .mb.is-dragging .mb-slot.is-over { background: var(--cv-tint); }
+  .mb-proj__people { grid-area: people; align-self: center; list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+  .mb-proj__people:empty::before { content: 'Nobody added'; font-size: 0.8125rem; opacity: 0.4; }
+  .mb :global(.mb-tag) { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px 2px 10px; border-radius: 999px; background: var(--cv-soft); border: 1px solid var(--cv-line); font-size: 0.8125rem; font-weight: 500; color: var(--cv-ink); }
+  .mb :global(.mb-tag--team) { background: var(--cv-bg); }
+  .mb :global(.mb-tag:not(:has(.mb-tag__x))) { padding-right: 10px; }
+  .mb :global(.mb-tag__x) { width: 20px; height: 20px; display: grid; place-items: center; border: 0; border-radius: 50%; background: none; color: inherit; opacity: 0.5; font-size: 0.95rem; line-height: 1; cursor: pointer; }
+  .mb :global(.mb-tag__x:hover) { opacity: 1; background: #fbeaea; color: #a12a2a; }
+  .mb-proj__add { grid-area: add; align-self: center; justify-self: end; display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border: 1px solid var(--cv-accent); border-radius: 8px; background: var(--cv-accent); color: #fff; font: inherit; font-size: 0.8125rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .mb-proj__add:hover { opacity: 0.9; }
   .mb-proj__add[hidden] { display: none; }
-  .mb-toast {
-    position: fixed; left: 50%; bottom: 1.25rem; transform: translateX(-50%); z-index: 60;
-    display: flex; align-items: center; gap: 0.9rem; max-width: calc(100vw - 2rem);
-    padding: 0.75rem 1.05rem; background: var(--text-strong); color: var(--bg); border-radius: 14px; font-size: 0.86rem;
-  }
+  .mb-proj.is-match .mb-proj__add { box-shadow: 0 0 0 3px #c5e0cf; }
+  .mb.is-dragging .mb-proj { opacity: 0.7; }
+  .mb.is-dragging .mb-proj.is-match { opacity: 1; }
+  .mb.is-dragging .mb-proj.is-over { opacity: 1; background: var(--cv-tint); box-shadow: inset 0 0 0 2px var(--cv-accent); }
+  .mb-proj.is-busy { opacity: 0.55; pointer-events: none; }
+  .mb-proj.is-flash { background: #e6f2ea; }
+  .mb-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 14px; max-width: calc(100vw - 32px); padding: 11px 16px; border-radius: 10px; background: #111827; color: #fff; font-size: 0.875rem; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.25); }
   .mb-toast[hidden] { display: none; }
-  .mb-toast.is-error { background: var(--red); color: #fff; }
-  .mb-toast__undo { border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; cursor: pointer; padding: 0; }
+  .mb-toast.is-error { background: #8a1f1f; }
+  .mb-toast__undo { border: 0; background: none; color: inherit; font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 0; }
   :global(.mb-ghost) {
     position: fixed; left: 0; top: 0; z-index: 70; pointer-events: none;
-    padding: 0.5rem 0.85rem; background: var(--blue); color: #fff; border-radius: 12px;
-    font-size: 0.86rem; font-weight: 700; white-space: nowrap;
+    padding: 7px 12px; background: #1f4e79; color: #fff; border-radius: 8px;
+    font-size: 0.875rem; font-weight: 700; white-space: nowrap; box-shadow: 0 10px 24px rgba(15, 23, 42, 0.25);
   }
-  @media (max-width: 760px) {
+  @media (max-width: 900px) {
     .mb__cols { grid-template-columns: 1fr; }
     .mb__people { position: static; max-height: none; }
-    .mb__chips { max-height: 300px; }
+    .mb__chips { max-height: 320px; }
+    .mb-proj { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "head add" "lead add" "needs needs" "slot slot" "people people"; }
+    .mb-proj__people { margin-top: 6px; }
   }
   .mnt-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
   .mnt-head__title { font-family: var(--font-sans); font-weight: 700; font-size: 2.3rem; color: var(--text-strong); margin: 0; }
@@ -1516,4 +2054,191 @@ const ratingJson = JSON.stringify(Object.fromEntries(
     .mnt-cols { grid-template-columns: 1fr; }
     .mnt-cols > div:first-child { border-right: 0; padding-right: 0; border-bottom: 1px solid var(--border-soft); padding-bottom: 1rem; }
   }
+  /* ---------- help requests ---------- */
+  .hq, .an { display: grid; gap: 1rem; margin-top: 1rem; }
+  .hq__h { margin: 0.6rem 0 0; font-size: var(--step-1); color: var(--text-strong); display: flex; align-items: center; gap: 0.5rem; }
+  .hq__h span { font-size: 0.8rem; padding: 0 0.45em; background: var(--bg-tint); color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .hq__sub { margin: 0; font-size: 0.85rem; color: var(--text-muted); max-width: 72ch; }
+  .hq__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.8rem; }
+  .hq-card { display: grid; gap: 0.7rem; padding: 1rem 1.1rem; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-soft); }
+  .hq-card__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+  .hq-card__head form { margin: 0; flex: none; }
+  .hq-card__role { margin: 0 0 0.2rem; font-size: 1.05rem; font-weight: 800; color: var(--text-strong); }
+  .hq-card__count { margin-left: 0.4rem; font-size: 0.78rem; font-weight: 700; color: var(--blue); }
+  .hq-card__paper { color: var(--text-strong); text-decoration: none; font-size: 0.92rem; line-height: 1.4; }
+  .hq-card__paper:hover { text-decoration: underline; }
+  .hq-card__meta { margin: 0.2rem 0 0; font-size: 0.8rem; color: var(--text-muted); }
+  .hq-card__note { margin: 0; padding: 0.5rem 0.75rem; background: var(--bg-tint); font-size: 0.86rem; color: var(--text); }
+  .hq-card__close { border: 0; background: none; padding: 0; font: inherit; font-size: 0.8rem; font-weight: 700; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
+  .hq-card__close:hover { color: var(--red); }
+  .hq-card__filled { margin: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+  .hq-tag { display: inline-block; padding: 0.15rem 0.55rem; background: var(--bg-tint); font-size: 0.78rem; font-weight: 600; color: var(--text-strong); }
+  .hq-sugg__k { margin: 0 0 0.35rem; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }
+  .hq-sugg__list { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.4rem; }
+  .hq-pick { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; margin: 0; padding: 0.55rem 0.7rem; box-shadow: inset 0 0 0 1px var(--border-soft); }
+  .hq-pick__who { display: grid; gap: 1px; min-width: 0; }
+  .hq-pick__who b { font-size: 0.88rem; color: var(--text-strong); }
+  .hq-pick__who span { font-size: 0.74rem; color: var(--text-muted); }
+  .hq-pick__offer { font-style: normal; font-size: 0.72rem; font-weight: 700; color: var(--ok); }
+  .hq-pick__go { flex: none; padding: 0.4rem 0.8rem; font-size: 0.78rem; }
+  .hq-any { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.5rem; margin: 0; }
+  .hq-any label { display: grid; gap: 0.25rem; flex: 1 1 240px; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); }
+  .hq-any select { padding: 0.5rem 0.6rem; border: 0; box-shadow: inset 0 0 0 1px var(--border); background: var(--surface); font: inherit; font-size: 0.86rem; color: var(--text-strong); }
+  .hq-any .btn { padding: 0.5rem 0.9rem; font-size: 0.8rem; }
+  .hq-vols { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.5rem; }
+  .hq-vol { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: 0.6rem 1rem; align-items: start; padding: 0.8rem 1rem; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-soft); }
+  .hq-vol__who { display: grid; gap: 2px; min-width: 0; }
+  .hq-vol__who b, .hq-vol__who a { color: var(--text-strong); font-size: 0.92rem; }
+  .hq-vol__who span { font-size: 0.76rem; color: var(--text-muted); overflow-wrap: anywhere; }
+  .hq-vol__roles { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .hq-vol__facts { margin: 0; display: grid; gap: 0.2rem; font-size: 0.8rem; }
+  .hq-vol__facts div { display: flex; gap: 0.4rem; }
+  .hq-vol__facts dt { color: var(--text-muted); font-weight: 600; }
+  .hq-vol__facts dd { margin: 0; color: var(--text-strong); }
+  .hq-past summary { cursor: pointer; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); }
+  .hq-past ul { margin: 0.5rem 0 0; padding-left: 1.1rem; font-size: 0.85rem; }
+  @media (max-width: 820px) { .hq-vol { grid-template-columns: 1fr; } .hq-card__head { flex-direction: column; } }
+
+  /* ---------- analysts ---------- */
+  .an__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; align-items: start; }
+  .an-col { display: grid; gap: 0.8rem; padding: 1rem 1.1rem; background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-soft); }
+  .an-col__h { margin: 0; padding-bottom: 0.5rem; border-bottom: 2px solid var(--text-strong); font-size: var(--step-1); color: var(--text-strong); display: flex; align-items: baseline; gap: 0.5rem; }
+  .an-col__h span { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
+  .an-wait__k { margin: 0 0 0.5rem; font-size: 0.82rem; font-weight: 700; color: var(--text-strong); }
+  .an-wait__k b { color: var(--red); }
+  .an-wait ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.7rem; }
+  .an-wait li { display: grid; gap: 0.25rem; }
+  .an-wait li > a { font-size: 0.86rem; color: var(--text-strong); text-decoration: none; line-height: 1.35; }
+  .an-wait li > a:hover { text-decoration: underline; }
+  .an-wait__meta { font-size: 0.74rem; color: var(--text-muted); }
+  .an-pick { display: flex; gap: 0.4rem; margin: 0.15rem 0 0; }
+  .an-pick select { flex: 1; min-width: 0; padding: 0.4rem 0.5rem; border: 0; box-shadow: inset 0 0 0 1px var(--border); background: var(--surface); font: inherit; font-size: 0.82rem; color: var(--text-strong); }
+  .an-pick .btn { flex: none; padding: 0.4rem 0.75rem; font-size: 0.76rem; }
+  .an-none { margin: 0; font-size: 0.84rem; color: var(--text-muted); }
+  .an-people { margin: 0; padding: 0; list-style: none; display: grid; }
+  .an-people li { display: grid; grid-template-columns: 1fr auto; gap: 0 0.6rem; padding: 0.5rem 0; border-bottom: 1px solid var(--border-soft); }
+  .an-people__name, .an-people__name a { font-size: 0.9rem; font-weight: 700; color: var(--text-strong); text-decoration: none; }
+  .an-people__name a:hover { text-decoration: underline; }
+  .an-people__load { grid-row: span 2; align-self: center; min-width: 1.8rem; padding: 0.15rem 0.4rem; text-align: center; font-weight: 800; font-variant-numeric: tabular-nums; background: var(--bg-tint); color: var(--text-strong); }
+  .an-people__meta { font-size: 0.75rem; color: var(--text-muted); }
+  @media (max-width: 860px) { .an__cols { grid-template-columns: 1fr; } }
+  /* ================= calm look (matches Submissions / Ongoing) ================= */
+  :global(html:not([data-theme='dark']) body.app:has(.mt)) { background: #fff; }
+  .mt { gap: 0; }
+  .mt .cv-bar { margin-bottom: 14px; }
+  .mt .cv-tabs { margin-bottom: 28px; }
+  .mt [hidden] { display: none !important; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* List: one ruled row per mentee, details open underneath. */
+  .mt { --mt-grid: minmax(0, 1.55fr) 84px minmax(0, 1.2fr) 60px 84px 176px 18px; }
+  .mt-kind { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; background: var(--cv-soft); border: 1px solid var(--cv-line); }
+  .mt-kind.is-admin { background: var(--cv-tint); border-color: transparent; color: var(--cv-accent); }
+  .mt-kind.is-mentee { background: #e6f2ea; border-color: transparent; color: #1f6b3a; }
+  .mt .mnt-card[hidden] { display: none; }
+  .pp-chips { margin: 0 0 12px; }
+  .pp-body { display: grid; gap: 12px; }
+  .pp-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; }
+  .pp-facts dt { font-size: 0.8125rem; font-weight: 700; }
+  .pp-facts dd { margin: 2px 0 0; font-size: 0.9rem; overflow-wrap: anywhere; }
+  .pp-papers { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .pp-papers li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; font-size: 0.9rem; }
+  .pp-papers a:hover { color: var(--cv-accent); text-decoration: underline; }
+  .pp-none { margin: 0; font-size: 0.9rem; }
+  .pp-sep { border: 0; border-top: 1px solid var(--cv-line); margin: 6px 0; }
+  .pp-acct { display: grid; }
+  :global(.mnt-menu__item--danger) { color: #a12a2a !important; }
+  .pp-audit { margin-top: 28px; }
+  .pp-audit summary { cursor: pointer; font-size: 0.9375rem; font-weight: 700; }
+  .pp-audit ul { list-style: none; margin: 12px 0 0; padding: 0; display: grid; }
+  .pp-audit li { display: grid; grid-template-columns: 170px 1fr; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--cv-line); font-size: 0.875rem; }
+  .pp-audit time { opacity: 0.6; font-variant-numeric: tabular-nums; }
+  .mt .mnt-list { gap: 0; }
+  .mt-cols { display: grid; grid-template-columns: var(--mt-grid); gap: 16px; padding: 0 96px 12px 16px; border-bottom: 2px solid var(--cv-ink); font-size: 0.9375rem; font-weight: 700; }
+  .mt-cols .r, .mt-row .r { text-align: right; }
+  .mt .mnt-card { background: none; border: 0; border-radius: 0; box-shadow: none; border-bottom: 1px solid var(--cv-line); }
+  .mt .mnt-card:hover { background: var(--cv-soft); }
+  .mt .mnt-card:has(.mnt-row[open]) { background: var(--cv-soft); }
+  .mt-row { display: grid; grid-template-columns: var(--mt-grid); align-items: center; gap: 16px; padding: 14px 96px 14px 16px; cursor: pointer; list-style: none; }
+  .mt-row::-webkit-details-marker { display: none; }
+  .mt-row:focus-visible { outline: 2px solid var(--cv-accent); outline-offset: -2px; }
+  .mt-who { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .mt-av { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 0.75rem; font-weight: 700; background: var(--cv-tint); color: var(--cv-accent); }
+  .mt-av[data-tone='green'] { background: #e6f2ea; color: #1f6b3a; }
+  .mt-av[data-tone='rose'] { background: #f8e9e9; color: #a12a2a; }
+  .mt-av[data-tone='amber'] { background: #f8f0dc; color: #7a5200; }
+  .mt-who__t { display: grid; min-width: 0; }
+  .mt-who__t b { font-size: 1rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mt-who__t small { font-size: 0.8125rem; opacity: 0.6; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mt-skills { font-size: 0.875rem; line-height: 1.45; }
+  .mt-n { font-size: 0.9375rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .mt-status { display: grid; gap: 2px; justify-items: start; }
+  .mt-warn { font-size: 0.75rem; font-weight: 600; color: #8a5a00; padding-left: 17px; }
+  .mt-chev { opacity: 0.45; transition: transform 0.18s ease; }
+  .mt .mnt-row[open] .mt-chev { transform: rotate(180deg); opacity: 0.9; }
+  .mt .mnt-row__tools { position: absolute; margin: 0; top: 50%; right: 12px; transform: translateY(-50%); gap: 2px; }
+  .mt .mnt-card:has(.mnt-row[open]) .mnt-row__tools { top: 31px; }
+  .mt .mnt-icon-btn { width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; color: var(--cv-ink); }
+  .mt .mnt-icon-btn:hover { background: var(--cv-tint); color: var(--cv-accent); }
+  .mt .mnt-row__body { padding: 4px 96px 26px 62px; gap: 18px; }
+  .mt .mnt-cols { gap: 24px; }
+  .mt .mnt-cols > div:first-child { border-right-color: var(--cv-line); }
+  .mt .pcard { background: var(--cv-bg); border: 1px solid var(--cv-line); border-radius: 10px; box-shadow: none; }
+  .mt .mnt-menu__panel { border-radius: 10px; border: 1px solid var(--cv-line); box-shadow: 0 16px 40px rgba(15, 23, 42, 0.14); }
+  @media (max-width: 900px) {
+    .mt { --mt-grid: minmax(0, 1fr) 84px 140px 18px; }
+    .mt-cols span:nth-child(3), .mt-cols span:nth-child(4), .mt-cols span:nth-child(5), .mt-row .mt-skills, .mt-row .mt-n { display: none; }
+    .mt .mnt-row__body { padding: 4px 16px 22px; }
+  }
+  @media (max-width: 560px) {
+    .mt { --mt-grid: minmax(0, 1fr) 18px; }
+    .mt-cols { display: none; }
+    .mt-row { padding-right: 84px; row-gap: 6px; }
+    .mt-row .mt-status { grid-column: 1; grid-row: 2; padding-left: 46px; }
+    .mt-row .mt-role { display: none; }
+    .mt-row .mt-chev { grid-column: 2; grid-row: 1; }
+    .mt .mnt-row__tools { position: absolute; top: 22px; right: 12px; margin: 0; transform: none; }
+  }
+  :root[data-theme='dark'] .mt-av { background: var(--cv-tint) !important; color: var(--cv-ink) !important; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .mt-av { background: var(--cv-tint) !important; color: var(--cv-ink) !important; } }
+
+  /* Help requests and analysts. */
+  .hq, .an { display: block; margin-top: 0; }
+  .hq-table tbody td, .an-table tbody td { padding-top: 16px; padding-bottom: 16px; }
+  .hq-table td.t > a, .an-wait__t { font-size: 1rem; font-weight: 600; }
+  .hq-table .sm, .an-table .sm { font-size: 0.875rem; }
+  .hq-table .x .cv-acts { justify-content: flex-end; }
+  .hq-gap { margin-left: 12px; }
+  .hq-need b { font-size: 0.9375rem; font-weight: 600; }
+  .hq-fill { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 0.8125rem; }
+  .hq-meter { display: inline-flex; gap: 3px; }
+  .hq-meter i { width: 16px; height: 6px; border-radius: 3px; background: var(--cv-line); }
+  .hq-meter i.on { background: var(--cv-accent); }
+  .hq-names { margin-top: 4px; font-size: 0.8125rem; }
+  .hq-appoint { display: flex; gap: 8px; margin: 0; }
+  .hq-appoint select { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--cv-line); border-radius: 8px; background: var(--cv-bg); font: inherit; font-size: 0.875rem; color: var(--cv-ink); }
+  .hq-appoint select:focus { outline: none; border-color: var(--cv-accent); box-shadow: 0 0 0 3px var(--cv-tint); }
+  .hq-hint { margin: 6px 0 0; font-size: 0.8125rem; color: #1f6b3a; }
+  .hq-acts form { margin: 0; }
+  .hq-acts .hq-del:hover { background: #fbeaea; color: #a12a2a; }
+  .hq-name { font-size: 1rem; font-weight: 600; }
+  .hq-nolab { color: #a12a2a; font-weight: 600; }
+  .an__cols { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+  .an-col { display: block; padding: 0; background: none; box-shadow: none; }
+  .an-col .cv-h2 { margin-bottom: 14px; }
+  .an-wait { margin: 0 0 22px; padding: 14px 16px; border: 1px solid var(--cv-line); border-radius: 10px; background: var(--cv-soft); }
+  .an-wait__h { margin: 0 0 10px; }
+  .an-wait ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 16px; }
+  .an-wait li { display: grid; gap: 2px; }
+  .an-wait:not(.is-all) li:nth-child(n+4) { display: none; }
+  .an-more { margin-top: 14px; }
+  .an-table thead th { white-space: nowrap; }
+  .an-wait .hq-appoint { margin-top: 8px; }
+  .an-wait__t:hover, .hq-table td.t > a:hover { color: var(--cv-accent); text-decoration: underline; text-underline-offset: 3px; }
+  .an-table th.r, .an-table td.r { text-align: right; }
+  .an-name { font-weight: 600; }
+  a.an-name:hover { color: var(--cv-accent); }
+  .an-load { display: inline-block; min-width: 28px; padding: 2px 8px; border-radius: 999px; background: var(--cv-soft); border: 1px solid var(--cv-line); text-align: center; font-weight: 700; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+  .an-load.is-free { background: #e6f2ea; border-color: #c5e0cf; color: #1f6b3a; }
+  @media (max-width: 960px) { .an__cols { grid-template-columns: 1fr; } .hq-table colgroup col { width: auto !important; } }
 </style>

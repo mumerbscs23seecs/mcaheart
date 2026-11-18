@@ -1,0 +1,279 @@
+---
+/**
+ * Request help: a first author picks one of their papers and asks the lab for
+ * helpers (e.g. 2 for manuscript writing, 2 for screening, 1 for visuals).
+ * The coordinators appoint people from Admin > Mentees > Help requests; each
+ * person appointed is emailed and has 7-10 days to finish.
+ */
+import PipelineLayout from '../../layouts/PipelineLayout.astro';
+import { HELP_DEFAULTS, HELP_LABEL, HELP_COLS, roleLabel, notSetUp, deliverHelpRequested, type HelpRequest } from '../../lib/help';
+import { wantsCoordinatorEmail } from '../../lib/coordinator-emails';
+import { SKILL_SHORT, isSkill } from '../../lib/skills';
+import CalmBar from '../../components/calm/CalmBar.astro';
+import CalmDock from '../../components/calm/CalmDock.astro';
+import { icon, stageColor } from '../../lib/calm';
+
+export const prerender = false;
+const { supabase, person } = Astro.locals;
+const REAL = (e: string | null | undefined) => !!e && !e.endsWith('@import.invalid');
+
+const { data: myPapers } = await supabase
+  .from('project_list')
+  .select('id,ref,title,full_title,phase,stage,stage_label,study_type,lead_id')
+  .eq('lead_id', person.id)
+  .is('archived_at', null)
+  .is('hidden_at', null)
+  .is('deleted_at', null)
+  .order('ref');
+const papers = (myPapers ?? []).filter((p: any) => !(p.phase === 'journal' && p.stage === 'published'));
+
+let errors: Record<string, string> = {};
+let spotsDraft: Record<string, number> = {};
+let noteDraft = '';
+let openId = Astro.url.searchParams.get('project') ?? '';
+
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  if (action === 'close') {
+    const { error } = await supabase.rpc('close_help_request', { p_id: String(form.get('id') ?? '') });
+    return Astro.redirect(`/pipeline/help?${error ? 'err' : 'ok'}=${encodeURIComponent(error ? error.message : 'Request closed.')}`, 303);
+  }
+  const chosen = papers.find((p: any) => p.id === String(form.get('project') ?? '')) ?? null;
+  if (action === 'request' && chosen) {
+    openId = chosen.id;
+    const roles = HELP_DEFAULTS.map(({ role }) => ({ role, spots: Math.max(0, Math.min(10, Number(form.get(`spots-${role}`) ?? 0) || 0)) }));
+    spotsDraft = Object.fromEntries(roles.map((r) => [r.role, r.spots]));
+    noteDraft = String(form.get('note') ?? '').trim();
+    const wanted = roles.filter((r) => r.spots > 0);
+    if (!wanted.length) {
+      errors._form = 'Choose at least one kind of help, with how many people you need.';
+    } else {
+      const { error } = await supabase.rpc('request_help', { p_project: chosen.id, p_roles: wanted, p_note: noteDraft || null });
+      if (error) {
+        errors._form = notSetUp(error) ? 'Requesting help is not switched on yet. Please ask the coordinator.' : error.message;
+      } else {
+        const { data: admins } = await supabase.from('people').select('email').eq('role', 'admin').eq('active', true);
+        const to = (admins ?? []).map((a: any) => a.email).filter(REAL).filter(wantsCoordinatorEmail);
+        deliverHelpRequested({
+          to,
+          requester: person.full_name,
+          projectTitle: chosen.full_title || chosen.title,
+          ref: chosen.ref,
+          lines: wanted.map((w) => `${roleLabel(w.role)}\t${w.spots} ${w.spots === 1 ? 'person' : 'people'}`),
+          note: noteDraft || null,
+          link: `${Astro.url.origin}/admin/mentees?view=help`,
+        }).catch((e) => console.error('[help] coordinator email failed:', e));
+        return Astro.redirect(`/pipeline/help?ok=${encodeURIComponent(`Request sent for ${chosen.ref}. You will be told who joins.`)}`, 303);
+      }
+    }
+  }
+}
+
+// Requests on their papers, with who has been appointed to each.
+let ready = true;
+let requests: HelpRequest[] = [];
+const filledBy = new Map<string, { name: string; done: boolean }[]>();
+if (papers.length) {
+  const { data, error } = await supabase.from('help_requests').select(HELP_COLS).in('project_id', papers.map((p: any) => p.id)).order('created_at', { ascending: false });
+  if (error) ready = !notSetUp(error);
+  requests = (data ?? []) as HelpRequest[];
+  if (requests.length) {
+    const { data: asg } = await supabase.from('assignments').select('request_id,person_id,done_at').in('request_id', requests.map((r) => r.id));
+    const ids = [...new Set((asg ?? []).map((a: any) => a.person_id))];
+    const { data: ppl } = ids.length ? await supabase.from('people').select('id,full_name').in('id', ids) : { data: [] };
+    const name = new Map((ppl ?? []).map((r: any) => [r.id, r.full_name]));
+    for (const a of asg ?? []) {
+      const list = filledBy.get((a as any).request_id) ?? [];
+      list.push({ name: name.get((a as any).person_id) ?? 'Member', done: !!(a as any).done_at });
+      filledBy.set((a as any).request_id, list);
+    }
+  }
+}
+const openOn = (pid: string) => requests.filter((r) => r.project_id === pid && !r.closed_at);
+const spotsFor = (role: string, dflt: number) => spotsDraft[role] ?? dflt;
+const shortRole = (r: string) => (isSkill(r) ? SKILL_SHORT[r] : r);
+const openPaper = papers.find((p: any) => p.id === openId) ?? null;
+---
+
+<PipelineLayout title="Request help" active="requests">
+  <div class="cv">
+    <CalmBar title="Request help" count={papers.length} placeholder="Filter your papers" />
+
+    {!ready && <p class="cv-flash">Requesting help is not switched on yet. Please ask the coordinator.</p>}
+
+    {papers.length === 0 ? (
+      <p class="cv-empty-box">You are not the first author of an open paper yet.</p>
+    ) : (
+      <table class="cv-table hp-table">
+        <thead>
+          <tr><th>Paper</th><th class="cv-hide-sm" style="width:250px">Stage</th><th class="hp-asked-th" style="width:300px">Help asked for</th><th class="x" style="width:150px"><span class="sr-only">Request</span></th></tr>
+        </thead>
+        <tbody>
+          {papers.map((p: any) => {
+            const open = openOn(p.id);
+            return (
+              <tr data-cv-row data-cv-text={`${p.ref} ${p.title} ${p.full_title ?? ''}`}>
+                <td class="t">
+                  <a href={`/pipeline/projects/${p.id}#team`}>{p.full_title || p.title}</a>
+                  <div class="cv-sub"><span class="cv-num">{p.ref}</span><span class="hp-type">{p.study_type}</span></div>
+                </td>
+                <td class="cv-hide-sm"><span class="cv-dot" style={`--c:${stageColor(p.phase, p.stage)}`}>{p.stage_label}</span></td>
+                <td>
+                  {open.length === 0 ? <span class="cv-muted sm">Nothing yet</span> : (
+                    <ul class="hp-asks">
+                      {open.map((r) => {
+                        const who = filledBy.get(r.id) ?? [];
+                        return (
+                          <li>
+                            <span class="hp-asks__role">{shortRole(r.role)}</span>
+                            <span class="hp-meter" aria-label={`${who.length} of ${r.spots} appointed`} title={who.map((w) => w.name).join(', ') || 'Nobody appointed yet'}>
+                              {Array.from({ length: r.spots }, (_, i) => <i class:list={[i < who.length && 'on']} />)}
+                            </span>
+                            <span class="hp-asks__n">{who.length}/{r.spots}</span>
+                            <form method="post" data-hp-close>
+                              <input type="hidden" name="action" value="close" />
+                              <input type="hidden" name="id" value={r.id} />
+                              <button type="submit" class="hp-x" aria-label={`Withdraw the request for ${shortRole(r.role)}`} title="Withdraw"><Fragment set:html={icon('x')} /></button>
+                            </form>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </td>
+                <td class="x hp-go">
+                  <button type="button" class="cv-btn cv-btn--sm" data-hp-open={p.id} data-title={p.full_title || p.title} data-ref={p.ref}>
+                    <Fragment set:html={icon('plus')} /> Request help
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    )}
+
+    <dialog class="cv-dialog hp-dialog" data-hp-dialog data-open={openPaper ? openPaper.id : undefined} data-open-title={openPaper ? (openPaper.full_title || openPaper.title) : undefined} aria-labelledby="hp-dlg-title">
+      <form method="post">
+        <input type="hidden" name="action" value="request" />
+        <input type="hidden" name="project" data-hp-project />
+        <div class="cv-dialog__head">
+          <div>
+            <h2 class="cv-dialog__title" id="hp-dlg-title">Request help</h2>
+            <p class="cv-dialog__sub" data-hp-paper></p>
+          </div>
+          <button type="button" class="cv-ib" data-hp-close-dlg aria-label="Close"><Fragment set:html={icon('x')} /></button>
+        </div>
+        <div class="cv-dialog__body">
+          <p class="cv-dialog__err" role="alert" hidden={!errors._form}>{errors._form}</p>
+          <ul class="hp-rows">
+            {HELP_DEFAULTS.map(({ role, spots }) => (
+              <li class="hp-row" data-hp-row>
+                <span class="hp-row__label">{HELP_LABEL[role]}</span>
+                <span class="cv-step">
+                  <button type="button" data-hp-dec aria-label={`One fewer for ${HELP_LABEL[role]}`}>−</button>
+                  <output data-hp-out>{spotsFor(role, spots)}</output>
+                  <button type="button" data-hp-inc aria-label={`One more for ${HELP_LABEL[role]}`}>+</button>
+                </span>
+                <input type="hidden" name={`spots-${role}`} value={spotsFor(role, spots)} data-hp-n data-default={spots} />
+              </li>
+            ))}
+          </ul>
+          <label class="cv-field"><span>Note for the coordinator <small>optional</small></span>
+            <textarea name="note" rows="2" maxlength="2000" placeholder="What needs doing, and by when">{noteDraft}</textarea>
+          </label>
+        </div>
+        <div class="cv-dialog__foot">
+          <span class="hp-total" data-hp-total></span>
+          <button type="button" class="cv-btn" data-hp-close-dlg>Cancel</button>
+          <button type="submit" class="cv-btn cv-btn--pri" data-hp-send>Send request</button>
+        </div>
+      </form>
+    </dialog>
+  </div>
+  <CalmDock drawer={false} />
+</PipelineLayout>
+
+<script>
+  const dlg = document.querySelector<HTMLDialogElement>('[data-hp-dialog]');
+  if (dlg) {
+    const project = dlg.querySelector<HTMLInputElement>('[data-hp-project]')!;
+    const paper = dlg.querySelector<HTMLElement>('[data-hp-paper]')!;
+    const total = dlg.querySelector<HTMLElement>('[data-hp-total]')!;
+    const send = dlg.querySelector<HTMLButtonElement>('[data-hp-send]')!;
+    const rows = [...dlg.querySelectorAll<HTMLElement>('[data-hp-row]')];
+    const recount = () => {
+      const n = rows.reduce((a, r) => a + Number(r.querySelector<HTMLInputElement>('[data-hp-n]')!.value), 0);
+      total.textContent = n === 0 ? 'Choose at least one person' : `${n} ${n === 1 ? 'person' : 'people'} in total`;
+      send.disabled = n === 0;
+    };
+    rows.forEach((row) => {
+      const n = row.querySelector<HTMLInputElement>('[data-hp-n]')!;
+      const out = row.querySelector<HTMLOutputElement>('[data-hp-out]')!;
+      const dec = row.querySelector<HTMLButtonElement>('[data-hp-dec]')!;
+      const inc = row.querySelector<HTMLButtonElement>('[data-hp-inc]')!;
+      const set = (v: number) => {
+        const x = Math.max(0, Math.min(10, v));
+        n.value = String(x); out.textContent = String(x);
+        row.classList.toggle('is-zero', x === 0);
+        dec.disabled = x === 0; inc.disabled = x === 10;
+        recount();
+      };
+      dec.addEventListener('click', () => set(Number(n.value) - 1));
+      inc.addEventListener('click', () => set(Number(n.value) + 1));
+      (row as any).reset = () => set(Number(n.dataset.default));
+      set(Number(n.value));
+    });
+    const open = (id: string, title: string, fresh: boolean) => {
+      project.value = id;
+      paper.textContent = title;
+      if (fresh) {
+        rows.forEach((r) => (r as any).reset());
+        dlg.querySelector<HTMLTextAreaElement>('textarea')!.value = '';
+        dlg.querySelector<HTMLElement>('.cv-dialog__err')!.hidden = true;
+      }
+      dlg.showModal();
+    };
+    document.querySelectorAll<HTMLButtonElement>('[data-hp-open]').forEach((b) =>
+      b.addEventListener('click', () => open(b.dataset.hpOpen!, b.dataset.title ?? '', true)));
+    dlg.querySelectorAll('[data-hp-close-dlg]').forEach((b) => b.addEventListener('click', () => dlg.close()));
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    // Opened from a paper's page (?project=), or sent back with an error.
+    if (dlg.dataset.open) open(dlg.dataset.open, dlg.dataset.openTitle ?? '', false);
+  }
+  document.querySelectorAll<HTMLFormElement>('[data-hp-close]').forEach((f) =>
+    f.addEventListener('submit', (e) => { if (!confirm('Withdraw this request? Nobody else will be appointed to it.')) e.preventDefault(); }));
+</script>
+
+<style>
+  .hp-type { margin-left: 10px; }
+  .hp-table tbody td { vertical-align: middle; }
+  .hp-table td.sm, .hp-table .sm { font-size: 0.875rem; }
+  .hp-go { text-align: right; }
+  .hp-asks { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .hp-asks li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 10px; font-size: 0.875rem; }
+  .hp-asks form { margin: 0; }
+  .hp-asks__role { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hp-asks__n { font-variant-numeric: tabular-nums; font-size: 0.8125rem; opacity: 0.7; min-width: 26px; text-align: right; }
+  .hp-meter { display: inline-flex; gap: 3px; }
+  .hp-meter i { width: 14px; height: 6px; border-radius: 3px; background: var(--cv-line); }
+  .hp-meter i.on { background: var(--cv-accent); }
+  .hp-x { width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; color: var(--cv-ink); opacity: 0.45; cursor: pointer; }
+  .hp-x :global(.cv-ic) { width: 14px; height: 14px; }
+  .hp-x:hover { opacity: 1; background: #fbeaea; color: #a12a2a; }
+  .hp-rows { list-style: none; margin: 0; padding: 0; border: 1px solid var(--cv-line); border-radius: 10px; }
+  .hp-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 10px 10px 16px; transition: background 0.15s; }
+  .hp-row + .hp-row { border-top: 1px solid var(--cv-line); }
+  .hp-row__label { font-weight: 600; font-size: 0.9375rem; transition: opacity 0.15s; }
+  .hp-row.is-zero .hp-row__label { opacity: 0.45; font-weight: 500; }
+  .hp-row:not(.is-zero) { background: var(--cv-soft); }
+  .hp-total { margin-right: auto; align-self: center; font-size: 0.8125rem; opacity: 0.7; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  @media (max-width: 820px) {
+    .hp-table .hp-asked-th { width: 150px !important; }
+    .hp-table th.x { width: 56px !important; }
+    .hp-go .cv-btn { padding: 8px; font-size: 0; gap: 0; }
+    .hp-go .cv-btn :global(.cv-ic) { width: 18px; height: 18px; }
+  }
+</style>

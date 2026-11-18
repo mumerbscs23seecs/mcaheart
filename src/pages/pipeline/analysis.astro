@@ -1,0 +1,200 @@
+---
+import PipelineLayout from '../../layouts/PipelineLayout.astro';
+import CalmBar from '../../components/calm/CalmBar.astro';
+import CalmFilters from '../../components/calm/CalmFilters.astro';
+import CalmDock from '../../components/calm/CalmDock.astro';
+import { drawerInfo, icon } from '../../lib/calm';
+import { ANALYSIS_TYPES } from '../../lib/appoint';
+
+export const prerender = false;
+const { supabase, person } = Astro.locals;
+
+// Admin view of the database papers, the ones that need an analyst.
+// First authors change their own paper's analyst on the paper page.
+if (person.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+const { data: rows, error } = await supabase
+  .from('project_list')
+  .select('id,ref,title,full_title,phase,stage,stage_label,study_type,lead_id,lead_name,analyst_id,analyst_name,current_conference,current_journal,stage_changed_at,created_at')
+  .in('study_type', ANALYSIS_TYPES as unknown as string[])
+  .is('archived_at', null)
+  .is('hidden_at', null)
+  .is('deleted_at', null);
+
+// Published papers are finished; the rest are what needs looking after.
+const open = (rows ?? []).filter((p: any) => p.stage !== 'published');
+const list = open.sort((a: any, b: any) =>
+  Number(!!a.analyst_id) - Number(!!b.analyst_id) || String(a.ref).localeCompare(String(b.ref), undefined, { numeric: true }));
+
+const DB: Record<string, { key: string; label: string; c: string }> = {
+  TriNetX: { key: 'trinetx', label: 'TriNetX', c: '#2563a8' },
+  NIS: { key: 'nisnrd', label: 'NIS', c: '#0f766e' },
+  NRD: { key: 'nisnrd', label: 'NRD', c: '#0f766e' },
+  'DMC PCI': { key: 'dmc', label: 'DMC PCI', c: '#6b3a7d' },
+};
+const without = list.filter((p: any) => !p.analyst_id).length;
+const chips = [
+  { key: 'none', label: 'Needs an analyst', count: without },
+  { key: 'trinetx', label: 'TriNetX', count: list.filter((p: any) => p.study_type === 'TriNetX').length },
+  { key: 'nisnrd', label: 'NIS / NRD', count: list.filter((p: any) => p.study_type === 'NIS' || p.study_type === 'NRD').length },
+  { key: 'dmc', label: 'DMC PCI', count: list.filter((p: any) => p.study_type === 'DMC PCI').length },
+];
+const PHASE: Record<string, string> = { idea: 'Idea', manuscript: 'Ongoing', conference: 'Conference', journal: 'Submission' };
+
+// Who can be picked: everyone active, with how many open database papers
+// they analyse now and which databases they have analysed before.
+const { data: ppl } = await supabase.from('people').select('id,full_name,expertise').eq('active', true).neq('role', 'viewer').order('full_name');
+const typeKey = (t: string) => DB[t]?.key ?? '';
+const pickers = (ppl ?? []).map((x: any) => {
+  const mine = (rows ?? []).filter((p: any) => p.analyst_id === x.id);
+  return {
+    id: x.id,
+    name: x.full_name,
+    load: mine.filter((p: any) => p.stage !== 'published').length,
+    done: [...new Set(mine.map((p: any) => typeKey(p.study_type)))],
+    stats: (x.expertise ?? []).some((e: string) => /analysis/i.test(e) && !/meta-analysis/i.test(e)),
+  };
+});
+const pickJson = JSON.stringify(pickers).replace(/</g, '\\u003c');
+const ret = '/pipeline/analysis';
+---
+
+<PipelineLayout title="Analysis" active="analysis">
+  <div class="cv an2">
+    <CalmBar title="Analysis" count={list.length} placeholder="Search title, number or name" />
+    {error && <p class="cv-flash cv-flash--err">{error.message}</p>}
+
+    {list.length === 0 ? (
+      <p class="cv-empty-box">No open TriNetX, NIS, NRD or DMC PCI papers.</p>
+    ) : (
+      <>
+        <CalmFilters items={chips} total={list.length} />
+        <table class="cv-table an2-table">
+          <thead>
+            <tr>
+              <th>Paper</th>
+              <th class="cv-hide-sm" style="width:130px">Database</th>
+              <th class="cv-hide-sm" style="width:190px">First author</th>
+              <th style="width:210px">Analyst</th>
+              <th class="x" style="width:110px"><span class="sr-only">Change</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((p: any) => {
+              const db = DB[p.study_type];
+              return (
+                <tr data-cv-row data-cv-f={p.analyst_id ? 'has' : 'none'} data-cv-f2={db.key} data-cv-info={drawerInfo(p)}
+                  data-cv-text={`${p.full_title ?? ''} ${p.title ?? ''} ${p.ref ?? ''} ${p.lead_name ?? ''} ${p.analyst_name ?? ''}`}>
+                  <td class="t">
+                    <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.full_title || p.title}</a>
+                    <div class="cv-sub">{p.ref} · {PHASE[p.phase] ?? p.phase}{p.stage_label ? `, ${p.stage_label.toLowerCase()}` : ''}</div>
+                  </td>
+                  <td class="cv-hide-sm"><span class="cv-dot" style={`--c:${db.c}`}>{db.label}</span></td>
+                  <td class="cv-hide-sm sm">{p.lead_name ?? '-'}</td>
+                  <td>{p.analyst_name ? <span class="an2-name">{p.analyst_name}</span> : <span class="cv-dot" style="--c:#a12a2a">Needed</span>}</td>
+                  <td class="x">
+                    <button type="button" class:list={['cv-btn', 'cv-btn--sm', !p.analyst_id && 'cv-btn--pri']} data-an2-open
+                      data-id={p.id} data-ref={p.ref} data-title={p.full_title || p.title} data-db={db.key} data-dbl={db.label}
+                      data-lead={p.lead_id ?? ''} data-cur={p.analyst_id ?? ''} data-curn={p.analyst_name ?? ''}>
+                      {p.analyst_id ? 'Change' : 'Add'}
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </>
+    )}
+
+    <dialog class="cv-dialog" data-an2-dialog aria-labelledby="an2-title">
+      <form method="post" data-an2-form>
+        <input type="hidden" name="return" value={ret} />
+        <div class="cv-dialog__head">
+          <div>
+            <h2 class="cv-dialog__title" id="an2-title">Analyst</h2>
+            <p class="cv-dialog__sub" data-an2-sub></p>
+          </div>
+          <button type="button" class="cv-ib" data-an2-close aria-label="Close"><Fragment set:html={icon('x')} /></button>
+        </div>
+        <div class="cv-dialog__body">
+          <label class="cv-field">
+            <span>Analyst</span>
+            <select name="person" required data-an2-select></select>
+          </label>
+          <p class="an2-hint">The new analyst is emailed, and so is the first author.</p>
+        </div>
+        <div class="cv-dialog__foot an2-foot">
+          <button type="submit" class="cv-btn an2-remove" name="action" value="analyst-remove" formnovalidate data-an2-remove>Remove analyst</button>
+          <button type="button" class="cv-btn" data-an2-close>Cancel</button>
+          <button type="submit" class="cv-btn cv-btn--pri" name="action" value="analyst">Save</button>
+        </div>
+      </form>
+    </dialog>
+  </div>
+  <CalmDock />
+  <script type="application/json" id="an2-people" set:html={pickJson} />
+</PipelineLayout>
+
+<script>
+  type Pick = { id: string; name: string; load: number; done: string[]; stats: boolean };
+  const people: Pick[] = JSON.parse(document.getElementById('an2-people')?.textContent || '[]');
+  const dlg = document.querySelector<HTMLDialogElement>('[data-an2-dialog]');
+  const form = document.querySelector<HTMLFormElement>('[data-an2-form]');
+  const sel = document.querySelector<HTMLSelectElement>('[data-an2-select]');
+  const sub = document.querySelector<HTMLElement>('[data-an2-sub]');
+  const rm = document.querySelector<HTMLButtonElement>('[data-an2-remove]');
+  const LABEL: Record<string, string> = { trinetx: 'TriNetX', nisnrd: 'NIS / NRD', dmc: 'DMC PCI' };
+
+  const opt = (p: Pick) => {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = p.load ? `${p.name}  (analyst on ${p.load})` : p.name;
+    return o;
+  };
+  const group = (label: string, list: Pick[]) => {
+    if (!list.length) return;
+    const g = document.createElement('optgroup');
+    g.label = label;
+    list.forEach((p) => g.append(opt(p)));
+    sel!.append(g);
+  };
+
+  document.querySelectorAll<HTMLButtonElement>('[data-an2-open]').forEach((b) => b.addEventListener('click', () => {
+    if (!dlg || !form || !sel || !sub || !rm) return;
+    const { id, ref, title, db = '', cur = '', curn, lead } = b.dataset;
+    form.action = `/pipeline/projects/${id}/appoint`;
+    sub.textContent = `${ref} · ${title}${curn ? ` · now ${curn}` : ''}`;
+    rm.hidden = !cur;
+    sel.replaceChildren();
+    const ph = document.createElement('option');
+    ph.value = '';
+    ph.textContent = 'Choose a person';
+    sel.append(ph);
+    const pool = people.filter((p) => p.id !== cur);
+    const byLoad = (a: Pick, c: Pick) => a.load - c.load || a.name.localeCompare(c.name);
+    // People who have analysed this database before, then other analysts,
+    // then everyone else.
+    const same = pool.filter((p) => p.done.includes(db)).sort(byLoad);
+    const other = pool.filter((p) => !same.includes(p) && (p.done.length || p.stats)).sort(byLoad);
+    const rest = pool.filter((p) => !same.includes(p) && !other.includes(p));
+    group(`Have analysed ${LABEL[db] ?? 'this database'} papers`, same);
+    group('Other analysts', other);
+    group('Everyone', rest);
+    if (lead) [...sel.options].forEach((o) => { if (o.value === lead) o.textContent += '  (first author)'; });
+    dlg.showModal();
+    sel.focus();
+  }));
+  document.querySelectorAll('[data-an2-close]').forEach((b) => b.addEventListener('click', () => dlg?.close()));
+  dlg?.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+  rm?.addEventListener('click', (e) => { if (!confirm('Remove the analyst from this paper?')) e.preventDefault(); });
+</script>
+
+<style>
+  .an2-table tbody td { vertical-align: middle; }
+  .an2-name { font-weight: 600; }
+  .an2-hint { margin: 0; font-size: 0.8125rem; opacity: 0.65; }
+  .an2-foot .an2-remove { margin-right: auto; color: #a12a2a; }
+  .an2-foot .an2-remove[hidden] { display: none; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>

@@ -1,0 +1,123 @@
+/* The admin pages in the same calm look as the workflow lists (Submissions,
+   Ongoing): white page, Merriweather Sans, jet-black text, navy accent,
+   hairline rules, 8px corners, sentence-case labels. Done with tokens on the
+   page body only, so the crimson app bar stays as it is. */
+
+.app__main {
+  --bg: #ffffff;
+  --bg-tint: #f5f7fa;
+  --surface: #ffffff;
+  --text-strong: #000000;
+  --text: #1f2328;
+  --text-muted: #5b6472;
+  --text-faint: #8a93a0;
+  --text-hint: #5b6472;
+  --blue: #1f4e79;
+  --blue-deep: #163a5c;
+  --blue-light: #2b6497;
+  --accent-wash: #eef3f9;
+  --accent-wash-strong: #e6eef7;
+  --red: #a12a2a;
+  --red-deep: #7f1f1f;
+  --red-wash: #fbeaea;
+  --red-border: #ecc9c9;
+  --ok: #166534;
+  --ok-bg: #e6f2ea;
+  --ok-border: #c5e0cf;
+  --warn: #8a5a00;
+  --warn-bg: #f8f0dc;
+  --warn-border: #ead9ad;
+  --ink: #000000;
+  --border: #cfd8e3;
+  --border-soft: #dfe5ec;
+  --border-strong: #9aa6b4;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --font-sans: 'Merriweather Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: var(--font-sans);
+  --font-serif: var(--font-sans);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+:root[data-theme='dark'] .app__main {
+  --bg: #141412; --bg-tint: rgba(127, 167, 214, 0.08); --surface: #1b1d20;
+  --text-strong: #f5f4f1; --text: rgba(245, 244, 241, 0.85); --text-muted: rgba(245, 244, 241, 0.6);
+  --blue: #8fb3dc; --blue-deep: #a8c5e6; --accent-wash: rgba(127, 167, 214, 0.12); --accent-wash-strong: rgba(127, 167, 214, 0.2);
+  --red: #f0a3a3; --red-wash: rgba(161, 42, 42, 0.22); --red-border: rgba(240, 163, 163, 0.35);
+  --ok: #8fd1a6; --ok-bg: rgba(31, 107, 58, 0.25); --warn: #f0cf7a; --warn-bg: rgba(122, 82, 0, 0.3);
+  --ink: #f5f4f1; --border: rgba(255, 255, 255, 0.16); --border-soft: rgba(255, 255, 255, 0.1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .app__main {
+    --bg: #141412; --bg-tint: rgba(127, 167, 214, 0.08); --surface: #1b1d20;
+    --text-strong: #f5f4f1; --text: rgba(245, 244, 241, 0.85); --text-muted: rgba(245, 244, 241, 0.6);
+    --blue: #8fb3dc; --blue-deep: #a8c5e6; --accent-wash: rgba(127, 167, 214, 0.12); --accent-wash-strong: rgba(127, 167, 214, 0.2);
+    --red: #f0a3a3; --red-wash: rgba(161, 42, 42, 0.22); --red-border: rgba(240, 163, 163, 0.35);
+    --ok: #8fd1a6; --ok-bg: rgba(31, 107, 58, 0.25); --warn: #f0cf7a; --warn-bg: rgba(122, 82, 0, 0.3);
+    --ink: #f5f4f1; --border: rgba(255, 255, 255, 0.16); --border-soft: rgba(255, 255, 255, 0.1);
+  }
+}
+html:not([data-theme='dark']) body.app { background: #fff; }
+@media (prefers-color-scheme: dark) { html:not([data-theme='light']) body.app { background: #141412; } }
+
+/* A wider page, centred, like the workflow lists. */
+.app .app__shell { max-width: 1240px; }
+.app .app__heading { font-size: 2rem; font-weight: 700; letter-spacing: -0.015em; line-height: 1.1; color: var(--text-strong); margin-bottom: 24px; }
+
+/* No tracked capitals anywhere in the page body: labels read in sentence case. */
+.app__main :is(*, *::before, *::after) { text-transform: none !important; letter-spacing: normal !important; }
+.app__main :is(h1, h2, h3) { letter-spacing: -0.01em !important; }
+
+/* Small labels that were tiny capitals get a readable size. */
+.app__main :is(.adm-f span, .adm-table th, .stat__l, .mailprev__head dt, .field__label, .idea__dl dt, .mnt-label) {
+  font-size: 0.8125rem; font-weight: 700; color: var(--text-strong);
+}
+.app__main .adm-table th { border-bottom: 2px solid var(--ink); padding-top: 12px; padding-bottom: 12px; font-size: 0.875rem; }
+.app__main .adm-table td { padding-top: 14px; padding-bottom: 14px; font-size: 0.875rem; }
+.app__main .adm-table tbody tr:hover { background: var(--bg-tint); }
+
+/* Buttons. */
+.app__main .btn { border-radius: 8px; min-height: 2.5rem; padding: 0 1.1em; font-size: 0.875rem; font-weight: 600; }
+.app__main .btn--ghost { --btn-fg: var(--text-strong); --btn-bd: var(--border); }
+.app__main .btn--ghost:hover { --btn-bg: var(--bg-tint); --btn-fg: var(--blue); --btn-bd: var(--blue); }
+.app__main .adm-btn { border-radius: 8px; padding: 6px 11px; font-size: 0.8125rem; background: var(--surface); }
+.app__main .adm-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+/* Fields. */
+.app__main :is(input:not([type=checkbox], [type=radio], [type=range], [type=file], [type=color]), select, textarea) { border-radius: 8px; }
+.app__main :is(input, select, textarea):focus-visible { outline: none; border-color: var(--blue) !important; box-shadow: 0 0 0 3px var(--accent-wash-strong); }
+
+/* Panels, flashes, pills. */
+.app__main .adm-panel { border-radius: 12px; }
+.app__main .adm-flash { border-radius: 8px; font-weight: 600; }
+.app__main .adm-pill { border-radius: 999px; padding: 2px 9px; font-size: 0.75rem; font-weight: 600; }
+.app__main .stat { border-radius: 12px; }
+.app__main .stat__n { font-family: var(--font-sans); }
+
+/* Dashboard: the same navy family instead of crimson. */
+body.app .app__main .dash { --d-r1: #163a5c; --d-r2: #1f4e79; --d-r3: #3f74a8; --d-r4: #9dbbdb; --d-r5: #dbe7f4; }
+:root[data-theme='dark'] body.app .app__main .dash { --d-r1: #a8c5e6; --d-r2: #8fb3dc; --d-r3: #6f98c8; --d-r4: #3e5f86; --d-r5: #24364d; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) body.app .app__main .dash { --d-r1: #a8c5e6; --d-r2: #8fb3dc; --d-r3: #6f98c8; --d-r4: #3e5f86; --d-r5: #24364d; } }
+body.app .app__main .dash-bars__peak { color: var(--blue) !important; }
+
+/* Review lists (Ideas, Applicants, Requests): ruled rows, not boxed cards. */
+body.app .app__main :is(.ideas__list, .reqs__list) { gap: 0 !important; border-top: 2px solid var(--ink); }
+body.app .app__main details.idea { border: 0; border-bottom: 1px solid var(--border-soft); border-radius: 0; background: none; box-shadow: none; }
+body.app .app__main details.idea[open] { background: var(--bg-tint); border-color: var(--border-soft); }
+body.app .app__main details.idea > summary:hover { background: var(--bg-tint); }
+body.app .app__main .idea__pill { border-radius: 999px; padding: 3px 10px; font-size: 0.75rem; font-weight: 600; }
+body.app .app__main .idea__title { font-weight: 600; }
+
+/* Filter chips: soft pills, the chosen one tinted. */
+body.app .app__main .reqs__chip { border: 0; border-radius: 999px; padding: 6px 12px; background: none; color: var(--text-strong); font-size: 0.8125rem; font-weight: 500; }
+body.app .app__main .reqs__chip:hover { background: var(--bg-tint); color: var(--text-strong); }
+body.app .app__main .reqs__chip.is-active { background: var(--accent-wash-strong); color: var(--text-strong); font-weight: 700; }
+body.app .app__main .reqs__chip.is-active span { color: var(--text-strong); opacity: 0.7; }
+
+/* Monospace only where it helps (none of these). */
+body.app .app__main .adm-mono { font-family: var(--font-sans); font-size: 0.875rem; }
+
+/* Dashboard tiles: no crimson top edge. */
+body.app .app__main .dash :is(.dash-kpi, .dash-card, .dash-tile) { border-top-color: var(--border-soft); }
+/* Pages that capped their own width now use the full page. */
+body.app .app__main .wa { max-width: none; }

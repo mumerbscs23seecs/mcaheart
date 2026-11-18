@@ -2,7 +2,7 @@
 import AppLayout from '../../layouts/AppLayout.astro';
 import '../../styles/admin.css';
 import { currentUser } from '../../lib/auth';
-import { listRequests, getRequest, markAllRequestsRead, type RequestRecord } from '../../lib/requests';
+import { listRequests, getRequest, markAllRequestsRead, resolveRequest, deleteRequest, type RequestRecord } from '../../lib/requests';
 import { listReplies } from '../../lib/request-replies';
 import { labEmailSet } from '../../lib/lab-members';
 import { INTENT_LABELS, INTENTS, type Intent } from '../../lib/contact-schema';
@@ -13,6 +13,21 @@ export const prerender = false;
 const me = currentUser(Astro.cookies);
 if (!me) return Astro.redirect('/login', 302);
 if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
+
+// Resolve without replying (no email goes to the sender), reopen, or delete.
+if (Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  const id = String(form.get('id') ?? '');
+  const back = String(form.get('back') ?? '/admin/requests');
+  const safeBack = /^\/admin\/[\w/?=&-]*$/.test(back) ? back : '/admin/requests';
+  let err: string | null = 'Unknown action.';
+  let msg = '';
+  if (action === 'resolve') { err = await resolveRequest(id, me.name, String(form.get('note') ?? '')); msg = 'Marked as resolved. No email was sent.'; }
+  if (action === 'reopen') { err = await resolveRequest(id, null); msg = 'Reopened.'; }
+  if (action === 'delete') { err = await deleteRequest(id, me.name); msg = 'Request deleted.'; }
+  return Astro.redirect(`${safeBack}${safeBack.includes('?') ? '&' : '?'}${err ? 'err' : 'ok'}=${encodeURIComponent(err ?? msg)}`, 303);
+}
 
 const flashOk = Astro.url.searchParams.get('ok');
 const flashErr = Astro.url.searchParams.get('err');
@@ -94,6 +109,7 @@ const detailRows = (r: RequestRecord) => intentRows(r);
               {r.source === 'member' && <span class="idea__pill idea__pill--soft">From a member</span>}
               {notInLab(r) && <span class="idea__pill idea__pill--nolab">Not in the lab database</span>}
               {(replies.get(r.id) ?? []).length > 0 && <span class="idea__pill idea__pill--ok">Replied</span>}
+              {r.resolvedAt && <span class="idea__pill idea__pill--done">Resolved</span>}
             </span>
             <span class="idea__title">{r.fullName}</span>
             <span class="idea__meta">{r.email} · {ago(r.submittedAt)}</span>
@@ -137,11 +153,40 @@ const detailRows = (r: RequestRecord) => intentRows(r);
               </div>
             )}
 
+            {r.resolvedAt && (
+              <p class="rq-resolved">Resolved without a reply by {r.resolvedBy} on {fmtDate(r.resolvedAt)}.{r.resolvedNote && <><br /><span>{r.resolvedNote}</span></>}</p>
+            )}
+
+            <div class="rq-acts">
             {repliesReady && (
               <a class="btn rp-open" href={`/admin/requests/${r.id}?from=${encodeURIComponent(`/admin/requests${active ? `?type=${active}` : ''}`)}`}>
                 {(replies.get(r.id) ?? []).length > 0 ? 'Reply again' : `Reply to ${r.fullName.split(/\s+/)[0] || 'them'}`}
               </a>
             )}
+              {r.resolvedAt ? (
+                <form method="post" class="rq-inline">
+                  <input type="hidden" name="action" value="reopen" /><input type="hidden" name="id" value={r.id} />
+                  <input type="hidden" name="back" value={`/admin/requests${active ? `?type=${active}` : ''}`} />
+                  <button type="submit" class="rq-quiet">Reopen</button>
+                </form>
+              ) : (
+                <details class="rq-resolve">
+                  <summary class="rq-quiet">Resolve without replying</summary>
+                  <form method="post" class="rq-resolve__form">
+                    <input type="hidden" name="action" value="resolve" /><input type="hidden" name="id" value={r.id} />
+                    <input type="hidden" name="back" value={`/admin/requests${active ? `?type=${active}` : ''}`} />
+                    <input name="note" maxlength="500" placeholder="Private note (only admins see it)" aria-label="Private note" />
+                    <button type="submit" class="btn btn--ghost">Mark resolved</button>
+                    <span>{r.fullName.split(/\s+/)[0] || 'They'} won't get an email.</span>
+                  </form>
+                </details>
+              )}
+              <form method="post" class="rq-inline rq-del" onsubmit="return confirm('Delete this request for good?')">
+                <input type="hidden" name="action" value="delete" /><input type="hidden" name="id" value={r.id} />
+                <input type="hidden" name="back" value={`/admin/requests${active ? `?type=${active}` : ''}`} />
+                <button type="submit" class="rq-quiet rq-quiet--danger">Delete</button>
+              </form>
+            </div>
           </div>
         </details>
       ))}
@@ -153,6 +198,22 @@ const detailRows = (r: RequestRecord) => intentRows(r);
 
 <style>
   .idea__pill.idea__pill--ok { color: var(--ok); background: var(--ok-bg); }
+  .idea__pill.idea__pill--done { color: var(--text-muted); background: var(--bg-tint); }
+  .rq-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem 1.4rem; margin-top: 1.2rem; }
+  .rq-acts .rp-open { margin-top: 0; }
+  .rq-inline { margin: 0; }
+  .rq-del { margin-left: auto; }
+  .rq-quiet { border: 0; background: none; padding: 0; font: inherit; font-size: 0.86rem; font-weight: 700; color: var(--text-strong); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--border); list-style: none; }
+  .rq-quiet::-webkit-details-marker { display: none; }
+  .rq-quiet:hover { text-decoration-color: currentColor; }
+  .rq-quiet--danger { color: var(--red); }
+  .rq-resolve[open] { flex-basis: 100%; order: 3; }
+  .rq-resolve[open] > summary { margin-bottom: 0.6rem; }
+  .rq-resolve__form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+  .rq-resolve__form input[name=note] { flex: 1 1 260px; padding: 0.6rem 0.75rem; border: 1px solid var(--border); background: var(--surface); font: inherit; font-size: 0.88rem; color: var(--text-strong); }
+  .rq-resolve__form span { flex-basis: 100%; font-size: 0.8rem; color: var(--text-muted); }
+  .rq-resolved { margin: 1rem 0 0; padding: 0.6rem 0.85rem; background: var(--bg-tint); font-size: 0.84rem; color: var(--text); }
+  .rq-resolved span { color: var(--text-muted); }
   .idea__pill.idea__pill--nolab { color: #fff; background: var(--red); }
   .idea__pill.idea__pill--soft { background: transparent; box-shadow: inset 0 0 0 1px currentColor; }
   .rp-sent { margin-top: 1.1rem; display: grid; gap: 0.4rem; }

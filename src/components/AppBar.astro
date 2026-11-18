@@ -1,5 +1,6 @@
 ---
-import { pendingIdeaCount } from '../lib/ideas';
+import { pendingIdeaCount, ideaGroupsToMakeCount } from '../lib/ideas';
+import { openHelpCount } from '../lib/appoint';
 import { pendingApplicationCount, whatsappToAddCount } from '../lib/applications';
 import { unreadRequestCount } from '../lib/requests';
 import { hiddenProjectCount } from '../lib/hidden-papers';
@@ -9,7 +10,7 @@ import ThemeToggle from './ThemeToggle.astro';
 import LogoMark from './LogoMark.astro';
 
 interface Props {
-  active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'mentees' | 'requests' | 'testimonials' | 'hidden' | 'deleted' | 'access' | 'tasks' | 'new-idea' | 'journals' | 'progress' | 'whatsapp';
+  active?: 'dashboard' | 'pipeline' | 'ideas' | 'applicants' | 'mentees' | 'requests' | 'testimonials' | 'hidden' | 'deleted' | 'access' | 'tasks' | 'new-idea' | 'journals' | 'progress' | 'whatsapp' | 'learning';
   name: string;
   role: string;
   email: string;
@@ -38,7 +39,8 @@ const pendingApps = isAdmin ? await safeCount(pendingApplicationCount) : 0;
 const unreadRequests = isAdmin ? await safeCount(unreadRequestCount) : 0;
 const hiddenCount = isAdmin ? await safeCount(hiddenProjectCount) : 0;
 const deletedCount = isAdmin ? await safeCount(deletedProjectCount) : 0;
-const whatsappCount = isAdmin ? await safeCount(whatsappToAddCount) : 0;
+const whatsappCount = isAdmin ? (await safeCount(whatsappToAddCount)) + (await safeCount(ideaGroupsToMakeCount)) : 0;
+const helpCount = isAdmin ? await safeCount(openHelpCount) : 0;
 
 // Two kinds of entry: a plain link, or a dropdown ('menu') grouping a few
 // related pages - Review (things waiting on a decision) and Manage
@@ -48,7 +50,18 @@ type NavMenu = { type: 'menu'; key: string; label: string; badge: number; items:
 const navItems: (NavLink | NavMenu)[] = isAdmin
   ? [
       { type: 'link', key: 'dashboard', label: 'Dashboard', href: '/admin', badge: 0 },
-      { type: 'link', key: 'pipeline', label: 'Workflow', href: '/pipeline', badge: 0 },
+      {
+        // Opens straight to a workflow list; the black tab row under the bar
+        // stays on those pages for moving between them.
+        type: 'menu', key: 'pipeline', label: 'Workflow', badge: 0,
+        items: [
+          { key: 'wf-conferences', label: 'Conferences', href: '/pipeline/conferences', badge: 0 },
+          { key: 'wf-ongoing', label: 'Ongoing', href: '/pipeline/ongoing', badge: 0 },
+          { key: 'wf-submissions', label: 'Submissions', href: '/pipeline/submissions', badge: 0 },
+          { key: 'wf-published', label: 'Published', href: '/pipeline/published', badge: 0 },
+          { key: 'wf-analysis', label: 'Analysis', href: '/pipeline/analysis', badge: 0 },
+        ],
+      },
       {
         type: 'menu', key: 'review', label: 'Review', badge: pendingIdeas + pendingApps + unreadRequests,
         items: [
@@ -58,12 +71,12 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
         ],
       },
       {
-        type: 'menu', key: 'manage', label: 'Manage', badge: whatsappCount,
+        type: 'menu', key: 'manage', label: 'Manage', badge: whatsappCount + helpCount,
         items: [
-          { key: 'access', label: 'Members', href: '/admin/access', badge: 0 },
           { key: 'testimonials', label: 'Testimonials', href: '/admin/testimonials', badge: 0 },
-          { key: 'mentees', label: 'Mentees', href: '/admin/mentees', badge: 0 },
-          { key: 'whatsapp', label: 'Add to WhatsApp', href: '/admin/whatsapp', badge: whatsappCount },
+          { key: 'mentees', label: 'Members', href: '/admin/mentees', badge: helpCount },
+          { key: 'whatsapp', label: 'WhatsApp', href: '/admin/whatsapp', badge: whatsappCount },
+          { key: 'learning', label: 'Learning', href: '/pipeline/learning', badge: 0 },
           { key: 'journals', label: 'Journals', href: '/admin/journals', badge: 0 },
           { key: 'hidden', label: 'Hidden', href: '/admin/hidden', badge: hiddenCount },
           { key: 'deleted', label: 'Deleted', href: '/admin/deleted', badge: deletedCount },
@@ -98,7 +111,7 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
             <span class="appbar__menu" data-menu>
               <button
                 type="button"
-                class:list={['appbar__link', 'appbar__menu-trigger', item.items.some((s) => s.key === active) && 'is-active']}
+                class:list={['appbar__link', 'appbar__menu-trigger', (active === item.key || item.items.some((s) => s.key === active)) && 'is-active']}
                 data-menu-toggle
                 aria-haspopup="true"
                 aria-expanded="false"
@@ -112,9 +125,9 @@ const navItems: (NavLink | NavMenu)[] = isAdmin
               <div class="appbar__menu-panel" data-menu-panel hidden>
                 {item.items.map((sub) => (
                   <a
-                    class:list={['appbar__menu-item', active === sub.key && 'is-active']}
+                    class:list={['appbar__menu-item', (active === sub.key || (sub.key.startsWith('wf-') && Astro.url.pathname.startsWith(sub.href))) && 'is-active']}
                     href={sub.href}
-                    aria-current={active === sub.key ? 'page' : undefined}
+                    aria-current={active === sub.key || (sub.key.startsWith('wf-') && Astro.url.pathname.startsWith(sub.href)) ? 'page' : undefined}
                   >{sub.label}{sub.badge > 0 && <span class="appbar__badge-n">{sub.badge}</span>}</a>
                 ))}
               </div>

@@ -27,7 +27,7 @@ const rows = () => document.querySelectorAll('[data-cv-row]');
 function applyFilter() {
   const q = ($('[data-cv-q]')?.value || '').trim().toLowerCase();
   rows().forEach((tr) => {
-    const okF = filterKey === 'all' || tr.dataset.cvF === filterKey;
+    const okF = filterKey === 'all' || tr.dataset.cvF === filterKey || tr.dataset.cvF2 === filterKey;
     const okQ = !q || (tr.dataset.cvText || tr.textContent || '').toLowerCase().includes(q);
     tr.hidden = !(okF && okQ);
   });
@@ -140,6 +140,27 @@ $('[data-cv-filters]')?.addEventListener('click', (e) => {
     }
     dr.append(head, body);
 
+    // Previous / next paper in the list as it is filtered now.
+    const visible = [...document.querySelectorAll('[data-cv-row]')].filter((r) => !r.hidden);
+    const at = visible.indexOf(tr);
+    const nav = mk('div', 'cv-dnav');
+    [['\u2039', 'Previous paper', -1], ['\u203a', 'Next paper', 1]].forEach(([glyph, label, step]) => {
+      const b = mk('button', 'cv-dx cv-dnav__b', glyph);
+      b.type = 'button'; b.setAttribute('aria-label', label); b.title = label + (step < 0 ? ' (\u2190)' : ' (\u2192)');
+      const target = visible[at + step];
+      if (!target) b.disabled = true;
+      else b.onclick = () => { const ta = target.querySelector('td.t > a'); if (ta) open(target, ta); };
+      nav.append(b);
+    });
+    if (visible.length > 1) {
+      nav.append(mk('span', 'cv-dnav__n', (at + 1) + ' of ' + visible.length));
+      head.insertBefore(nav, x);
+    }
+
+    // More from the paper itself: progress, everyone on it, history.
+    const pid = (a.getAttribute('href') || '').match(/projects\/([0-9a-f-]{36})/i)?.[1];
+    if (pid) enrich(pid, body, statusSec, people, details);
+
     if (actions) {
       const foot = mk('div', 'cv-dfoot');
       const links = [...actions.querySelectorAll('a')];
@@ -155,6 +176,102 @@ $('[data-cv-filters]')?.addEventListener('click', (e) => {
     }
     dr.classList.add('on'); dim.classList.add('on'); dr.setAttribute('aria-hidden', 'false'); x.focus();
   }
+  const fmtD = (d) => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  const SHORT = { 'Manuscript writing': 'Writing', 'Screening/Extraction for meta-analysis': 'Screening', 'Visuals': 'Visuals', 'Analysis for TriNetX': 'TriNetX analysis', 'Analysis for NIS/NRD': 'NIS/NRD analysis' };
+  const OUTC = { accepted: 'ok', published: 'ok', rejected: 'bad', withdrawn: 'bad', rejected_comments: 'bad', rejected_no_comments: 'bad' };
+  let token = 0;
+  function enrich(pid, body, statusSec, people, details) {
+    const mine = ++token;
+    const wait = mk('p', 'cv-dload', 'Loading history\u2026');
+    body.append(wait);
+    fetch('/pipeline/projects/' + pid + '/panel.json', { headers: { accept: 'application/json' } })
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then((d) => {
+        if (mine !== token) return;
+        wait.remove();
+        // Status: time at this stage, target, and where it sits on the path.
+        if (statusSec) {
+          const bits = [];
+          if (d.days_in_stage != null) bits.push(d.days_in_stage + ' day' + (d.days_in_stage === 1 ? '' : 's') + ' at this stage');
+          if (d.next_target) bits.push('target ' + fmtD(d.next_target));
+          const sub = mk('p', 'cv-dsub', bits.join(' \u00b7 '));
+          if (d.days_overdue > 0) { const o = mk('b', 'cv-dlate', 'Overdue ' + d.days_overdue + ' days'); sub.append(' ', o); }
+          if (bits.length || d.days_overdue > 0) statusSec.append(sub);
+          const steps = d.steps || [];
+          const cur = steps.findIndex((st) => st.code === d.stage);
+          if (steps.length > 1) {
+            const ol = mk('ol', 'cv-dsteps');
+            ol.style.setProperty('--n', steps.length);
+            steps.forEach((st, i) => {
+              const li = mk('li', cur < 0 ? '' : i < cur ? 'is-done' : i === cur ? 'is-cur' : '');
+              li.title = st.label;
+              if (i === cur) li.setAttribute('aria-current', 'step');
+              ol.append(li);
+            });
+            const cap = mk('p', 'cv-dstepcap', cur >= 0 ? 'Step ' + (cur + 1) + ' of ' + steps.length + (steps[cur + 1] ? ' \u00b7 next: ' + steps[cur + 1].label : '') : 'Off the usual path');
+            statusSec.append(ol, cap);
+          }
+        }
+        // People: everyone on the paper, helpers with their roles.
+        const P = d.people || {};
+        const add = (label, name) => {
+          if (!name || [...people.querySelectorAll('dt')].some((t) => t.textContent === label)) return;
+          const dd = mk('dd'); dd.append(mk('span', 'cv-av', initials(name)), document.createTextNode(name));
+          people.append(mk('dt', null, label), dd);
+        };
+        add('Co-lead', P.colead); add('Presenter', P.presenter); add('Corresponding', P.corresponding);
+        (d.team || []).forEach((t) => add(t.roles && t.roles.length ? t.roles.map((r) => SHORT[r] || r).join(', ') : 'Team', t.name));
+        if (people.children.length && !people.parentElement) {
+          const sec = mk('div', 'cv-dsec'); sec.append(mk('h3', null, 'People'), people);
+          (statusSec && statusSec.parentElement ? statusSec : body.firstChild).after(sec);
+        }
+        // Details: the manuscript.
+        if (d.manuscript_url) {
+          const dd = mk('dd'); const l = mk('a', 'cv-dlink', 'Open the document'); l.href = d.manuscript_url; l.target = '_blank'; l.rel = 'noopener';
+          dd.append(l); details.append(mk('dt', null, 'Manuscript'), dd);
+        }
+        if (details.children.length && !details.parentElement) {
+          const sec = mk('div', 'cv-dsec'); sec.append(mk('h3', null, 'Details'), details); body.append(sec);
+        }
+        // Journal and conference attempts.
+        const attempts = (title, list, name, fallback) => {
+          if (!list.length) return;
+          const sec = mk('div', 'cv-dsec'); sec.append(mk('h3', null, title));
+          const ul = mk('ul', 'cv-datt');
+          list.forEach((x) => {
+            const li = mk('li');
+            li.append(mk('span', 'cv-datt__n', name(x)), mk('span', 'cv-datt__d', fmtD(x.submitted_on)),
+              mk('span', 'cv-dpill ' + (x.outcome ? (OUTC[x.outcome] || '') : 'wait'), x.outcome ? String(x.outcome).replace(/_/g, ' ') : fallback));
+            ul.append(li);
+          });
+          sec.append(ul); body.append(sec);
+        }
+        attempts('Journals', d.journal_attempts || [], (x) => x.journal + (x.revision_round ? ' (revision ' + x.revision_round + ')' : ''), 'with journal');
+        attempts('Conferences', d.conference_attempts || [], (x) => x.name || '-', 'pending');
+        // Recent activity.
+        const hist = d.history || [];
+        if (hist.length) {
+          const sec = mk('div', 'cv-dsec'); sec.append(mk('h3', null, 'Recent activity'));
+          const ol = mk('ol', 'cv-dtime');
+          hist.forEach((h, i) => {
+            const li = mk('li'); if (i >= 5) li.hidden = true;
+            li.append(mk('time', null, fmtD(h.at)));
+            const t = mk('span', null, h.label); if (h.actor) t.append(mk('em', null, ' ' + h.actor));
+            li.append(t); ol.append(li);
+          });
+          sec.append(ol);
+          if (hist.length > 5) {
+            const more = mk('button', 'cv-dmore', 'Show all ' + hist.length);
+            more.type = 'button';
+            more.onclick = () => { ol.querySelectorAll('li[hidden]').forEach((li) => { li.hidden = false; }); more.remove(); };
+            sec.append(more);
+          }
+          body.append(sec);
+        }
+      })
+      .catch(() => { if (mine === token) wait.textContent = ''; });
+  }
+
   // Capture phase, so the older slide-in panel never sees this click.
   document.addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('.cv-table td.t > a');
@@ -162,7 +279,15 @@ $('[data-cv-filters]')?.addEventListener('click', (e) => {
     e.preventDefault(); e.stopPropagation();
     open(a.closest('tr'), a);
   }, true);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') close();
+    // Arrow keys move between papers while the drawer is open (not while typing or in the status menu).
+    if (!dr || !dr.classList.contains('on') || e.target.closest('select, input, textarea')) return;
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      const b = dr.querySelectorAll('.cv-dnav__b')[e.key === 'ArrowRight' ? 1 : 0];
+      if (b && !b.disabled) { e.preventDefault(); b.click(); }
+    }
+  });
 })();
 
 /* ---------- pixel pets: drawn on a grid, animated frame by frame ---------- */

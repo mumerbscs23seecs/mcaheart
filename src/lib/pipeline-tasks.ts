@@ -10,8 +10,9 @@ import { scopeProjects } from './pipeline-scope';
 import { stagesFor } from './lifecycle.mjs';
 import { listIdeas } from './ideas';
 import { listApplications } from './applications';
+import { roleLabel, longDay, daysLeft } from './help';
 
-export type TaskKind = 'approval' | 'idea' | 'application' | 'stale' | 'overdue' | 'declined';
+export type TaskKind = 'approval' | 'idea' | 'application' | 'stale' | 'overdue' | 'declined' | 'mypart' | 'review' | 'help';
 
 export interface Task {
   id: string;
@@ -104,7 +105,83 @@ async function adminTasks(supabase: SupabaseClient): Promise<Task[]> {
     console.warn('[tasks] applications unavailable - run add-forms-storage.sql:', err instanceof Error ? err.message : err);
   }
 
+  // 4. help requests from first authors, still open (add-help-and-learning.sql)
+  const { data: helps } = await supabase
+    .from('help_requests')
+    .select('id,project_id,role,spots,created_at,requested_by')
+    .is('closed_at', null)
+    .order('created_at');
+  if (helps && helps.length) {
+    const { data: filled } = await supabase.from('assignments').select('request_id').in('request_id', helps.map((h: any) => h.id));
+    const n = new Map<string, number>();
+    for (const f of filled ?? []) n.set((f as any).request_id, (n.get((f as any).request_id) ?? 0) + 1);
+    const { data: projs } = await supabase.from('projects').select('id,ref').in('id', [...new Set(helps.map((h: any) => h.project_id))]);
+    const ref = new Map((projs ?? []).map((p: any) => [p.id, p.ref]));
+    for (const h of helps as any[]) {
+      tasks.push({
+        id: 'help-' + h.id,
+        kind: 'help',
+        title: `Appoint ${h.spots - (n.get(h.id) ?? 0)} for ${roleLabel(h.role).toLowerCase()} - ${ref.get(h.project_id) ?? 'a paper'}`,
+        detail: `${n.get(h.id) ?? 0} of ${h.spots} places filled`,
+        href: '/admin/mentees?view=help',
+        cta: 'Appoint',
+        when: h.created_at,
+      });
+    }
+  }
+
   return sortTasks(tasks);
+}
+
+/** Parts the member was appointed to, and helpers waiting for the lead's review. */
+async function helpTasks(supabase: SupabaseClient, person: Person): Promise<Task[]> {
+  const tasks: Task[] = [];
+  const { data: mineA, error } = await supabase
+    .from('assignments')
+    .select('id,project_id,person_id,role,due_on,done_at')
+    .order('due_on');
+  if (error || !mineA?.length) return tasks;
+  const projIds = [...new Set(mineA.map((a: any) => a.project_id))];
+  const { data: projs } = await supabase.from('projects').select('id,ref,lead_id,colead_id,archived_at').in('id', projIds);
+  const proj = new Map((projs ?? []).map((p: any) => [p.id, p]));
+  for (const a of mineA as any[]) {
+    const p = proj.get(a.project_id);
+    if (!p || p.archived_at || a.person_id !== person.id || a.done_at) continue;
+    const left = daysLeft(a.due_on);
+    tasks.push({
+      id: 'part-' + a.id,
+      kind: 'mypart',
+      title: `Your part on ${p.ref}: ${roleLabel(a.role)}`,
+      detail: left < 0 ? `Was due ${longDay(a.due_on)}, ${-left} day${left === -1 ? '' : 's'} ago.` : `Due ${longDay(a.due_on)}${left === 0 ? ' (today)' : ''}.`,
+      href: `/pipeline/projects/${a.project_id}#mypart`,
+      cta: 'Mark done',
+      when: a.due_on,
+      urgent: left <= 2,
+    });
+  }
+  // Leads: finished parts they haven't reviewed yet.
+  const done = (mineA as any[]).filter((a) => a.done_at && a.person_id !== person.id && [proj.get(a.project_id)?.lead_id, proj.get(a.project_id)?.colead_id].includes(person.id));
+  if (done.length) {
+    const [{ data: revs }, { data: ppl }] = await Promise.all([
+      supabase.from('mentee_reviews').select('project_id,person_id').eq('reviewer_id', person.id),
+      supabase.from('people').select('id,full_name').in('id', [...new Set(done.map((a) => a.person_id))]),
+    ]);
+    const reviewed = new Set((revs ?? []).map((r: any) => `${r.project_id}:${r.person_id}`));
+    const name = new Map((ppl ?? []).map((r: any) => [r.id, r.full_name]));
+    for (const a of done) {
+      if (reviewed.has(`${a.project_id}:${a.person_id}`)) continue;
+      tasks.push({
+        id: 'rev-' + a.id,
+        kind: 'review',
+        title: `Review ${name.get(a.person_id) ?? 'a helper'}'s work on ${proj.get(a.project_id)?.ref}`,
+        detail: `${roleLabel(a.role)}, finished. Your review is private.`,
+        href: `/pipeline/projects/${a.project_id}#team`,
+        cta: 'Add a review',
+        when: a.done_at,
+      });
+    }
+  }
+  return tasks;
 }
 
 async function memberTasks(supabase: SupabaseClient, person: Person): Promise<Task[]> {
@@ -169,6 +246,7 @@ async function memberTasks(supabase: SupabaseClient, person: Person): Promise<Ta
     }
   }
 
+  tasks.push(...(await helpTasks(supabase, person)));
   return sortTasks(tasks);
 }
 

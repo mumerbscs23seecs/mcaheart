@@ -4,7 +4,9 @@
  * sign-in email; mentees also choose the skills they can help with.
  * Needs mca-pipeline/add-profiles.sql (skills: add-skills.sql).
  */
-import AuthShell from '../../components/AuthShell.astro';
+import PipelineLayout from '../../layouts/PipelineLayout.astro';
+import '../../styles/calm.css';
+import { SKILL_SHORT } from '../../lib/skills';
 import { supabaseAdmin } from '../../lib/supabase';
 import { forgetPerson } from '../../lib/pipeline-auth';
 import { changeEmail } from '../../lib/profile';
@@ -60,56 +62,52 @@ if (ready && Astro.request.method === 'POST') {
 }
 ---
 
-<AuthShell title="Your profile" description="Edit your MCA Heart profile.">
-  <form class="auth-card prof" method="post" novalidate>
-    <h1 class="auth-card__title">Your profile</h1>
-    <p class="auth-card__sub">These details will be used for papers and conferences.</p>
+<PipelineLayout title="Your profile">
+  <div class="cv acct">
+    <div class="cv-bar"><h1 class="cv-h1">Your profile</h1></div>
+    <p class="acct-sub">Used on papers and conference submissions.</p>
 
-    {!ready && (
-      <p class="auth-alert" role="alert">Profile editing isn't switched on yet. A coordinator needs to run add-profiles.sql.</p>
-    )}
-    {error && <p class="auth-alert" role="alert">{error}</p>}
-    {saved && <p class="auth-ok-box" role="status">Your profile is saved.</p>}
+    {!ready && <p class="cv-flash cv-flash--err" role="alert">Profile editing isn't switched on yet. A coordinator needs to run add-profiles.sql.</p>}
+    {error && <p class="cv-flash cv-flash--err" role="alert">{error}</p>}
+    {saved && <p class="cv-flash" role="status">Saved.</p>}
 
     {ready && (
-      <>
-        <div class="auth-field">
-          <label for="full_name">Full name</label>
-          <input id="full_name" name="full_name" required maxlength="120" value={form.full_name} autocomplete="name" />
-        </div>
-        <div class="auth-field">
-          <label for="affiliation">Affiliation</label>
-          <input id="affiliation" name="affiliation" maxlength="200" value={form.affiliation} placeholder="Hospital, university or institution" autocomplete="organization" />
-        </div>
-        <div class="auth-field">
-          <label for="email">Email</label>
-          <input id="email" name="email" type="email" required maxlength="254" value={form.email} autocomplete="email" data-prof-email data-current={person.email} />
-          <small class="prof__hint">You sign in with this email.</small>
-        </div>
-        <div class="auth-field" data-prof-pw hidden>
-          <label for="password">Current password</label>
-          <input id="password" name="password" type="password" autocomplete="current-password" />
-          <small class="prof__hint">Needed to change your email.</small>
-        </div>
+      <form class="acct-card" method="post" novalidate>
+        <label class="cv-field"><span>Full name</span>
+          <input name="full_name" required maxlength="120" value={form.full_name} autocomplete="name" />
+        </label>
+        <label class="cv-field"><span>Affiliation</span>
+          <input name="affiliation" maxlength="200" value={form.affiliation} placeholder="Hospital, university or institution" autocomplete="organization" />
+        </label>
+        <label class="cv-field"><span>Email <small>you sign in with this</small></span>
+          <input name="email" type="email" required maxlength="254" value={form.email} autocomplete="email" data-prof-email data-current={person.email} />
+        </label>
+        <label class="cv-field" data-prof-pw hidden><span>Current password <small>needed to change your email</small></span>
+          <input name="password" type="password" autocomplete="current-password" />
+        </label>
 
         {isMentee && (
-          <fieldset class="prof__skills">
+          <fieldset class="acct-skills">
             <legend>What you can help with</legend>
-            {SKILLS.map((s) => (
-              <label class="prof__skill">
-                <input type="checkbox" name="skills" value={s} checked={form.skills.includes(s)} />
-                <span>{s}</span>
-              </label>
-            ))}
+            <div class="acct-skills__grid">
+              {SKILLS.map((sk) => (
+                <label class="acct-skill">
+                  <input type="checkbox" name="skills" value={sk} checked={form.skills.includes(sk)} />
+                  <span>{SKILL_SHORT[sk]}</span>
+                </label>
+              ))}
+            </div>
           </fieldset>
         )}
 
-        <button class="btn" type="submit">Save profile</button>
-      </>
+        <div class="acct-foot">
+          <button class="cv-btn cv-btn--pri" type="submit">Save profile</button>
+          <a class="cv-btn" href="/account/password">Change password</a>
+        </div>
+      </form>
     )}
-    <a class="auth-card__link" href={home}>&larr; Back</a>
-  </form>
-</AuthShell>
+  </div>
+</PipelineLayout>
 
 <script>
   // Ask for the current password only once the email is actually changed.
@@ -124,10 +122,18 @@ if (ready && Astro.request.method === 'POST') {
 </script>
 
 <style>
-  .prof__hint { font-size: 0.76rem; color: var(--text-muted); }
+  .acct { max-width: 640px; margin-inline: auto; }
+  .acct .cv-bar { margin-bottom: 6px; }
+  .acct-sub { margin: 0 0 22px; font-size: 0.9375rem; opacity: 0.7; }
+  .acct-card { display: grid; gap: 18px; padding: 24px; border: 1px solid var(--cv-line); border-radius: 12px; }
   [data-prof-pw][hidden] { display: none; }
-  .prof__skills { border: 0; margin: 0; padding: 0; display: grid; gap: 0.45rem; }
-  .prof__skills legend { font-size: 0.8rem; font-weight: 600; color: var(--text); margin-bottom: 0.4rem; padding: 0; }
-  .prof__skill { display: flex; align-items: center; gap: 0.55rem; font-size: 0.9rem; color: var(--text-strong); cursor: pointer; }
-  .prof__skill input { width: 16px; height: 16px; accent-color: var(--blue); }
+  .acct-skills { border: 0; margin: 0; padding: 0; min-width: 0; }
+  .acct-skills legend { padding: 0; margin-bottom: 8px; font-size: 0.8125rem; font-weight: 700; }
+  .acct-skills__grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .acct-skill { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--cv-line); border-radius: 8px; font-size: 0.9375rem; cursor: pointer; }
+  .acct-skill:has(input:checked) { border-color: var(--cv-accent); background: var(--cv-tint); }
+  .acct-skill input { width: 16px; height: 16px; margin: 0; accent-color: var(--cv-accent); }
+  .acct-foot { display: flex; gap: 8px; padding-top: 4px; }
+  .acct-foot .cv-btn { padding: 10px 18px; font-size: 0.9rem; }
+  @media (max-width: 520px) { .acct-skills__grid { grid-template-columns: 1fr; } }
 </style>

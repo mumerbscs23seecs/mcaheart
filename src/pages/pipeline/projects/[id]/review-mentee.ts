@@ -28,7 +28,7 @@ export const POST: APIRoute = async ({ params, request, locals, redirect }) => {
 
   const personId = String(form.get('personId') ?? '');
   const overall = score(form.get('overall'));
-  if (!personId) return to('err', 'Choose a mentee.');
+  if (!personId) return to('err', 'Choose a member.');
   if (!overall) return to('err', 'Give an overall rating from 1 to 5.');
   const workAgain = String(form.get('work_again') ?? '');
   const { error } = await supabase.rpc('add_mentee_review', {

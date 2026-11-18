@@ -109,6 +109,42 @@ export async function pendingIdeaCount(): Promise<number> {
   return count ?? 0;
 }
 
+/** Accepted ideas whose WhatsApp group hasn't been ticked off (add-help-and-learning.sql). */
+export async function ideaGroupsToMakeCount(): Promise<number> {
+  const { count, error } = await supabaseAdmin().from('ideas').select('id', { count: 'exact', head: true })
+    .eq('status', 'approved').is('whatsapp_group_at', null);
+  return error ? 0 : count ?? 0;
+}
+
+export type IdeaGroupRow = { id: string; title: string; leadName: string; leadEmail: string; phone: string; reviewedAt: number | null; groupAt: number | null; groupBy: string | null };
+
+/** Accepted ideas, for the WhatsApp page. `ready` is false until the SQL is run. */
+export async function listIdeaGroups(): Promise<{ ready: boolean; rows: IdeaGroupRow[] }> {
+  const { data, error } = await supabaseAdmin().from('ideas').select('id,payload,reviewed_at,whatsapp_group_at,whatsapp_group_by')
+    .eq('status', 'approved').order('reviewed_at', { ascending: false });
+  if (error) return { ready: false, rows: [] };
+  return {
+    ready: true,
+    rows: (data ?? []).map((r: any) => ({
+      id: r.id,
+      title: r.payload?.title ?? 'Untitled idea',
+      leadName: r.payload?.leadName ?? '',
+      leadEmail: r.payload?.leadEmail ?? '',
+      phone: r.payload?.contactNumber ?? '',
+      reviewedAt: r.reviewed_at ? new Date(r.reviewed_at).getTime() : null,
+      groupAt: r.whatsapp_group_at ? new Date(r.whatsapp_group_at).getTime() : null,
+      groupBy: r.whatsapp_group_by ?? null,
+    })),
+  };
+}
+
+export async function setIdeaGroupMade(id: string, made: boolean, by: string): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await supabaseAdmin().from('ideas')
+    .update(made ? { whatsapp_group_at: new Date().toISOString(), whatsapp_group_by: by } : { whatsapp_group_at: null, whatsapp_group_by: null })
+    .eq('id', id).eq('status', 'approved');
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
 export interface DecisionResult {
   ok: boolean;
   error?: string;

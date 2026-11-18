@@ -67,7 +67,7 @@ const any = r as any;
 const values = {
   recipient: (r.fullName || '').trim(),
   sender: me.name,
-  topic: any.topicArea?.trim() ?? '',
+  topic: any.topicArea?.trim() || (any.topicRoles?.length ? 'a new topic' : ''),
   purpose: any.recPurpose?.trim() ?? '',
   deadline: any.recDeadline?.trim() ?? '',
   start: any.obsStart?.trim() ?? '',

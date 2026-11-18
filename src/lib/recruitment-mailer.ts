@@ -84,10 +84,10 @@ export function renderApplicationDecisionEmail(
   let inner: string;
 
   if (opts.decision === 'approved') {
-    subject = 'Welcome to MCA Heart Research Lab as a Remote Research Collaborator';
+    subject = 'Welcome to MCA Heart Research Lab as a Research Collaborator';
     inner =
       p(`Dear ${name},`) +
-      p(`Thank you for your interest in MCA Heart Research Lab and for completing our application process. Following a review of your application, we are pleased to welcome you as a <strong>Remote Research Collaborator</strong> for an initial period of six months, effective today.`) +
+      p(`Thank you for your interest in MCA Heart Research Lab and for completing our application process. Following a review of your application, we are pleased to welcome you as a <strong>Research Collaborator</strong> for an initial period of six months, effective today.`) +
       p(`Led by <strong>Dr. Chadi Alraies</strong>, with support from Research Fellows <strong>Jawad Basit</strong> and <strong>Muhammad Burhan</strong> and our administrative team, the lab brings together more than <strong>300 cardiology researchers</strong> worldwide. It produces over <strong>70 peer-reviewed publications and 150 conference abstracts</strong> annually, with expertise spanning <strong>TriNetX, NIS, NRD, NEDS, and meta-analysis</strong>.`) +
       subhead('Onboarding') +
       p(`You will shortly be added to the lab's WhatsApp group using the contact number provided in your application. There, you will receive introductory materials, workflow guidance, and information about available opportunities. Once added, please introduce yourself to the team.`) +
@@ -122,7 +122,7 @@ export function renderApplicationDecisionEmail(
     subject = 'Your application to MCA Heart Research Lab';
     inner =
       p(`Dear ${name},`) +
-      p(`Thank you for taking the time to complete the application form for recruitment to our Remote Research Lab as a Research Collaborator/Member. We appreciate the time and effort you put into filling and submitting the application.`) +
+      p(`Thank you for taking the time to complete the application form for recruitment to our Research Lab as a Research Collaborator/Member. We appreciate the time and effort you put into filling and submitting the application.`) +
       p(`We regret to inform you that we are unable to accommodate your application at this time. We receive substantially more applications than available collaboration opportunities, and the number of ongoing projects may already be exceeded by the interest from existing members. In light of this, we prefer not to onboard additional collaborators whom we may not be able to meaningfully engage in active projects. Therefore, this outcome should not be viewed as a negative assessment of your qualifications, but rather as a reflection of our specific selection criteria and current capacity.`) +
       p(`Once again, we sincerely appreciate your interest in joining our team and encourage you to reach out again in the future should new opportunities arise. Please do not hesitate to contact us if you have any questions.`) +
       note +

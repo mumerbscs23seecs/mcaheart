@@ -22,6 +22,10 @@ export interface RequestRecord extends ContactPayload {
   cv: StoredFile | null;
   /** Flips to true the first time an admin opens /admin/requests after this arrived. */
   read: boolean;
+  /** Closed by an admin without replying (kept in the payload). */
+  resolvedAt?: number | null;
+  resolvedBy?: string | null;
+  resolvedNote?: string | null;
 }
 
 const hexToBuffer = (hex: string) => Buffer.from(hex.slice(2), 'hex');
@@ -81,4 +85,31 @@ export async function unreadRequestCount(): Promise<number> {
 /** Called when the admin opens the requests list - marks everything currently there as read. */
 export async function markAllRequestsRead(): Promise<void> {
   await supabaseAdmin().from('contact_requests').update({ read_at: new Date().toISOString() }).is('read_at', null);
+}
+
+/** Close a request without emailing the sender, with an optional private note. */
+export async function resolveRequest(id: string, by: string | null, note = ''): Promise<string | null> {
+  const db = supabaseAdmin();
+  const { data, error } = await db.from('contact_requests').select('payload').eq('id', id).maybeSingle();
+  if (error || !data) return error?.message ?? 'That request no longer exists.';
+  const payload = { ...(data.payload as object) } as Record<string, unknown>;
+  if (by) {
+    payload.resolvedAt = Date.now();
+    payload.resolvedBy = by;
+    payload.resolvedNote = note.trim() || null;
+  } else {
+    delete payload.resolvedAt; delete payload.resolvedBy; delete payload.resolvedNote;
+  }
+  const { error: upErr } = await db.from('contact_requests').update({ payload }).eq('id', id);
+  if (upErr) return upErr.message;
+  audit(by ?? 'admin', by ? 'resolved request without reply' : 'reopened request', id);
+  return null;
+}
+
+/** Remove a request for good. */
+export async function deleteRequest(id: string, by: string): Promise<string | null> {
+  const { error } = await supabaseAdmin().from('contact_requests').delete().eq('id', id);
+  if (error) return error.message;
+  audit(by, 'deleted request', id);
+  return null;
 }

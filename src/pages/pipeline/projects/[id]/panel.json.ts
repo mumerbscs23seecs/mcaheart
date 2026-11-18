@@ -1,5 +1,12 @@
 import type { APIRoute } from 'astro';
 import { personOnProject } from '../../../../lib/pipeline-scope';
+import { stagesFor } from '../../../../lib/lifecycle.mjs';
+
+// Stages that are not a step on the usual path (as on the paper's own page).
+const OFF_PATH: Record<string, string[]> = {
+  conference: ['rejected', 'not_sent'],
+  journal: ['halted', 'rejected_comments', 'rejected_no_comments'],
+};
 
 export const prerender = false;
 
@@ -18,9 +25,10 @@ export const GET: APIRoute = async ({ params, locals }) => {
   if (!p) return json({ error: 'No such project.' }, 404);
   if (!personOnProject(p, person)) return json({ error: 'Not your project.' }, 403);
 
-  const ids = [p.lead_id, p.analyst_id, p.colead_id, p.presenter_id, p.corresponding_id].filter(Boolean);
+  const team: string[] = p.team_member_ids ?? [];
+  const ids = [p.lead_id, p.analyst_id, p.colead_id, p.presenter_id, p.corresponding_id, ...team].filter(Boolean);
 
-  const [peopleRes, confRes, jrnlRes, histRes] = await Promise.all([
+  const [peopleRes, confRes, jrnlRes, histRes, asgRes] = await Promise.all([
     ids.length
       ? supabase.from('people').select('id,full_name').in('id', ids)
       : Promise.resolve({ data: [] as { id: string; full_name: string }[] }),
@@ -38,11 +46,15 @@ export const GET: APIRoute = async ({ params, locals }) => {
       .order('id', { ascending: false }),
     supabase
       .from('project_history')
-      .select('at,label,actor')
+      .select('at,label,actor,detail')
       .eq('project_id', id)
       .order('at', { ascending: false })
       .limit(40),
+    // Roles of people put on the paper (only returned to admins and the lead).
+    supabase.from('assignments').select('person_id,role,done_at').eq('project_id', id),
   ]);
+  const roleOf = new Map<string, string[]>();
+  for (const a of (asgRes.error ? [] : asgRes.data ?? []) as any[]) roleOf.set(a.person_id, [...(roleOf.get(a.person_id) ?? []), a.role ?? 'General help']);
 
   const who = new Map((peopleRes.data ?? []).map((r: any) => [r.id, r.full_name]));
 
@@ -70,6 +82,12 @@ export const GET: APIRoute = async ({ params, locals }) => {
       presenter: who.get(p.presenter_id) ?? null,
       corresponding: who.get(p.corresponding_id) ?? null,
     },
+    team: team.filter((t) => ![p.lead_id, p.analyst_id, p.colead_id, p.presenter_id, p.corresponding_id].includes(t))
+      .map((t) => ({ name: who.get(t) ?? 'Member', roles: roleOf.get(t) ?? [] })),
+    stage: p.stage,
+    steps: stagesFor(p.phase)
+      .filter((st: any) => !(OFF_PATH[p.phase] ?? []).includes(st.code))
+      .map((st: any) => ({ code: st.code, label: String(st.label).replace(/^\s*\d+\s*\/\s*\d+\s*/, '') })),
     conference_attempts: (confRes.data ?? []).map((a: any) => ({
       name: a.conference?.name ?? null,
       outcome: a.outcome,
@@ -81,6 +99,9 @@ export const GET: APIRoute = async ({ params, locals }) => {
       revision_round: a.revision_round,
       submitted_on: a.submitted_on,
     })),
-    history: (histRes.data ?? []).map((h: any) => ({ at: h.at, label: h.label, actor: h.actor })),
+    // Same wording as the paper's own page: a corrected label, the system note, or the standard label.
+    history: (histRes.data ?? [])
+      .map((h: any) => ({ at: h.at, label: h.detail?.label_override || h.detail?.system || h.label, actor: h.actor }))
+      .filter((h: any) => h.label),
   });
 };

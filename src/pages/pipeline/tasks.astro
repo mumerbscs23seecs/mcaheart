@@ -1,78 +1,87 @@
 ---
 import PipelineLayout from '../../layouts/PipelineLayout.astro';
-import { getPipelineTasks } from '../../lib/pipeline-tasks';
+import CalmBar from '../../components/calm/CalmBar.astro';
+import CalmFilters from '../../components/calm/CalmFilters.astro';
+import CalmDock from '../../components/calm/CalmDock.astro';
+import { getPipelineTasks, type TaskKind } from '../../lib/pipeline-tasks';
 
 export const prerender = false;
 const { supabase, person } = Astro.locals;
-const isAdmin = person.role === 'admin';
 
 const tasks = await getPipelineTasks(supabase, person);
-const urgent = tasks.filter((t) => t.urgent);
-const rest = tasks.filter((t) => !t.urgent);
 
-const KIND_LABEL: Record<string, string> = {
-  approval: 'Approval',
-  idea: 'New idea',
-  application: 'Recruitment',
-  stale: 'Needs update',
-  overdue: 'Overdue',
-  declined: 'Declined',
+// What each kind is called, as a filter (plural) and in the table (singular),
+// and its dot colour.
+const KIND: Record<TaskKind, { one: string; many: string; c: string }> = {
+  approval: { one: 'Approval', many: 'Approvals', c: '#c0432b' },
+  idea: { one: 'New idea', many: 'New ideas', c: '#2563a8' },
+  application: { one: 'Application', many: 'Applications', c: '#3b3fa3' },
+  help: { one: 'Help request', many: 'Help requests', c: '#0f766e' },
+  mypart: { one: 'Your part', many: 'Your parts', c: '#0f766e' },
+  review: { one: 'Review', many: 'Reviews', c: '#6b3a7d' },
+  stale: { one: 'Needs update', many: 'Needs update', c: '#b06a0a' },
+  overdue: { one: 'Overdue', many: 'Overdue', c: '#a12a2a' },
+  declined: { one: 'Declined', many: 'Declined', c: '#5b6472' },
 };
-const fmt = (d?: string | null) =>
-  d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+const ORDER: TaskKind[] = ['approval', 'mypart', 'review', 'overdue', 'stale', 'help', 'idea', 'application', 'declined'];
+const chips = ORDER.map((k) => ({ key: k, label: KIND[k].many, count: tasks.filter((t) => t.kind === k).length }));
+
+// The type column already says "New idea" / "Application", so drop that
+// prefix from the title.
+const titleOf = (t: (typeof tasks)[number]) =>
+  (t.kind === 'idea' || t.kind === 'application') && t.title.includes(' - ') ? t.title.slice(t.title.indexOf(' - ') + 3) : t.title;
+const fmt = (d?: string | null) => {
+  if (!d) return '';
+  const dt = new Date(d);
+  return Number.isNaN(dt.getTime()) ? '' : dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+};
 ---
 
 <PipelineLayout title="Tasks" active="tasks">
-  <h1 class="pl-h1">Pending tasks</h1>
-  <p class="pl-sub">
-    {isAdmin
-      ? 'Everything waiting on you - status approvals, new research ideas, and lab applications.'
-      : 'Papers of yours that need a status update, plus anything the coordinator sent back.'}
-  </p>
-
-  {tasks.length === 0 && (
-    <p class="pl-muted" style="margin-top:28px">You're all caught up - nothing pending.</p>
-  )}
-
-  {urgent.length > 0 && (
-    <>
-      <h2 class="pl-sech">Needs attention</h2>
-      <ul class="pl-tasks">
-        {urgent.map((t) => (
-          <li class="pl-task pl-task--urgent">
-            <div>
-              <p class="pl-task__k">{KIND_LABEL[t.kind] ?? t.kind}</p>
-              <p class="pl-task__t">{t.title}</p>
-              {t.detail && <p class="pl-task__d">{t.detail}</p>}
-            </div>
-            <div class="pl-task__go">
-              {t.when && <time>{fmt(t.when)}</time>}
-              <a class="pl-btn pl-btn--ghost" href={t.href}>{t.cta} →</a>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </>
-  )}
-
-  {rest.length > 0 && (
-    <>
-      <h2 class="pl-sech" style="margin-top:28px">{urgent.length > 0 ? 'Also pending' : 'Pending'}</h2>
-      <ul class="pl-tasks">
-        {rest.map((t) => (
-          <li class="pl-task">
-            <div>
-              <p class="pl-task__k">{KIND_LABEL[t.kind] ?? t.kind}</p>
-              <p class="pl-task__t">{t.title}</p>
-              {t.detail && <p class="pl-task__d">{t.detail}</p>}
-            </div>
-            <div class="pl-task__go">
-              {t.when && <time>{fmt(t.when)}</time>}
-              <a class="pl-btn pl-btn--ghost" href={t.href}>{t.cta} →</a>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </>
-  )}
+  <div class="cv tk">
+    <CalmBar title="Tasks" count={tasks.length} placeholder="Search tasks" />
+    {tasks.length === 0 ? (
+      <p class="cv-empty-box">Nothing waiting on you.</p>
+    ) : (
+      <>
+        <CalmFilters items={chips} total={tasks.length} />
+        <table class="cv-table tk-table">
+          <thead>
+            <tr>
+              <th>Task</th>
+              <th class="cv-hide-sm" style="width:180px">Type</th>
+              <th class="cv-hide-sm" style="width:110px">Date</th>
+              <th class="x" style="width:170px"><span class="sr-only">Action</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {tasks.map((t) => (
+              <tr data-cv-row data-cv-f={t.kind} data-cv-text={`${t.title} ${t.detail ?? ''}`} class:list={[t.urgent && 'is-urgent']}>
+                <td class="t">
+                  <a href={t.href}>{titleOf(t)}</a>
+                  {t.detail && <div class="cv-sub tk-detail">{t.detail}</div>}
+                </td>
+                <td class="cv-hide-sm">
+                  <span class="cv-dot" style={`--c:${t.urgent ? '#a12a2a' : KIND[t.kind].c}`}>{KIND[t.kind].one}</span>
+                  {t.urgent && <div class="tk-urgent">Urgent</div>}
+                </td>
+                <td class="cv-hide-sm sm num">{fmt(t.when)}</td>
+                <td class="x tk-go"><a class:list={['cv-btn', 'cv-btn--sm', t.urgent && 'cv-btn--pri']} href={t.href}>{t.cta}</a></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </>
+    )}
+  </div>
+  <CalmDock drawer={false} />
 </PipelineLayout>
+
+<style>
+  .tk-table tbody td { vertical-align: middle; padding-top: 16px; padding-bottom: 16px; }
+  .tk-table td.t > a { font-size: 1rem; font-weight: 600; }
+  .tk-detail { opacity: 0.7; line-height: 1.45; }
+  .tk-urgent { margin: 2px 0 0 17px; font-size: 0.75rem; font-weight: 600; color: #a12a2a; }
+  .tk-go { text-align: right; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>

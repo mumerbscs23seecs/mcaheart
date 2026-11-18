@@ -11,9 +11,13 @@
  * the website enquiries, with the same unread badge.
  */
 import PipelineLayout from '../../layouts/PipelineLayout.astro';
+import CalmDock from '../../components/calm/CalmDock.astro';
+import '../../styles/calm.css';
+import { icon } from '../../lib/calm';
+import { listReplies } from '../../lib/request-replies';
 import { addRequest, listRequests, type RequestRecord } from '../../lib/requests';
 import { deliverEnquiry } from '../../lib/mailer';
-import { memberRequestSchema, INTENT_LABELS, type ContactPayload } from '../../lib/contact-schema';
+import { memberRequestSchema, INTENT_LABELS, TOPIC_ROLES, TOPIC_ROLE_LABEL, AI_PLANS, AI_PLAN_LABEL, AI_DECLARATION, DEADLINE_DECLARATION, type ContactPayload } from '../../lib/contact-schema';
 
 export const prerender = false;
 const { person } = Astro.locals;
@@ -25,12 +29,14 @@ let kind: Kind | null = kindParam === 'lor' || kindParam === 'topic' ? kindParam
 
 let errors: Record<string, string> = {};
 let values: Record<string, string> = {};
+let rolesChosen: string[] = [];
 
 if (Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
   values = Object.fromEntries([...form.entries()].map(([k, v]) => [k, String(v)]));
+  rolesChosen = form.getAll('topicRoles').map(String);
   kind = values.intent === 'topic' ? 'topic' : 'lor';
-  const parsed = memberRequestSchema.safeParse(values);
+  const parsed = memberRequestSchema.safeParse(kind === 'topic' ? { ...values, topicRoles: rolesChosen } : values);
   if (!parsed.success) {
     for (const issue of parsed.error.issues) errors[String(issue.path[0])] ??= issue.message;
   } else {
@@ -44,7 +50,7 @@ if (Astro.request.method === 'POST') {
       await addRequest(payload, null);
       // Saved either way; don't hold the page on SMTP.
       deliverEnquiry(payload).catch((err) => console.error('[member request] email failed (record kept):', err));
-      return Astro.redirect(`/pipeline/requests?ok=${encodeURIComponent('Request sent. The coordinator will get back to you by email.')}`, 303);
+      return Astro.redirect(`/pipeline/requests?ok=${encodeURIComponent('Request sent. The coordinator will reply by email.')}`, 303);
     } catch (err) {
       errors._form = 'Could not send the request. Please try again shortly.';
       console.error('[member request] could not save:', err);
@@ -67,108 +73,228 @@ const fmt = (t: number) => {
   return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}-${d.getFullYear()}`;
 };
 const summary = (r: RequestRecord) =>
-  r.intent === 'recommendation' ? `${r.recPurpose ?? ''}${r.recDeadline ? ` · due ${r.recDeadline}` : ''}` : (r.topicArea ?? '');
+  r.intent === 'recommendation'
+    ? `${r.recPurpose ?? ''}${r.recDeadline ? ` · due ${r.recDeadline}` : ''}`
+    : r.topicRoles?.length
+      ? r.topicRoles.map((x) => (x === 'Other' ? r.topicOther || 'Other' : (TOPIC_ROLE_LABEL as Record<string, string>)[x] ?? x)).join(', ')
+      : (r.topicArea ?? '');
 
-const ROLES = ['Literature search and data extraction', 'Statistical analysis', 'Writing the manuscript', 'Wherever I am needed'];
 const v = (k: string) => values[k] ?? '';
+const today = new Date().toISOString().slice(0, 10);
+const { byRequest: replies } = mine.length ? await listReplies().catch(() => ({ byRequest: new Map() })) : { byRequest: new Map() };
+const stateOf = (r: RequestRecord) =>
+  (replies.get(r.id) ?? []).length ? { label: 'Replied', c: '#166534' } : r.resolvedAt ? { label: 'Closed', c: '#5b6472' } : { label: 'Waiting', c: '#b06a0a' };
+
+// The first author of an open paper can also ask for helpers.
+const { count: leads } = await Astro.locals.supabase.from('projects').select('id', { count: 'exact', head: true })
+  .eq('lead_id', person.id).is('archived_at', null).is('deleted_at', null);
+const OPTIONS = [
+  { href: '/pipeline/ideas', title: 'New research idea', text: 'Propose a database study or meta-analysis.', icon: 'doc' },
+  { href: '/pipeline/requests?type=lor', title: 'Letter of recommendation', text: 'For residency, fellowship or a job application.', icon: 'edit' },
+  { href: '/pipeline/requests?type=topic', title: 'Join a new topic', text: 'Offer to help with analysis, writing, screening or visuals.', icon: 'hand' },
+  ...((leads ?? 0) > 0 ? [{ href: '/pipeline/help', title: 'Request help on my paper', text: 'Ask for helpers on a paper you lead.', icon: 'plus' }] : []),
+];
 ---
 
-<PipelineLayout title="Requests" active="requests">
-  <h1 class="pl-h1">{kind ? INTENT_LABELS[KIND_INTENT[kind]] : 'Requests'}</h1>
-  <p class="pl-sub">{kind ? 'Sent to the coordinator, who replies by email.' : 'Ask the lab for something.'}</p>
+<PipelineLayout title={kind ? INTENT_LABELS[KIND_INTENT[kind]] : 'Requests'} active="requests">
+  <div class="cv rq">
+    {kind && <a class="rq-back" href="/pipeline/requests"><Fragment set:html={icon('up')} />Requests</a>}
+    <div class="cv-bar"><h1 class="cv-h1">{kind ? INTENT_LABELS[KIND_INTENT[kind]] : 'Requests'}</h1></div>
 
-  {!kind && (
-    <p class="rq-pickhint">
-      <a href="/pipeline/ideas">New idea</a> · <a href="/pipeline/requests?type=lor">Letter of recommendation</a> · <a href="/pipeline/requests?type=topic">Join a new topic</a>
-    </p>
-  )}
+    {!kind && (
+      <>
+        <ul class="rq-opts">
+          {OPTIONS.map((o) => (
+            <li>
+              <a class="rq-opt" href={o.href}>
+                <span class="rq-opt__ic"><Fragment set:html={icon(o.icon)} /></span>
+                <span class="rq-opt__t"><b>{o.title}</b><span>{o.text}</span></span>
+                <svg class="rq-opt__go" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="m7.5 5 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" /></svg>
+              </a>
+            </li>
+          ))}
+        </ul>
 
-  {kind && (
-    <form method="post" class="rq-form" id="form" novalidate>
-      <input type="hidden" name="intent" value={KIND_INTENT[kind]} />
-      <p class="rq-from">From {person.full_name} &lt;{person.email}&gt;</p>
-      {errors._form && <p class="rq-err" role="alert">{errors._form}</p>}
+        {mine.length > 0 && (
+          <section class="cv-section">
+            <h2 class="cv-h2">Sent <span>{mine.length}</span></h2>
+            <table class="cv-table">
+              <thead><tr><th>Request</th><th class="cv-hide-sm">Details</th><th style="width:130px">Sent</th><th style="width:130px">Status</th></tr></thead>
+              <tbody>
+                {mine.map((r) => (
+                  <tr>
+                    <td class="sm"><b>{INTENT_LABELS[r.intent]}</b></td>
+                    <td class="cv-hide-sm sm">{summary(r) || '-'}</td>
+                    <td class="sm num">{fmt(r.submittedAt)}</td>
+                    <td><span class="cv-dot" style={`--c:${stateOf(r).c}`}>{stateOf(r).label}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        )}
+      </>
+    )}
 
-      {kind === 'lor' ? (
-        <>
-          <label class="pl-field">
-            <span>What is the letter for?</span>
-            <input name="recPurpose" maxlength="300" required value={v('recPurpose')} placeholder="e.g. Internal medicine residency application (ERAS)" />
-            {errors.recPurpose && <em class="rq-ferr">{errors.recPurpose}</em>}
-          </label>
-          <label class="pl-field rq-short">
-            <span>Deadline</span>
-            <input type="date" name="recDeadline" required value={v('recDeadline')} />
-            {errors.recDeadline && <em class="rq-ferr">{errors.recDeadline}</em>}
-          </label>
-          <label class="pl-field">
-            <span>Your work with the lab</span>
-            <textarea name="recWork" rows="5" maxlength="4000" required placeholder="Papers, abstracts and projects you worked on, and your part in each.">{v('recWork')}</textarea>
-            {errors.recWork && <em class="rq-ferr">{errors.recWork}</em>}
-          </label>
-        </>
-      ) : (
-        <>
-          <label class="pl-field">
-            <span>Area or kind of topic</span>
-            <input name="topicArea" maxlength="300" required value={v('topicArea')} placeholder="e.g. Structural heart, TAVR outcomes, a database study" />
-            {errors.topicArea && <em class="rq-ferr">{errors.topicArea}</em>}
-          </label>
-          <label class="pl-field rq-short">
-            <span>How you would like to help</span>
-            <select name="topicRole" required>
-              <option value="" selected={!v('topicRole')} disabled>Choose one</option>
-              {ROLES.map((r) => <option selected={v('topicRole') === r}>{r}</option>)}
-            </select>
-            {errors.topicRole && <em class="rq-ferr">{errors.topicRole}</em>}
-          </label>
-          <label class="pl-field rq-short">
-            <span>Hours per week (optional)</span>
-            <input name="topicHours" maxlength="40" value={v('topicHours')} placeholder="e.g. 6" />
-          </label>
-          <label class="pl-field">
-            <span>Anything else (optional)</span>
-            <textarea name="topicNote" rows="4" maxlength="4000">{v('topicNote')}</textarea>
-          </label>
-        </>
-      )}
-      <button type="submit" class="pl-btn">Send request</button>
-    </form>
-  )}
+    {kind && (
+      <form method="post" class="rq-form" novalidate>
+        <input type="hidden" name="intent" value={KIND_INTENT[kind]} />
+        {errors._form && <p class="cv-flash cv-flash--err" role="alert">{errors._form}</p>}
 
-  {mine.length > 0 && (
-    <>
-      <h2 class="pl-sech rq-mine">Your requests <span class="pl-h1__count">({mine.length})</span></h2>
-      <div class="pl-tablewrap">
-        <table class="pl-table">
-          <thead><tr><th>Request</th><th>Details</th><th>Sent</th></tr></thead>
-          <tbody>
-            {mine.map((r) => (
-              <tr>
-                <td data-th="Request">{INTENT_LABELS[r.intent]}</td>
-                <td data-th="Details">{summary(r) || '-'}</td>
-                <td class="pl-t__date" data-th="Sent">{fmt(r.submittedAt)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  )}
+        {kind === 'lor' ? (
+          <div class="rq-card">
+            <label class="cv-field"><span>What is the letter for?</span>
+              <input name="recPurpose" maxlength="300" required value={v('recPurpose')} placeholder="Internal medicine residency (ERAS)" />{errors.recPurpose && <em class="rq-ferr">{errors.recPurpose}</em>}
+            </label>
+            <label class="cv-field rq-narrow"><span>Deadline</span>
+              <input type="date" name="recDeadline" required min={today} value={v('recDeadline')} />{errors.recDeadline && <em class="rq-ferr">{errors.recDeadline}</em>}
+            </label>
+            <label class="cv-field"><span>Your work with the lab</span>
+              <textarea name="recWork" rows="6" maxlength="4000" required placeholder="Papers, abstracts and projects, and your part in each">{v('recWork')}</textarea>{errors.recWork && <em class="rq-ferr">{errors.recWork}</em>}
+            </label>
+          </div>
+        ) : (
+          <>
+            <fieldset class="rq-card">
+              <legend class="rq-h">How can you help?</legend>
+              <div class="rq-opts2">
+                {TOPIC_ROLES.map((r) => (
+                  <label class="rq-tick">
+                    <input type="checkbox" name="topicRoles" value={r} checked={rolesChosen.includes(r)} data-rq-role={r} />
+                    <span>{TOPIC_ROLE_LABEL[r]}</span>
+                  </label>
+                ))}
+              </div>
+              {errors.topicRoles && <em class="rq-ferr">{errors.topicRoles}</em>}
+              <label class="cv-field" data-rq-other hidden={!rolesChosen.includes('Other')}><span>What else?</span>
+                <input name="topicOther" maxlength="300" value={v('topicOther')} placeholder="Cover letter, reference formatting" />{errors.topicOther && <em class="rq-ferr">{errors.topicOther}</em>}
+              </label>
+            </fieldset>
+
+            <fieldset class="rq-card">
+              <legend class="rq-h">Availability</legend>
+              <div class="rq-row3">
+                <label class="cv-field"><span>Hours a week</span>
+                  <input name="topicHours" maxlength="40" inputmode="numeric" required value={v('topicHours')} placeholder="6" />{errors.topicHours && <em class="rq-ferr">{errors.topicHours}</em>}
+                </label>
+                <label class="cv-field"><span>From</span>
+                  <input type="date" name="topicFrom" required min={today} value={v('topicFrom') || today} />{errors.topicFrom && <em class="rq-ferr">{errors.topicFrom}</em>}
+                </label>
+                <label class="cv-field"><span>Until <small>optional</small></span>
+                  <input type="date" name="topicUntil" min={today} value={v('topicUntil')} />{errors.topicUntil && <em class="rq-ferr">{errors.topicUntil}</em>}
+                </label>
+              </div>
+              <label class="cv-field"><span>Area of interest <small>optional</small></span>
+                <input name="topicArea" maxlength="300" value={v('topicArea')} placeholder="Structural heart, TAVR outcomes" />
+              </label>
+            </fieldset>
+
+            <fieldset class="rq-card">
+              <legend class="rq-h">AI use</legend>
+              <div class="rq-seg" role="radiogroup">
+                {AI_PLANS.map((a) => (
+                  <label><input type="radio" name="aiPlan" value={a} checked={v('aiPlan') === a} data-rq-ai /><span>{AI_PLAN_LABEL[a]}</span></label>
+                ))}
+              </div>
+              {errors.aiPlan && <em class="rq-ferr">{errors.aiPlan}</em>}
+              <div class="rq-aimore" data-rq-aiparts hidden={!v('aiPlan') || v('aiPlan') === 'none'}>
+                <label class="cv-field"><span>Which parts?</span>
+                  <input name="aiPlanParts" maxlength="1000" value={v('aiPlanParts')} placeholder="Grammar of the discussion, wording of the abstract" />{errors.aiPlanParts && <em class="rq-ferr">{errors.aiPlanParts}</em>}
+                </label>
+                <label class="rq-decl">
+                  <input type="checkbox" name="aiDeclaration" value="yes" checked={v('aiDeclaration') === 'yes'} data-rq-decl />
+                  <span><b>AI declaration.</b> {AI_DECLARATION}</span>
+                </label>
+                {errors.aiDeclaration && <em class="rq-ferr">{errors.aiDeclaration}</em>}
+              </div>
+            </fieldset>
+
+            <fieldset class="rq-card rq-confirm">
+              <legend class="rq-h">Confirm</legend>
+              <label class="rq-check"><input type="checkbox" name="deadlineAck" value="yes" checked={v('deadlineAck') === 'yes'} required /><span>{DEADLINE_DECLARATION}</span></label>
+              {errors.deadlineAck && <em class="rq-ferr">{errors.deadlineAck}</em>}
+              <label class="rq-check"><input type="checkbox" name="textedCoordinator" value="yes" checked={v('textedCoordinator') === 'yes'} required /><span>I have texted Muhammad Burhan, the coordinator.</span></label>
+              {errors.textedCoordinator && <em class="rq-ferr">{errors.textedCoordinator}</em>}
+            </fieldset>
+
+            <label class="cv-field rq-note"><span>Anything else <small>optional</small></span>
+              <textarea name="topicNote" rows="3" maxlength="4000">{v('topicNote')}</textarea>
+            </label>
+          </>
+        )}
+        <div class="rq-foot">
+          <button type="submit" class="cv-btn cv-btn--pri">Send request</button>
+          <a class="cv-btn" href="/pipeline/requests">Cancel</a>
+        </div>
+      </form>
+    )}
+  </div>
+  <CalmDock drawer={false} />
 </PipelineLayout>
 
+<script>
+  const other = document.querySelector<HTMLElement>('[data-rq-other]');
+  document.querySelector<HTMLInputElement>('[data-rq-role="Other"]')?.addEventListener('change', (e) => {
+    if (other) other.hidden = !(e.target as HTMLInputElement).checked;
+  });
+  const parts = document.querySelector<HTMLElement>('[data-rq-aiparts]');
+  document.querySelectorAll<HTMLInputElement>('[data-rq-ai]').forEach((r) =>
+    r.addEventListener('change', () => {
+      const on = r.value !== 'none';
+      if (parts) parts.hidden = !on;
+      const decl = document.querySelector<HTMLInputElement>('[data-rq-decl]');
+      if (decl) decl.required = on;
+    }));
+</script>
+
 <style>
-  .rq-pickhint { margin: 18px 0 0; font-weight: 700; }
-  .rq-pickhint a { color: var(--pl-accent); }
+  .rq { max-width: 800px; margin-inline: auto; }
+  .rq [hidden] { display: none !important; }
+  .rq-back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 0.875rem; font-weight: 600; opacity: 0.7; }
+  .rq-back:hover { opacity: 1; color: var(--cv-accent); }
+  .rq-back :global(.cv-ic) { width: 15px; height: 15px; transform: rotate(-90deg); }
+  .rq-opts { list-style: none; margin: 0; padding: 0; border-top: 2px solid var(--cv-ink); }
+  .rq-opts li { border-bottom: 1px solid var(--cv-line); }
+  .rq-opt { display: flex; align-items: center; gap: 16px; padding: 18px 12px; transition: background 0.12s; }
+  .rq-opt:hover { background: var(--cv-soft); }
+  .rq-opt:hover b { color: var(--cv-accent); }
+  .rq-opt:focus-visible { outline: 2px solid var(--cv-accent); outline-offset: -2px; }
+  .rq-opt__ic { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; background: var(--cv-tint); color: var(--cv-accent); }
+  .rq-opt__t { display: grid; gap: 2px; flex: 1; min-width: 0; }
+  .rq-opt__t b { font-size: 1.0625rem; font-weight: 600; }
+  .rq-opt__t span { font-size: 0.875rem; opacity: 0.65; }
+  .rq-opt__go { flex: none; opacity: 0.4; }
 
-  .rq-form { max-width: 640px; margin-top: 24px; }
-  .rq-from { margin: -4px 0 18px; font-size: 0.875rem; color: var(--text-muted); }
-  .rq-short { max-width: 320px; }
-  .rq-form textarea { resize: vertical; }
-  .rq-err { margin: 0 0 14px; color: var(--pl-danger); font-weight: 600; }
-  .rq-ferr { font-style: normal; font-size: 0.8rem; color: var(--pl-danger); }
-  .rq-mine { margin-top: 40px; }
-
+  .rq-form { display: grid; gap: 18px; }
+  .rq-card { display: grid; gap: 14px; margin: 0; padding: 20px; border: 1px solid var(--cv-line); border-radius: 12px; min-width: 0; }
+  .rq-h { float: left; width: 100%; padding: 0; margin: 0 0 2px; font-size: 1rem; font-weight: 700; }
+  .rq-h + * { clear: both; }
+  .rq-narrow { max-width: 240px; }
+  .rq-ferr { font-style: normal; font-size: 0.8125rem; font-weight: 600; color: #a12a2a; }
+  .rq-opts2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .rq-tick { display: flex; align-items: flex-start; gap: 10px; padding: 11px 13px; border: 1px solid var(--cv-line); border-radius: 8px; font-size: 0.9375rem; cursor: pointer; transition: border-color 0.12s, background 0.12s; }
+  .rq-tick:hover { border-color: var(--cv-accent); }
+  .rq-tick:has(input:checked) { border-color: var(--cv-accent); background: var(--cv-tint); }
+  .rq-tick input, .rq-check input { flex: none; width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--cv-accent); }
+  .rq-row3 { display: grid; grid-template-columns: 120px 1fr 1fr; gap: 12px; }
+  .rq-seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .rq-seg label { cursor: pointer; }
+  .rq-seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .rq-seg span { display: inline-block; padding: 8px 14px; border: 1px solid var(--cv-line); border-radius: 999px; font-size: 0.875rem; font-weight: 500; transition: border-color 0.12s, background 0.12s; }
+  .rq-seg label:hover span { border-color: var(--cv-accent); }
+  .rq-seg input:checked + span { border-color: var(--cv-accent); background: var(--cv-accent); color: #fff; font-weight: 600; }
+  .rq-seg input:focus-visible + span { box-shadow: 0 0 0 3px var(--cv-tint); }
+  .rq-confirm { gap: 12px; }
+  .rq-aimore { display: grid; gap: 14px; }
+  .rq-decl { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid var(--cv-line); border-radius: 8px; background: var(--cv-soft); font-size: 0.9rem; line-height: 1.55; cursor: pointer; }
+  .rq-decl input { flex: none; width: 16px; height: 16px; margin: 3px 0 0; accent-color: var(--cv-accent); }
+  .rq-decl b { font-weight: 700; }
+  .rq-check { display: flex; align-items: flex-start; gap: 10px; font-size: 0.9375rem; line-height: 1.45; cursor: pointer; }
+  .rq-foot { display: flex; gap: 8px; }
+  .rq-foot .cv-btn { padding: 10px 18px; font-size: 0.9rem; }
+  @media (max-width: 620px) {
+    .rq-opts2 { grid-template-columns: 1fr; }
+    .rq-row3 { grid-template-columns: 1fr 1fr; }
+    .rq-row3 > :first-child { grid-column: 1 / -1; }
+  }
 </style>
-
-

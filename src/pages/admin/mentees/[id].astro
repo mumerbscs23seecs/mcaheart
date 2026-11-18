@@ -192,7 +192,7 @@ const nextStart = ms ? nextTermStart(ms) : '';
 
 <AppLayout title={`${m.full_name} - progress`} user={me} active="mentees">
   <div class="adm mp">
-    <a class="mp__back" href="/admin/mentees">&larr; All mentees</a>
+    <a class="mp__back" href="/admin/mentees">&larr; Members</a>
 
     <header class="mp__head">
       <span class="mp__avatar" aria-hidden="true">{initials}</span>
@@ -440,7 +440,7 @@ const nextStart = ms ? nextTermStart(ms) : '';
 
     <section class="mp__projects">
       <h2 class="mp__h2">Projects</h2>
-      {projectIds.length === 0 && <p class="adm-hint">Not on any project yet. Assign one from the Mentees page.</p>}
+      {projectIds.length === 0 && <p class="adm-hint">Not on any project yet. Assign one from the Members page.</p>}
       {(pmRows ?? []).map((pm: any) => {
         const p: any = projById.get(pm.project_id);
         const theirs = reviews.filter((r) => r.project_id === pm.project_id);
@@ -536,7 +536,7 @@ const nextStart = ms ? nextTermStart(ms) : '';
     .ms__lists { grid-template-columns: 1fr; }
   }
 
-  .mp { max-width: 980px; }
+  .mp { max-width: none; }
   .mp__back { display: inline-block; margin-bottom: var(--space-s); font-size: 0.85rem; color: var(--blue); }
   .mp__head { display: flex; gap: 1.1rem; align-items: center; margin-bottom: var(--space-m); }
   .mp__avatar { width: 72px; height: 72px; border-radius: 50%; flex-shrink: 0; display: grid; place-items: center; background: var(--accent-wash); color: var(--blue); font-weight: 700; font-size: 1.3rem; }

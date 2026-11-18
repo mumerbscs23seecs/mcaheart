@@ -36,6 +36,9 @@ const { data: allConferences } = supabase
   ? await supabase.from('conferences').select('name,abstract_deadline').order('abstract_deadline', { ascending: false })
   : { data: null };
 const conferenceOptions: string[] = (allConferences ?? []).map((c: any) => c.name);
+/** "No conference for now": the paper is created and waits on the Conferences page. */
+const LATER = '__later';
+const confLabel = (c: string) => (c === LATER ? 'no conference for now' : c);
 
 /** Best-guess default for the "send to conference" picker - the nearest
  *  upcoming named conference whose series matches what the submitter asked
@@ -73,7 +76,7 @@ const myReviewer = reviewerFor(me.email);
 const reviewerName = (k: string) => REVIEWERS.find((r) => r.key === k)?.name ?? k;
 const OUTCOMES = Object.keys(OUTCOME_LABEL) as IdeaOutcome[];
 const OUTCOME_HINT: Record<IdeaOutcome, string> = {
-  approved: 'Adds it to the pipeline and a conference',
+  approved: 'Adds it to the pipeline and a conference (or keeps it for one later)',
   rejected: 'Closes the idea',
   modify: 'Held until the author revises it',
   details: 'Held until the author replies',
@@ -159,7 +162,12 @@ async function applyIdeaDecision(
             : ' - added to the pipeline, but no lead was assigned (no pipeline account for that email yet)';
 
           if (!newProjectId) {
-            pipelineNote = `${leadNote} (could not find it again to send it to ${conference} - open it in the pipeline and use "Send to conference")`;
+            pipelineNote = `${leadNote} (could not find it again to send it to ${confLabel(conference)} - open it in the pipeline and use "Send to conference")`;
+          } else if (conference === LATER) {
+            const { error: waitErr } = await supabase.rpc('set_awaiting_conference', { p_project: newProjectId, p_on: true });
+            pipelineNote = waitErr
+              ? `${leadNote}, with no conference yet (run add-help-and-learning.sql to list it on the Conferences page)`
+              : `${leadNote}, with no conference yet: it waits on the Conferences page until you move it to one`;
           } else {
             const { error: gateErr } = await supabase.rpc('gate1_send_to_conference', {
               p_project: newProjectId,
@@ -249,7 +257,7 @@ if (Astro.request.method === 'POST') {
     if (blocked) flash = { tone: 'error', text: blocked };
     else if (!outcome) flash = { tone: 'error', text: 'Tick one box for the outcome.' };
     else if (outcome === 'approved' && !conference) {
-      flash = { tone: 'error', text: 'Choose which conference to send this to before approving.' };
+      flash = { tone: 'error', text: 'Choose which conference to send this to before approving, or "No conference for now".' };
     }
   }
 
@@ -373,7 +381,7 @@ const decidedLabel = (i: IdeaRecord) =>
               <input type="hidden" name={`conference-${it.id}`} value={it.conference} />
               <div class="bprev__head">
                 <span class:list={['bprev__pill', `bprev__pill--${OUTCOME_STATUS[it.outcome]}`]}>{OUTCOME_LABEL[it.outcome]}</span>
-                {it.conference && <span class="bprev__conf">to {it.conference}</span>}
+                {it.conference && <span class="bprev__conf">{it.conference === LATER ? 'no conference for now' : `to ${it.conference}`}</span>}
               </div>
               <p class="bprev__name">{it.title}</p>
               <p class="bprev__to">{it.author} · {it.to}</p>
@@ -450,6 +458,7 @@ const decidedLabel = (i: IdeaRecord) =>
                 </select>
                 <select class="iq__conf" aria-label="Send to conference" data-iq-conf hidden>
                   <option value="" selected={!defaultConferenceFor(i)}>Conference…</option>
+                  <option value={LATER}>No conference for now</option>
                   {conferenceOptions.map((c) => <option value={c} selected={c === defaultConferenceFor(i)}>{c}</option>)}
                 </select>
               </span>
@@ -591,6 +600,7 @@ const decidedLabel = (i: IdeaRecord) =>
                                   <span class="field__label">Send to conference</span>
                                   <select name="conference">
                                     <option value="" selected={!defaultConferenceFor(i)}>Choose…</option>
+                                    <option value={LATER}>No conference for now (decide later)</option>
                                     {conferenceOptions.map((c) => <option value={c} selected={c === defaultConferenceFor(i)}>{c}</option>)}
                                   </select>
                                 </label>
@@ -771,8 +781,9 @@ const decidedLabel = (i: IdeaRecord) =>
   .bres { margin-bottom: var(--space-m); padding: 1rem 1.1rem; border: 1px solid var(--border); background: var(--surface); }
   .bres__title { margin: 0 0 0.5rem; font-size: 1rem; color: var(--text-strong); }
   .bres__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.35rem; }
-  .bres__item { font-size: 0.86rem; padding-left: 0.7rem; border-left: 3px solid var(--ok); color: var(--text); }
-  .bres__item--error { border-left-color: var(--red); }
+  .bres__item { font-size: 0.86rem; color: var(--text); }
+  .bres__item b { color: var(--ok); }
+  .bres__item--error b { color: var(--red); }
   .bprev { display: grid; gap: var(--space-s); }
   .bprev__title { margin: 0; font-size: 1.2rem; color: var(--text-strong); }
   .bprev__copy { display: grid; gap: 0.6rem; }
@@ -886,7 +897,7 @@ const decidedLabel = (i: IdeaRecord) =>
   @media (max-width: 760px) { .pico, .prop__grid { grid-template-columns: 1fr; } }
 
   /* An initial review. */
-  .rcard { display: flex; gap: 0.9rem; padding: 1rem 1.1rem; background: var(--bg-tint); border-left: 3px solid var(--rc, var(--border)); }
+  .rcard { display: flex; gap: 0.9rem; padding: 1rem 1.1rem; background: var(--bg-tint); border-radius: 8px; }
   .rcard--accept { --rc: var(--ok); }
   .rcard--modify { --rc: var(--warn); }
   .rcard--reject { --rc: var(--red); }
@@ -969,7 +980,7 @@ const decidedLabel = (i: IdeaRecord) =>
   @media (max-width: 960px) { .decide { grid-template-columns: 1fr; } .mailwin { position: static; } }
 
   /* A decided idea. */
-  .outcome { padding: 0.9rem 1.1rem; border-left: 3px solid var(--oc); background: color-mix(in srgb, var(--oc) 7%, transparent); }
+  .outcome { padding: 0.9rem 1.1rem; border-radius: 8px; background: color-mix(in srgb, var(--oc) 7%, transparent); }
   .outcome--approved { --oc: var(--ok); }
   .outcome--withheld { --oc: var(--warn); }
   .outcome--declined { --oc: var(--red); }

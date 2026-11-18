@@ -1,0 +1,276 @@
+---
+/**
+ * Learning: the lab's education content (recorded lectures, guides, folders),
+ * for every member and lead. Admins add, edit, reorder and remove links here.
+ * Stored in learning_links (add-help-and-learning.sql); until that is run the
+ * lab's starting list shows, read-only.
+ */
+import PipelineLayout from '../../layouts/PipelineLayout.astro';
+import CalmBar from '../../components/calm/CalmBar.astro';
+import CalmFilters from '../../components/calm/CalmFilters.astro';
+import CalmDock from '../../components/calm/CalmDock.astro';
+import { icon } from '../../lib/calm';
+
+export const prerender = false;
+const { supabase, person } = Astro.locals;
+const isAdmin = person.role === 'admin';
+
+type Link = { id: string; title: string; url: string; topic: string; note: string | null; sort: number };
+
+const STARTER: Link[] = [
+  ['Meta-analysis recordings', 'https://drive.google.com/drive/folders/1FKJB907K8077a9j571fgtexMm23-xav6?usp=sharing', 'Meta-analysis', 'Recorded meta-analysis education sessions.'],
+  ['Step-wise meta-analysis lectures by MCA', 'https://docs.google.com/document/d/1hOn0ZqCk1lS3NeqrZxVREyi07pJvenDq-hjBGCSQoYc/edit', 'Meta-analysis', null],
+  ['Literature review search', 'https://drive.google.com/file/d/10ed-APf-eMAgbZyJvJwqJQzS4sL0N_Np/view?usp=drivesdk', 'Meta-analysis', 'Lecture by Mohammad Hamza.'],
+  ['AMSTAR and PRISMA', 'https://drive.google.com/drive/folders/1OMsV70pcFRA1yIaBVOpPuMhebjQ1epLg?usp=drive_link', 'Meta-analysis', null],
+  ['Quality check', 'https://drive.google.com/drive/folders/13jkkZNr1L4SrmNBfCEp4HRQQb3hOKTYh', 'Meta-analysis', null],
+  ['How to use EndNote', 'https://drive.google.com/file/d/1MQVoRgtElE9mq6BRDVLW_uQFY1VraB4U/view?usp=sharing', 'Writing and formatting', null],
+  ['How to format tables', 'https://drive.google.com/file/d/12Clc5wnwx43vBosNvDPaPXM7L5TEcjun/view?usp=drive_link', 'Writing and formatting', 'Session by Hamza.'],
+  ['How to make a supplementary file', 'https://drive.google.com/file/d/1UofT92YEa4KjMnw9WZC9DiHYVH0UdSsC/view?usp=drive_link', 'Writing and formatting', null],
+  ['TriNetX analysis', 'https://youtube.com/@danielnovakucr?si=t3XkraeKxtaw3pOp', 'Database analysis', 'YouTube channel by Daniel Novak.'],
+].map(([title, url, topic, note], i) => ({ id: `s${i}`, title: title!, url: url!, topic: topic!, note, sort: i }));
+
+let flash: { tone: 'ok' | 'err'; text: string } | null = null;
+
+if (isAdmin && Astro.request.method === 'POST') {
+  const form = await Astro.request.formData();
+  const action = String(form.get('action') ?? '');
+  const id = String(form.get('id') ?? '') || null;
+  let error: { message: string } | null = null;
+  if (action === 'save') {
+    ({ error } = await supabase.rpc('save_learning_link', {
+      p_id: id,
+      p_title: String(form.get('title') ?? ''),
+      p_url: String(form.get('url') ?? '').trim(),
+      p_topic: String(form.get('topic') ?? ''),
+      p_note: String(form.get('note') ?? ''),
+    }));
+  } else if (action === 'delete' && id) {
+    ({ error } = await supabase.rpc('delete_learning_link', { p_id: id }));
+  } else if (action === 'rename-topic' || action === 'delete-topic') {
+    // A topic is just a label on its links: rename or remove every link under it.
+    const from = String(form.get('topic') ?? '');
+    const to = String(form.get('newTopic') ?? '').trim();
+    const { data: under, error: lerr } = await supabase.from('learning_links').select('id,title,url,note').eq('topic', from);
+    error = lerr;
+    for (const l of (under ?? []) as any[]) {
+      if (error) break;
+      ({ error } = action === 'delete-topic'
+        ? await supabase.rpc('delete_learning_link', { p_id: l.id })
+        : await supabase.rpc('save_learning_link', { p_id: l.id, p_title: l.title, p_url: l.url, p_topic: to || from, p_note: l.note ?? '' }));
+    }
+    if (!error) return Astro.redirect(`/pipeline/learning?ok=${encodeURIComponent(action === 'delete-topic' ? `Removed "${from}" and its links.` : `Renamed to "${to}".`)}`, 303);
+  } else if ((action === 'up' || action === 'down') && id) {
+    ({ error } = await supabase.rpc('move_learning_link', { p_id: id, p_dir: action === 'up' ? -1 : 1 }));
+  }
+  if (!error) return Astro.redirect(`/pipeline/learning${action === 'save' ? '?ok=Saved.' : action === 'delete' ? '?ok=Removed.' : ''}`, 303);
+  flash = { tone: 'err', text: /learning_link|schema cache/i.test(error.message) ? 'Editing needs add-help-and-learning.sql. Run it in the Supabase SQL editor first.' : error.message };
+}
+
+const { data, error: loadErr } = await supabase.from('learning_links').select('id,title,url,topic,note,sort').order('sort').order('created_at');
+const ready = !loadErr;
+const links: Link[] = ready ? ((data ?? []) as Link[]) : STARTER;
+
+const slug = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+const topicNames = [...new Set(links.map((l) => l.topic))];
+const chips = topicNames.map((t) => ({ key: slug(t), label: t, count: links.filter((l) => l.topic === t).length }));
+const topicChoices = [...new Set([...topicNames, 'Meta-analysis', 'Writing and formatting', 'Database analysis', 'General'])];
+// Admins always see the editing tools; saving needs add-help-and-learning.sql.
+const canEdit = isAdmin;
+
+/** What kind of thing the link opens, from its address. */
+function kindOf(url: string): { label: string; icon: string } {
+  if (/youtube\.com|youtu\.be/.test(url)) return { label: 'YouTube', icon: 'youtube' };
+  if (/drive\.google\.com\/drive\/folders/.test(url)) return { label: 'Folder', icon: 'folder' };
+  if (/drive\.google\.com\/file/.test(url)) return { label: 'Video', icon: 'play' };
+  if (/docs\.google\.com/.test(url)) return { label: 'Document', icon: 'doc' };
+  return { label: 'Link', icon: 'link' };
+}
+const host = (url: string) => { try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; } };
+---
+
+<PipelineLayout title="Learning" active="learning">
+  <div class="cv">
+  <CalmBar title="Learning" count={links.length} placeholder="Search lectures and guides">
+    {canEdit && (
+      <>
+        <button type="button" class="cv-btn ln-add" data-ln-topics>Topics</button>
+        <button type="button" class="cv-btn cv-btn--pri ln-add" data-ln-new>
+          <Fragment set:html={icon('plus')} /> Add content
+        </button>
+      </>
+    )}
+  </CalmBar>
+
+  {flash && <p class="cv-flash cv-flash--err" role="alert">{flash.text}</p>}
+  {isAdmin && !ready && (
+    <p class="cv-flash">Showing the lab's starting list. Saving changes needs add-help-and-learning.sql, run once in Supabase.</p>
+  )}
+
+  <CalmFilters items={chips} total={links.length} />
+
+  {links.length === 0 ? (
+    <p class="cv-empty-box">No links yet.</p>
+  ) : (
+    <table class="cv-table ln-table">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th class="cv-hide-sm" style="width:220px">Topic</th>
+          <th class="cv-hide-sm" style="width:150px">Format</th>
+          <th class="x" style={`width:${canEdit ? 176 : 64}px`}><span class="sr-only">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        {links.map((l, i) => {
+          const k = kindOf(l.url);
+          return (
+            <tr data-cv-row data-cv-f={slug(l.topic)} data-cv-text={`${l.title} ${l.note ?? ''} ${l.topic}`}>
+              <td class="t">
+                <a href={l.url} target="_blank" rel="noopener">{l.title}</a>
+                <div class="cv-sub ln-sub">{l.note ? l.note : host(l.url)}</div>
+              </td>
+              <td class="cv-hide-sm sm">{l.topic}</td>
+              <td class="cv-hide-sm sm">
+                <span class:list={['ln-kind', `is-${k.icon}`]}><Fragment set:html={icon(k.icon)} />{k.label}</span>
+              </td>
+              <td class="x">
+                <div class="cv-acts ln-acts">
+                  <a class="cv-ib" href={l.url} target="_blank" rel="noopener" data-tip="Open" aria-label={`Open ${l.title}`}><Fragment set:html={icon('open')} /></a>
+                  {canEdit && (
+                    <>
+                      <button type="button" class="cv-ib" data-tip="Edit" aria-label={`Edit ${l.title}`}
+                        data-ln-edit={JSON.stringify({ id: l.id, title: l.title, url: l.url, topic: l.topic, note: l.note ?? '' })}>
+                        <Fragment set:html={icon('edit')} />
+                      </button>
+                      <form method="post">
+                        <input type="hidden" name="action" value="up" /><input type="hidden" name="id" value={l.id} />
+                        <button type="submit" class="cv-ib" data-tip="Move up" aria-label={`Move ${l.title} up`} disabled={i === 0}><Fragment set:html={icon('up')} /></button>
+                      </form>
+                      <form method="post">
+                        <input type="hidden" name="action" value="down" /><input type="hidden" name="id" value={l.id} />
+                        <button type="submit" class="cv-ib" data-tip="Move down" aria-label={`Move ${l.title} down`} disabled={i === links.length - 1}><Fragment set:html={icon('down')} /></button>
+                      </form>
+                      <form method="post" data-ln-delete={l.title}>
+                        <input type="hidden" name="action" value="delete" /><input type="hidden" name="id" value={l.id} />
+                        <button type="submit" class="cv-ib ln-del" data-tip="Remove" aria-label={`Remove ${l.title}`}><Fragment set:html={icon('trash')} /></button>
+                      </form>
+                    </>
+                  )}
+                </div>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  )}
+
+  {canEdit && (
+    <dialog class="cv-dialog" data-ln-dialog aria-labelledby="ln-dlg-title">
+      <form method="post">
+        <input type="hidden" name="action" value="save" />
+        <input type="hidden" name="id" data-ln-f="id" />
+        <div class="cv-dialog__head">
+          <h2 class="cv-dialog__title" id="ln-dlg-title" data-ln-heading>Add content</h2>
+          <button type="button" class="cv-ib" data-ln-close aria-label="Close"><Fragment set:html={icon('x')} /></button>
+        </div>
+        <div class="cv-dialog__body">
+          <label class="cv-field"><span>Title</span><input name="title" required maxlength="200" data-ln-f="title" placeholder="How to run a sensitivity analysis" /></label>
+          <label class="cv-field"><span>Link <small>Google Drive, YouTube, a document or any web page</small></span><input name="url" type="url" required data-ln-f="url" placeholder="https://drive.google.com/…" /></label>
+          <div class="cv-row2">
+            <label class="cv-field"><span>Topic <small>pick one or type a new one</small></span><input name="topic" list="ln-topics" maxlength="80" required data-ln-f="topic" /></label>
+            <label class="cv-field"><span>Note <small>optional</small></span><input name="note" maxlength="300" data-ln-f="note" placeholder="Lecture by …" /></label>
+          </div>
+        </div>
+        <div class="cv-dialog__foot">
+          <button type="button" class="cv-btn" data-ln-close>Cancel</button>
+          <button type="submit" class="cv-btn cv-btn--pri" data-ln-save>Add</button>
+        </div>
+      </form>
+    </dialog>
+    <datalist id="ln-topics">{topicChoices.map((t) => <option value={t} />)}</datalist>
+    <dialog class="cv-dialog" data-ln-topics-dialog aria-labelledby="ln-top-title">
+      <div class="cv-dialog__head">
+        <h2 class="cv-dialog__title" id="ln-top-title">Topics</h2>
+        <button type="button" class="cv-ib" data-ln-topics-close aria-label="Close"><Fragment set:html={icon('x')} /></button>
+      </div>
+      <div class="cv-dialog__body">
+        <ul class="ln-topics">
+          {topicNames.map((t) => (
+            <li>
+              <form method="post" class="ln-topic-row">
+                <input type="hidden" name="action" value="rename-topic" />
+                <input type="hidden" name="topic" value={t} />
+                <input name="newTopic" value={t} maxlength="80" aria-label={`Rename ${t}`} />
+                <span class="cv-muted ln-topic-n">{links.filter((l) => l.topic === t).length}</span>
+                <button type="submit" class="cv-btn cv-btn--sm">Rename</button>
+              </form>
+              <form method="post" data-ln-delete={`the "${t}" topic and all its links`}>
+                <input type="hidden" name="action" value="delete-topic" />
+                <input type="hidden" name="topic" value={t} />
+                <button type="submit" class="cv-ib ln-del" data-tip="Remove topic" aria-label={`Remove ${t}`}><Fragment set:html={icon('trash')} /></button>
+              </form>
+            </li>
+          ))}
+        </ul>
+        <p class="cv-muted ln-topics-hint">To start a new topic, add content and type the new topic's name.</p>
+      </div>
+    </dialog>
+  )}
+  </div>
+  <CalmDock drawer={false} />
+</PipelineLayout>
+
+<script>
+  const dlg = document.querySelector<HTMLDialogElement>('[data-ln-dialog]');
+  if (dlg) {
+    const f = (k: string) => dlg.querySelector<HTMLInputElement>(`[data-ln-f="${k}"]`)!;
+    const heading = dlg.querySelector('[data-ln-heading]')!;
+    const save = dlg.querySelector('[data-ln-save]')!;
+    const openWith = (v: { id?: string; title?: string; url?: string; topic?: string; note?: string }) => {
+      for (const k of ['id', 'title', 'url', 'topic', 'note']) f(k).value = (v as any)[k] ?? '';
+      if (!v.id) f('topic').value = v.topic ?? 'General';
+      heading.textContent = v.id ? 'Edit' : 'Add content';
+      save.textContent = v.id ? 'Save changes' : 'Add';
+      dlg.showModal();
+      f('title').focus();
+    };
+    document.querySelector('[data-ln-new]')?.addEventListener('click', () => openWith({}));
+    document.querySelectorAll<HTMLElement>('[data-ln-edit]').forEach((b) =>
+      b.addEventListener('click', () => openWith(JSON.parse(b.dataset.lnEdit ?? '{}'))));
+    dlg.querySelectorAll('[data-ln-close]').forEach((b) => b.addEventListener('click', () => dlg.close()));
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+  }
+  const topicsDlg = document.querySelector<HTMLDialogElement>('[data-ln-topics-dialog]');
+  document.querySelector('[data-ln-topics]')?.addEventListener('click', () => topicsDlg?.showModal());
+  topicsDlg?.querySelector('[data-ln-topics-close]')?.addEventListener('click', () => topicsDlg.close());
+  document.querySelectorAll<HTMLFormElement>('[data-ln-delete]').forEach((form) =>
+    form.addEventListener('submit', (e) => { if (!confirm(`Remove "${form.dataset.lnDelete}" from Learning?`)) e.preventDefault(); }));
+</script>
+
+<style>
+  .ln-table td.t > a { font-weight: 600; }
+  .ln-sub { opacity: 0.7; }
+  .ln-kind { display: inline-flex; align-items: center; gap: 8px; font-weight: 500; }
+  .ln-kind :global(.cv-ic) { color: var(--cv-accent); }
+  .ln-kind.is-youtube :global(.cv-ic) { color: #c4302b; }
+  .ln-acts { justify-content: flex-end; }
+  .ln-acts form { margin: 0; }
+  .ln-acts .cv-ib:disabled { opacity: 0.25; cursor: default; background: none; }
+  .ln-acts .ln-del:hover { color: #a12a2a; background: #fbeaea; }
+  .ln-table tbody td { padding-top: 18px; padding-bottom: 18px; }
+  @media (max-width: 820px) {
+    .ln-table tbody td { padding-top: 4px; padding-bottom: 4px; }
+    .ln-acts { justify-content: flex-start; }
+    .ln-acts > a.cv-ib { display: none; }
+    .ln-table td.x:not(:has(form)) { display: none; }
+  }
+  .ln-topics { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .ln-topics li { display: flex; align-items: center; gap: 6px; }
+  .ln-topics form { margin: 0; }
+  .ln-topic-row { flex: 1; display: flex; align-items: center; gap: 8px; }
+  .ln-topic-row input[name=newTopic] { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--cv-line); border-radius: 8px; font: inherit; font-size: 0.9375rem; background: var(--cv-bg); }
+  .ln-topic-n { min-width: 22px; text-align: right; font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+  .ln-topics-hint { margin: 4px 0 0; font-size: 0.8125rem; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>

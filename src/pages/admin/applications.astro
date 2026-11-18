@@ -179,10 +179,10 @@ if (Astro.request.method === 'POST') {
         }
         let menteeNote = '';
         if (it.decision === 'approved') {
-          if (!supabase) menteeNote = ' Add them as a mentee by hand (database not reachable).';
+          if (!supabase) menteeNote = ' Add them as a member by hand (database not reachable).';
           else {
             const { error: mentErr } = await supabase.rpc('add_mentee', { p_full_name: app.name, p_email: app.email, p_expertise: it.tags });
-            if (mentErr) menteeNote = ` Could not add them as a mentee: ${mentErr.message}`;
+            if (mentErr) menteeNote = ` Could not add them as a member: ${mentErr.message}`;
           }
         }
         const verb = it.decision === 'approved' ? 'Approved' : it.decision === 'withheld' ? 'Withheld' : 'Declined';
@@ -244,7 +244,7 @@ if (Astro.request.method === 'POST') {
       let menteeNote = '';
       if (decision === 'approved') {
         if (!supabase) {
-          menteeNote = ' Could not reach the pipeline database - add them as a mentee by hand.';
+          menteeNote = ' Could not reach the pipeline database - add them as a member by hand.';
         } else {
           const tags = form.getAll('expertise').map(String);
           const { error: mentErr } = await supabase.rpc('add_mentee', {
@@ -252,7 +252,7 @@ if (Astro.request.method === 'POST') {
             p_email: app.email,
             p_expertise: tags,
           });
-          if (mentErr) menteeNote = ` Added, but could not add them as a mentee: ${mentErr.message}`;
+          if (mentErr) menteeNote = ` Added, but could not add them as a member: ${mentErr.message}`;
         }
       }
       const verb = decision === 'approved' ? 'Approved' : decision === 'withheld' ? 'Withheld' : 'Declined';
@@ -815,8 +815,9 @@ const copyRoster = (rosterRows ?? []).filter((r: any) => r.email && !r.email.end
   .bres { margin-bottom: var(--space-m); padding: 1rem 1.1rem; border: 1px solid var(--border); background: var(--surface); }
   .bres__title { margin: 0 0 0.5rem; font-size: 1rem; color: var(--text-strong); }
   .bres__list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.35rem; }
-  .bres__item { font-size: 0.86rem; padding-left: 0.7rem; border-left: 3px solid var(--ok); color: var(--text); }
-  .bres__item--error { border-left-color: var(--red); }
+  .bres__item { font-size: 0.86rem; color: var(--text); }
+  .bres__item b { color: var(--ok); }
+  .bres__item--error b { color: var(--red); }
   .bprev { display: grid; gap: var(--space-s); }
   .bprev__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.8rem; }
   .bprev__item { display: grid; gap: 0.45rem; padding: 0.9rem 1rem; border: 1px solid var(--border-soft); background: var(--surface); }

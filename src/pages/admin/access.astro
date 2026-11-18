@@ -17,6 +17,9 @@ const me = currentUser(Astro.cookies);
 if (!me) return Astro.redirect('/login', 302);
 if (me.role !== 'admin') return Astro.redirect('/pipeline', 302);
 
+// Members and mentees now live together on one page.
+return Astro.redirect('/admin/mentees?view=list', 301);
+
 const admin = supabaseAdmin();
 const { supabase } = Astro.locals;
 

@@ -8,6 +8,7 @@ import { personOnProject } from '../../../lib/pipeline-scope';
 import { supabaseAdmin } from '../../../lib/supabase';
 import { docLinkLabel, DOC_LINK_HINT } from '../../../lib/doc-links';
 import { stageColor } from '../../../lib/calm';
+import { ASSIGNMENT_COLS, HELP_COLS, AI_USE_LABEL, HELP_LABEL, HELP_DEFAULTS, roleLabel, longDay, daysLeft, type Assignment, type HelpRequest } from '../../../lib/help';
 import '../../../styles/calm.css';
 
 export const prerender = false;
@@ -71,6 +72,41 @@ const { data: reviewerRows } = reviewerIds.length
   ? await supabaseAdmin().from('people').select('id,full_name').in('id', reviewerIds)
   : { data: [] };
 const reviewerNames = new Map<string, string>((reviewerRows ?? []).map((r: any) => [r.id, r.full_name]));
+
+// Help on the paper (add-help-and-learning.sql): who was appointed, in what
+// role, when it's due, and their AI disclosure once done. The database only
+// returns rows to admins, the paper's lead / co-lead, and the person themself.
+const { data: asgRows, error: asgErr } = await supabase.from('assignments').select(ASSIGNMENT_COLS).eq('project_id', id).order('assigned_at');
+const helpReady = !asgErr;
+const assignments = (asgRows ?? []) as Assignment[];
+const myParts = assignments.filter((a) => a.person_id === person.id);
+const { data: helpRows } = helpReady && canReview
+  ? await supabase.from('help_requests').select(HELP_COLS).eq('project_id', id).is('closed_at', null).order('created_at')
+  : { data: [] };
+const openHelp = (helpRows ?? []) as HelpRequest[];
+const teamIds = [...new Set([...assignments.map((a) => a.person_id), ...(projectMentees ?? []).map((pm: any) => pm.person_id)])];
+const { data: teamPeople } = teamIds.length ? await supabase.from('people').select('id,full_name,email,is_mentee').in('id', teamIds) : { data: [] };
+const teamWho = new Map((teamPeople ?? []).map((r: any) => [r.id, r]));
+const partsOf = (pid: string) => assignments.filter((a) => a.person_id === pid);
+// Admin: anyone active can be put on the paper.
+const { data: candRows } = isAdmin && helpReady && !p.archived_at
+  ? await supabase.from('people').select('id,full_name,is_mentee,flag_status,membership_status').eq('active', true).neq('role', 'viewer').order('full_name')
+  : { data: [] };
+const candidates = (candRows ?? []).filter((c: any) => c.id !== p.lead_id && c.flag_status !== 'blacklisted' && (c.membership_status ?? 'active') === 'active');
+const filledOf = (reqId: string) => assignments.filter((a) => a.request_id === reqId).length;
+const isLeadHere = person.id === p.lead_id;
+// The first author can change the analyst; admins can also add or remove one.
+const canSetAnalyst = !p.archived_at && (isAdmin || isLeadHere);
+const { data: analystPool } = canSetAnalyst
+  ? await supabase.from('people').select('id,full_name,expertise').eq('active', true).neq('role', 'viewer').order('full_name')
+  : { data: [] };
+// TriNetX and NIS/NRD papers list people with that analysis skill first;
+// other papers (DMC PCI and the rest) list anyone with an analysis skill.
+const analysisSkill = p.study_type === 'TriNetX' ? 'Analysis for TriNetX' : p.study_type === 'NIS' || p.study_type === 'NRD' ? 'Analysis for NIS/NRD' : null;
+const isSkilled = (x: any) => (x.expertise ?? []).some((e: string) => (analysisSkill ? e === analysisSkill : e.startsWith('Analysis')));
+const skilledAnalysts = (analystPool ?? []).filter((x: any) => isSkilled(x) && x.id !== p.analyst_id);
+const otherPeople = (analystPool ?? []).filter((x: any) => !isSkilled(x) && x.id !== p.analyst_id);
+const analystGroup = p.study_type === 'TriNetX' ? 'TriNetX analysts' : analysisSkill ? 'NIS / NRD analysts' : 'Analysts';
 
 const { data: history } = await supabase
   .from('project_history')
@@ -263,16 +299,149 @@ const peopleRows2: { label: string; name: string | null }[] = [
 
   <div class="pd-cols">
   <div class="pd-main">
-  {(projectMentees ?? []).length > 0 && reviewsReady && (
+  {myParts.filter((a) => !a.done_at).map((a) => {
+    const left = daysLeft(a.due_on);
+    return (
+      <section class="pd-card pd-mypart" id="mypart">
+        <h2>Your part: {roleLabel(a.role)}</h2>
+        <p class:list={['pd-mypart__due', left < 0 && 'is-late', left >= 0 && left <= 2 && 'is-soon']}>
+          {left < 0 ? `Was due ${longDay(a.due_on)}, ${-left} day${left === -1 ? '' : 's'} ago.` : left === 0 ? `Due today, ${longDay(a.due_on)}.` : `Due ${longDay(a.due_on)}, in ${left} day${left === 1 ? '' : 's'}.`}
+          {' '}You were asked to finish within 7 to 10 days of {longDay(a.assigned_at)}.
+        </p>
+        <details class="pd-done">
+          <summary class="pd-btn">Mark my part done</summary>
+          <form method="post" action={`/pipeline/projects/${id}/appoint`} class="pd-done__form" data-done-form>
+            <input type="hidden" name="action" value="finish" />
+            <input type="hidden" name="assignment" value={a.id} />
+            <fieldset class="pd-done__set">
+              <legend>How much of this work was done with AI tools?</legend>
+              {Object.entries(AI_USE_LABEL).map(([k, label]) => (
+                <label class="pd-done__opt"><input type="radio" name="ai_use" value={k} required data-ai-use /> {label}</label>
+              ))}
+            </fieldset>
+            <div data-ai-more hidden>
+              <label class="pl-field"><span>Which parts did AI help with?</span><input name="ai_parts" maxlength="1000" placeholder="e.g. Language editing of the discussion, R code for figure 2" /></label>
+              <fieldset class="pd-done__set">
+                <legend>Was the AI-assisted work proofread and checked?</legend>
+                <label class="pd-done__opt"><input type="radio" name="ai_proofread" value="yes" /> Yes, I proofread and checked it</label>
+                <label class="pd-done__opt"><input type="radio" name="ai_proofread" value="no" /> Not yet</label>
+              </fieldset>
+            </div>
+            <label class="pl-field"><span>Note for the first author (optional)</span><input name="note" maxlength="1000" placeholder="e.g. Draft is in the shared folder, tables 1 to 3" /></label>
+            <button class="pl-btn" type="submit">Send: my part is done</button>
+          </form>
+        </details>
+      </section>
+    );
+  })}
+
+  {helpReady && (canReview || (isAdmin && !p.archived_at)) && (teamIds.length > 0 || isAdmin || (isLeadHere && !p.archived_at)) && (
+    <section class="pd-card pl-actions pd-team" id="team">
+      <div class="pd-team__head">
+        <h2>Team help</h2>
+        {isLeadHere && !p.archived_at && <a class="pd-btn pd-btn--ghost" href={`/pipeline/help?project=${id}`}>Request help</a>}
+      </div>
+      {openHelp.length > 0 && (
+        <p class="pd-team__asked">Asked for: {openHelp.map((h) => `${roleLabel(h.role)} (${filledOf(h.id)} of ${h.spots})`).join(', ')}{isAdmin && <> · <a class="pl-link" href="/admin/mentees?view=help">Appoint</a></>}</p>
+      )}
+      {teamIds.length === 0 && <p class="pl-muted pl-small">Nobody has been added to help on this paper yet.</p>}
+      {teamIds.length > 0 && canReview && (
+        <p class="pl-muted pl-small">Reviews are private: only coordinators and this paper's first author and co-lead see them, never the person reviewed.</p>
+      )}
+      <ul class="pd-team__list">
+        {teamIds.map((pid) => {
+          const w = teamWho.get(pid);
+          const name = w?.full_name ?? 'Member';
+          const parts = partsOf(pid);
+          const theirs = projectReviews.filter((r) => r.person_id === pid);
+          return (
+            <li class="pd-helper">
+              <div class="pd-helper__top">
+                <b>{name}</b>
+                {isAdmin && w?.is_mentee && <a class="pl-mentee__link" href={`/admin/mentees/${pid}`}>See progress</a>}
+                {reviewsReady && (theirs.length
+                  ? <span class="pl-mentee__rating">Overall {average(theirs, 'overall')}/5 · {theirs.length} review{theirs.length === 1 ? '' : 's'}</span>
+                  : <span class="pl-muted pl-small">No reviews yet</span>)}
+              </div>
+              {parts.length === 0 && <p class="pd-helper__part"><span class="pd-chip">Member</span> <span class="pl-muted">no role recorded</span></p>}
+              {parts.map((a) => {
+                const left = daysLeft(a.due_on);
+                return (
+                  <div class="pd-helper__part">
+                    <span class="pd-chip">{roleLabel(a.role)}</span>
+                    {a.done_at
+                      ? <span class="pd-state is-done">Done {longDay(a.done_at)}</span>
+                      : <span class:list={['pd-state', left < 0 ? 'is-late' : left <= 2 ? 'is-soon' : '']}>{left < 0 ? `Late by ${-left} day${left === -1 ? '' : 's'}` : `Due ${longDay(a.due_on)}`}</span>}
+                    {a.done_at && a.ai_use && (
+                      <span class="pd-ai">AI: {AI_USE_LABEL[a.ai_use]}{a.ai_use !== 'none' && <>{a.ai_parts && ` (${a.ai_parts})`}{a.ai_proofread === true ? ', proofread' : a.ai_proofread === false ? ', not proofread yet' : ''}</>}</span>
+                    )}
+                    {a.done_note && <span class="pd-ai">Note: {a.done_note}</span>}
+                    {isAdmin && (
+                      <form method="post" action={`/pipeline/projects/${id}/appoint`} class="pd-helper__x" onsubmit="return confirm('Take them off this role?')">
+                        <input type="hidden" name="action" value="unappoint" />
+                        <input type="hidden" name="assignment" value={a.id} />
+                        <button type="submit">Remove</button>
+                      </form>
+                    )}
+                  </div>
+                );
+              })}
+              {reviewsReady && canReview && theirs.length > 0 && (
+                <details class="pl-mentee__edit">
+                  <summary>Show reviews ({theirs.length})</summary>
+                  <MenteeReviewList reviews={theirs} names={reviewerNames} viewerId={person.id} isAdmin={isAdmin} returnTo={`/pipeline/projects/${id}`} />
+                </details>
+              )}
+              {reviewsReady && canReview && pid !== person.id && (
+                <details class="pl-mentee__edit" open={parts.some((a) => a.done_at) && theirs.length === 0 && isLeadHere}>
+                  <summary>+ Add a review</summary>
+                  <MenteeReviewForm projectId={id!} personId={pid} name={name} />
+                </details>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {isAdmin && !p.archived_at && (
+        <form method="post" action={`/pipeline/projects/${id}/appoint`} class="pd-add">
+          <input type="hidden" name="action" value="appoint" />
+          <label class="pl-field"><span>Add someone</span>
+            <select name="person" required>
+              <option value="">Choose a member…</option>
+              {candidates.map((c: any) => <option value={c.id}>{c.full_name}{c.is_mentee ? ' (mentee)' : ''}</option>)}
+            </select>
+          </label>
+          <label class="pl-field"><span>Role</span>
+            <select name="role">
+              {HELP_DEFAULTS.map(({ role }) => <option value={role}>{HELP_LABEL[role]}</option>)}
+              <option value="">General help</option>
+            </select>
+          </label>
+          {openHelp.length > 0 && (
+            <label class="pl-field"><span>Fills a request</span>
+              <select name="request">
+                <option value="">No</option>
+                {openHelp.map((h) => <option value={h.id}>{roleLabel(h.role)} ({filledOf(h.id)} of {h.spots})</option>)}
+              </select>
+            </label>
+          )}
+          <button class="pl-btn" type="submit">Add and notify</button>
+          <p class="pd-add__hint">They and the first author are emailed. They get 7 to 10 days to finish.</p>
+        </form>
+      )}
+    </section>
+  )}
+
+  {(projectMentees ?? []).length > 0 && reviewsReady && !helpReady && (
     <section class="pd-card pl-actions" id="mentees">
-      <h2>Mentees</h2>
+      <h2>Helpers</h2>
       {canReview && (
-        <p class="pl-muted pl-small">Reviews are private: only coordinators and this paper's lead and co-lead see them, never the mentee.</p>
+        <p class="pl-muted pl-small">Reviews are private: only coordinators and this paper's lead and co-lead see them, never the member.</p>
       )}
       <div class="pl-mentees">
         {(projectMentees ?? []).map((pm: any) => {
           const theirs = projectReviews.filter((r) => r.person_id === pm.person_id);
-          const name = pm.person?.full_name ?? 'Mentee';
+          const name = pm.person?.full_name ?? 'Member';
           return (
             <div class="pl-mentee">
               <p class="pl-mentee__name">
@@ -303,7 +472,7 @@ const peopleRows2: { label: string; name: string | null }[] = [
 
   {(projectMentees ?? []).length > 0 && !reviewsReady && (
     <section class="pd-card pl-actions">
-      <h2>Mentees</h2>
+      <h2>Helpers</h2>
       <div class="pl-mentees">
         {(projectMentees ?? []).map((pm: any) => (
           <div class="pl-mentee">
@@ -614,6 +783,26 @@ const peopleRows2: { label: string; name: string | null }[] = [
           </>
         )}
       </dl>
+      {canSetAnalyst && (
+        <details class="pd-analyst">
+          <summary>{p.analyst_id ? 'Change analyst' : 'Add an analyst'}</summary>
+          <form method="post" action={`/pipeline/projects/${id}/appoint`} class="pd-analyst__form">
+            <input type="hidden" name="action" value="analyst" />
+            <select name="person" required aria-label="Analyst">
+              <option value="">Choose someone</option>
+              {skilledAnalysts.length > 0 && <optgroup label={analystGroup}>{skilledAnalysts.map((x: any) => <option value={x.id}>{x.full_name}</option>)}</optgroup>}
+              <optgroup label="Everyone">{otherPeople.map((x: any) => <option value={x.id}>{x.full_name}</option>)}</optgroup>
+            </select>
+            <button class="pd-btn" type="submit">Save</button>
+          </form>
+          {isAdmin && p.analyst_id && (
+            <form method="post" action={`/pipeline/projects/${id}/appoint`} class="pd-analyst__rm" onsubmit="return confirm('Remove the analyst from this paper?')">
+              <input type="hidden" name="action" value="analyst-remove" />
+              <button type="submit">Remove the analyst</button>
+            </form>
+          )}
+        </details>
+      )}
 
 
     </section>
@@ -675,6 +864,20 @@ const peopleRows2: { label: string; name: string | null }[] = [
       f.append(i);
     });
   }
+</script>
+
+<script is:inline>
+  // "Mark my part done": the AI questions appear unless no AI was used.
+  document.querySelectorAll('[data-done-form]').forEach((f) => {
+    const more = f.querySelector('[data-ai-more]');
+    const parts = f.querySelector('input[name="ai_parts"]');
+    f.querySelectorAll('[data-ai-use]').forEach((r) => r.addEventListener('change', () => {
+      const on = r.value !== 'none';
+      more.hidden = !on;
+      parts.required = on;
+      f.querySelectorAll('input[name="ai_proofread"]').forEach((x) => { x.required = on; });
+    }));
+  });
 </script>
 
 <script is:inline>
@@ -862,4 +1065,47 @@ const peopleRows2: { label: string; name: string | null }[] = [
   .pl-linktile.is-static .pl-linktile__value { font-weight: 600; }
   .pl-linktile.is-disabled { opacity: 0.5; cursor: not-allowed; }
   .pl-linktile.is-disabled .pl-linktile__value { font-weight: 500; }
+  /* Help on the paper: your part, and the team list. */
+  .pd-mypart { border-color: var(--cv-accent); }
+  .pd-mypart h2 { margin: 0 0 6px; }
+  .pd-mypart__due { margin: 0 0 14px; font-size: 0.92rem; }
+  .pd-mypart__due.is-soon { color: #8a5a00; font-weight: 600; }
+  .pd-mypart__due.is-late { color: #a12a2a; font-weight: 600; }
+  .pd-done > summary { list-style: none; width: max-content; }
+  .pd-done > summary::-webkit-details-marker { display: none; }
+  .pd-done[open] > summary { display: none; }
+  .pd-done__form { display: grid; gap: 14px; max-width: 560px; }
+  .pd-done__set { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .pd-done__set legend { padding: 0; margin-bottom: 6px; font-weight: 700; font-size: 0.92rem; }
+  .pd-done__opt { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border: 1px solid var(--cv-line); border-radius: 8px; cursor: pointer; font-size: 0.92rem; }
+  .pd-done__opt:has(input:checked) { border-color: var(--cv-accent); background: var(--cv-tint); }
+  .pd-done__opt input { accent-color: var(--cv-accent); width: 16px; height: 16px; margin: 0; }
+  [data-ai-more] { display: grid; gap: 14px; }
+  [data-ai-more][hidden] { display: none; }
+  .pd-team__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .pd .pd-team__head h2 { margin: 0; font-family: inherit; font-size: 1rem; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--cv-ink); }
+  .pd-team__asked { margin: 10px 0 0; padding: 8px 12px; background: var(--cv-tint); border-radius: 8px; font-size: 0.88rem; font-weight: 600; }
+  .pd-team__list { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px; }
+  .pd-helper { padding: 12px 14px; border: 1px solid var(--cv-line); border-radius: 10px; display: grid; gap: 6px; }
+  .pd-helper__top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+  .pd-helper__part { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; font-size: 0.86rem; }
+  .pd-chip { display: inline-block; padding: 2px 9px; border-radius: 999px; background: var(--cv-soft); border: 1px solid var(--cv-line); font-size: 0.8rem; font-weight: 600; }
+  .pd-state { font-size: 0.82rem; font-weight: 600; }
+  .pd-state.is-done { color: #1f6b3a; }
+  .pd-state.is-soon { color: #8a5a00; }
+  .pd-state.is-late { color: #a12a2a; }
+  .pd-ai { flex-basis: 100%; font-size: 0.82rem; opacity: 0.8; }
+  .pd-helper__x { margin: 0 0 0 auto; }
+  .pd-helper__x button { border: 0; background: none; padding: 0; font: inherit; font-size: 0.8rem; font-weight: 600; color: #a12a2a; cursor: pointer; }
+  .pd-add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 12px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--cv-line); }
+  .pd-add .pl-field { flex: 1 1 200px; margin: 0; }
+  .pd-add__hint { flex-basis: 100%; margin: 0; font-size: 0.8rem; opacity: 0.7; }
+  .pd-analyst { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--cv-line); }
+  .pd-analyst > summary { cursor: pointer; font-size: 0.875rem; font-weight: 600; color: var(--cv-accent); list-style: none; }
+  .pd-analyst > summary::-webkit-details-marker { display: none; }
+  .pd-analyst__form { display: flex; gap: 8px; margin-top: 10px; }
+  .pd-analyst__form select { flex: 1 1 0; width: 0; min-width: 0; }
+  .pd-analyst__form .pd-btn { padding: 8px 14px; }
+  .pd-analyst__rm { margin-top: 10px; }
+  .pd-analyst__rm button { border: 0; background: none; padding: 0; font: inherit; font-size: 0.8125rem; font-weight: 600; color: #a12a2a; cursor: pointer; }
 </style>

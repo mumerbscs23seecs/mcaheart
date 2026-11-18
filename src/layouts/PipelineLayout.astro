@@ -10,7 +10,7 @@ import { getPipelineTasks } from '../lib/pipeline-tasks';
 
 interface Props {
   title: string;
-  active?: 'conferences' | 'ongoing' | 'submissions' | 'published' | 'tasks' | 'ideas' | 'requests';
+  active?: 'conferences' | 'ongoing' | 'submissions' | 'published' | 'analysis' | 'tasks' | 'ideas' | 'requests' | 'learning';
   /** The page has journal-name boxes: include the shared journal list. */
   journals?: boolean;
 }
@@ -54,13 +54,32 @@ const journalStageCount = (op: 'eq' | 'neq') =>
     .is('deleted_at', null)
     [op]('stage', 'published');
 
-const [confN, ongoingN, subsN, pubN] = await Promise.all([
+// First authors (leads) of an open paper can ask for helpers on it.
+const leadsAPaper = isAdmin
+  ? false
+  : ((await supabase.from('projects').select('id', { count: 'exact', head: true })
+      .eq('lead_id', person.id).is('archived_at', null).is('deleted_at', null)).count ?? 0) > 0;
+
+// Admin: database papers (TriNetX, NIS, NRD, DMC PCI) still without an analyst.
+const noAnalystCount = () =>
+  supabase
+    .from('projects')
+    .select('id', { count: 'exact', head: true })
+    .in('study_type', ['TriNetX', 'NIS', 'NRD', 'DMC PCI'])
+    .is('analyst_id', null)
+    .neq('stage', 'published')
+    .is('archived_at', null)
+    .is('hidden_at', null)
+    .is('deleted_at', null);
+
+const [confN, ongoingN, subsN, pubN, anN] = await Promise.all([
   isAdmin
     ? supabase.from('conferences').select('id', { count: 'exact', head: true })
     : phaseCount('conference'),
   phaseCount('manuscript'),
   isAdmin ? journalStageCount('neq') : phaseCount('journal'),
   isAdmin ? journalStageCount('eq') : Promise.resolve({ count: null }),
+  isAdmin ? noAnalystCount() : Promise.resolve({ count: null }),
 ]);
 
 const flashOk = Astro.url.searchParams.get('ok');
@@ -71,7 +90,11 @@ const tabs: Tab[] = [
   { key: 'ongoing', label: 'Ongoing', href: '/pipeline/ongoing', count: ongoingN.count ?? null },
   { key: 'submissions', label: 'Submissions', href: '/pipeline/submissions', count: subsN.count ?? null },
   ...(isAdmin
-    ? [{ key: 'published', label: 'Published', href: '/pipeline/published', count: pubN.count ?? null }]
+    ? [
+        { key: 'published', label: 'Published', href: '/pipeline/published', count: pubN.count ?? null },
+        // The count is papers still waiting for an analyst.
+        { key: 'analysis', label: 'Analysis', href: '/pipeline/analysis', count: anN.count ?? null, alert: true },
+      ]
     : []),
   // Admins now reach these two from the top app bar (Manage > Tasks, and
   // New Idea) instead - but members have no app-bar nav items at all, so
@@ -88,8 +111,10 @@ const tabs: Tab[] = [
             { label: 'New idea', href: '/pipeline/ideas' },
             { label: 'Letter of recommendation', href: '/pipeline/requests?type=lor' },
             { label: 'Join a new topic', href: '/pipeline/requests?type=topic' },
+            ...(leadsAPaper ? [{ label: 'Request help on my paper', href: '/pipeline/help' }] : []),
           ],
         },
+        { key: 'learning', label: 'Learning', href: '/pipeline/learning', count: null },
       ]),
 ];
 ---
@@ -111,7 +136,7 @@ const tabs: Tab[] = [
   </head>
   <body class="pl-body">
     <AppBar
-      active={isAdmin && active === 'tasks' ? 'tasks' : isAdmin && active === 'ideas' ? 'new-idea' : 'pipeline'}
+      active={isAdmin && active === 'tasks' ? 'tasks' : isAdmin && active === 'ideas' ? 'new-idea' : isAdmin && active === 'learning' ? 'learning' : 'pipeline'}
       name={person.full_name}
       role={person.role}
       email={person.email}
@@ -157,8 +182,11 @@ const tabs: Tab[] = [
           <p class="pl-drawer__ref" id="pl-drawer-ref"></p>
           <button type="button" class="pl-drawer__x" data-drawer-close aria-label="Close">×</button>
         </div>
-        <h2 class="pl-drawer__title" id="pl-drawer-title"></h2>
-        <div class="pl-drawer__body" id="pl-drawer-body"></div>
+        <div class="pl-drawer__scroll">
+          <h2 class="pl-drawer__title" id="pl-drawer-title"></h2>
+          <div class="pl-drawer__body" id="pl-drawer-body"></div>
+        </div>
+        <div class="pl-drawer__foot" id="pl-drawer-foot" hidden></div>
       </aside>
     </div>
 
@@ -170,6 +198,7 @@ const tabs: Tab[] = [
         const refEl = document.getElementById('pl-drawer-ref');
         const titleEl = document.getElementById('pl-drawer-title');
         const bodyEl = document.getElementById('pl-drawer-body');
+        const footEl = document.getElementById('pl-drawer-foot');
 
         const esc = (s) =>
           String(s ?? '').replace(/[&<>"']/g, (c) =>
@@ -188,7 +217,8 @@ const tabs: Tab[] = [
           requestAnimationFrame(() => drawer.classList.add('is-open'));
           refEl.textContent = '';
           titleEl.textContent = 'Loading…';
-          bodyEl.innerHTML = '<p class="pl-drawer__loading">Fetching history…</p>';
+          bodyEl.innerHTML = '<div class="pl-dskel" aria-hidden="true"><i></i><i></i><i></i><i></i></div><p class="pl-drawer__loading">Loading the paper…</p>';
+          footEl.hidden = true;
           if (push) history.pushState({ panel: id }, '', location.pathname + '?panel=' + id);
 
           fetch('/pipeline/projects/' + encodeURIComponent(id) + '/panel.json', { headers: { accept: 'application/json' } })
@@ -217,70 +247,95 @@ const tabs: Tab[] = [
         function row(dt, dd) {
           return dd ? '<dt>' + esc(dt) + '</dt><dd>' + dd + '</dd>' : '';
         }
+        const initials = (n) => String(n || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase();
+        const SHORT_ROLE = {
+          'Manuscript writing': 'Writing',
+          'Screening/Extraction for meta-analysis': 'Screening',
+          'Visuals': 'Visuals',
+          'Analysis for TriNetX': 'TriNetX analysis',
+          'Analysis for NIS/NRD': 'NIS/NRD analysis',
+        };
+        const STEPS = [['idea', 'Idea'], ['conference', 'Conference'], ['manuscript', 'Ongoing'], ['journal', 'Submitted'], ['published', 'Published']];
+        const OUT = { accepted: 'ok', published: 'ok', rejected: 'bad', withdrawn: 'bad', rejected_comments: 'bad', rejected_no_comments: 'bad' };
+        const pill = (o, fallback) => '<span class="pl-dpill pl-dpill--' + (o ? (OUT[o] || 'mid') : 'wait') + '">' + esc(o ? String(o).replace(/_/g, ' ') : fallback) + '</span>';
 
         function render(d) {
-          refEl.textContent = d.ref + ' · ' + d.study_type;
+          refEl.innerHTML = '<span class="pl-dref">' + esc(d.ref) + '</span><span class="pl-dref pl-dref--soft">' + esc(d.study_type) + '</span>';
           titleEl.textContent = d.title;
 
-          const status = d.archived_at
-            ? 'Archived - ' + esc(d.archive_reason || 'no reason on file')
-            : esc(d.stage_label);
-          const sub = [
-            esc(d.phase),
-            d.days_in_stage != null ? d.days_in_stage + ' days in stage' : '',
-            d.days_overdue != null && d.days_overdue > 0 ? '<span class="pl-warn">overdue ' + d.days_overdue + 'd</span>' : '',
-            d.parked ? 'parked' : '',
-          ].filter(Boolean).join(' · ');
+          const late = d.days_overdue != null && d.days_overdue > 0;
+          const flags = [
+            late ? '<span class="pl-dflag pl-dflag--bad">Overdue ' + d.days_overdue + ' days</span>' : '',
+            d.parked ? '<span class="pl-dflag">Parked</span>' : '',
+            d.archived_at ? '<span class="pl-dflag pl-dflag--bad">Archived' + (d.archive_reason ? ': ' + esc(String(d.archive_reason).replace(/_/g, ' ')) : '') + '</span>' : '',
+          ].join('');
+          const cur = d.phase === 'journal' && d.stage === 'published' ? 4 : Math.max(0, STEPS.findIndex((s) => s[0] === d.phase));
+          const stepper = '<ol class="pl-dsteps">' + STEPS.map((s, i) =>
+            '<li class="' + (i < cur ? 'is-done' : i === cur ? 'is-cur' : '') + '"' + (i === cur ? ' aria-current="step"' : '') + '><span>' + s[1] + '</span></li>').join('') + '</ol>';
+          const statusCard =
+            '<div class="pl-dstatus">' +
+              '<p class="pl-dstatus__label">' + esc(d.stage_label) + '</p>' +
+              '<p class="pl-dstatus__sub">' + (d.days_in_stage != null ? d.days_in_stage + ' day' + (d.days_in_stage === 1 ? '' : 's') + ' at this stage' : '') +
+                (d.next_target ? ' · target ' + fmt(d.next_target) : '') + '</p>' +
+              (flags ? '<p class="pl-dflags">' + flags + '</p>' : '') +
+              stepper +
+            '</div>';
 
           const ppl = d.people || {};
+          const person = (role, name, extra) => name
+            ? '<li class="pl-dperson"><span class="pl-dav" aria-hidden="true">' + esc(initials(name)) + '</span><span><b>' + esc(name) + '</b><small>' + esc(role) + (extra ? ' · ' + esc(extra) : '') + '</small></span></li>'
+            : '';
+          const missing = (role) => '<li class="pl-dperson is-empty"><span class="pl-dav" aria-hidden="true">?</span><span><b>No ' + esc(role.toLowerCase()) + ' yet</b><small>' + esc(role) + '</small></span></li>';
           const people =
-            row('Lead', esc(ppl.lead)) +
-            row('Co-lead', esc(ppl.colead)) +
-            row('Analyst', esc(ppl.analyst)) +
-            row('Presenter', esc(ppl.presenter)) +
-            row('Corresponding author', esc(ppl.corresponding));
+            (ppl.lead ? person('First author', ppl.lead) : missing('First author')) +
+            person('Co-lead', ppl.colead) +
+            (ppl.analyst ? person('Analyst', ppl.analyst) : (['NIS', 'NRD', 'TriNetX'].includes(d.study_type) ? missing('Analyst') : '')) +
+            person('Presenter', ppl.presenter) +
+            person('Corresponding author', ppl.corresponding) +
+            (d.team || []).map((t) => person(t.roles && t.roles.length ? t.roles.map((r) => SHORT_ROLE[r] || r).join(', ') : 'Team member', t.name)).join('');
 
-          const dates =
+          const details =
             row('Opened', fmt(d.created_at)) +
-            row('Next target', d.next_target ? fmt(d.next_target) : '') +
-            row('Current conference', esc(d.current_conference)) +
-            row('Current journal', esc(d.current_journal)) +
-            row('Manuscript', d.manuscript_url ? '<a href="' + esc(d.manuscript_url) + '" target="_blank" rel="noopener">open</a>' : '');
+            row('Conference', esc(d.current_conference)) +
+            row('Journal', esc(d.current_journal)) +
+            row('Manuscript', d.manuscript_url ? '<a href="' + esc(d.manuscript_url) + '" target="_blank" rel="noopener">Open the document</a>' : '');
 
-          const cAtt = (d.conference_attempts || [])
-            .map(
-              (a) =>
-                '<li>' + esc(a.name || '-') + ' <span class="pl-muted">' + esc(a.outcome || 'pending') +
-                ' · ' + fmt(a.submitted_on) + '</span></li>',
-            )
-            .join('');
-          const jAtt = (d.journal_attempts || [])
-            .map(
-              (a) =>
-                '<li>' + esc(a.journal) + ' <span class="pl-muted">' + esc(a.outcome || 'open') +
-                (a.revision_round ? ' · rev ' + a.revision_round : '') +
-                ' · ' + fmt(a.submitted_on) + '</span></li>',
-            )
-            .join('');
+          const attempts = (list, nameOf, fallback) => list.map((a) =>
+            '<li><span class="pl-datt__name">' + esc(nameOf(a)) + '</span><span class="pl-datt__date">' + fmt(a.submitted_on) + '</span>' + pill(a.outcome, fallback) + '</li>').join('');
+          const cAtt = attempts(d.conference_attempts || [], (a) => a.name || '-', 'pending');
+          const jAtt = attempts(d.journal_attempts || [], (a) => a.journal + (a.revision_round ? ' (revision ' + a.revision_round + ')' : ''), 'with journal');
 
-          const hist = (d.history || []).length
-            ? (d.history || [])
-                .map(
-                  (h) =>
-                    '<li><span>' + esc(h.label) + (h.actor ? ' <span class="pl-muted">· ' + esc(h.actor) + '</span>' : '') +
-                    '</span><time>' + fmt(h.at) + '</time></li>',
-                )
-                .join('')
-            : '<li class="pl-muted">No recorded events yet.</li>';
+          const histAll = d.history || [];
+          const histItem = (h, i) => '<li' + (i >= 6 ? ' class="is-more" hidden' : '') + '><time>' + fmt(h.at) + '</time><span>' + esc(h.label) + (h.actor ? ' <em>' + esc(h.actor) + '</em>' : '') + '</span></li>';
+          const hist = histAll.length
+            ? '<ol class="pl-dtime">' + histAll.map(histItem).join('') + '</ol>' +
+              (histAll.length > 6 ? '<button type="button" class="pl-dmore" data-dmore>Show all ' + histAll.length + ' events</button>' : '')
+            : '<p class="pl-muted">No recorded events yet.</p>';
 
+          const section = (title, html) => html ? '<section class="pl-dsec"><h3>' + title + '</h3>' + html + '</section>' : '';
           bodyEl.innerHTML =
-            '<p class="pl-drawer__status"><b>' + status + '</b><span>' + sub + '</span></p>' +
-            (people ? '<h3>People</h3><dl class="pl-drawer__dl">' + people + '</dl>' : '') +
-            (dates ? '<h3>Details</h3><dl class="pl-drawer__dl">' + dates + '</dl>' : '') +
-            (cAtt ? '<h3>Conference attempts</h3><ul class="pl-drawer__att">' + cAtt + '</ul>' : '') +
-            (jAtt ? '<h3>Journal attempts</h3><ul class="pl-drawer__att">' + jAtt + '</ul>' : '') +
-            '<h3>History</h3><ul class="pl-drawer__hist">' + hist + '</ul>' +
-            '<p class="pl-drawer__full"><a href="/pipeline/projects/' + esc(d.id) + '">Open full view →</a></p>';
+            statusCard +
+            section('People', people ? '<ul class="pl-dpeople">' + people + '</ul>' : '') +
+            section('Details', details ? '<dl class="pl-drawer__dl">' + details + '</dl>' : '') +
+            section('Conference attempts', cAtt ? '<ul class="pl-datt">' + cAtt + '</ul>' : '') +
+            section('Journal attempts', jAtt ? '<ul class="pl-datt">' + jAtt + '</ul>' : '') +
+            section('History', hist);
+          footEl.innerHTML =
+            '<a class="pl-dbtn" href="/pipeline/projects/' + esc(d.id) + '">Open full view</a>' +
+            '<button type="button" class="pl-dbtn pl-dbtn--ghost" data-dcopy>Copy link</button>';
+          footEl.hidden = false;
+          const more = bodyEl.querySelector('[data-dmore]');
+          if (more) more.addEventListener('click', () => {
+            bodyEl.querySelectorAll('.pl-dtime .is-more').forEach((li) => { li.hidden = false; });
+            more.remove();
+          });
+          const copyBtn = footEl.querySelector('[data-dcopy]');
+          copyBtn.addEventListener('click', () => {
+            const url = location.origin + '/pipeline/projects/' + d.id;
+            (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject())
+              .then(() => { copyBtn.textContent = 'Link copied'; setTimeout(() => { copyBtn.textContent = 'Copy link'; }, 1800); })
+              .catch(() => { copyBtn.textContent = 'Copy blocked'; });
+          });
         }
 
         // Intercept clicks on any link carrying data-panel.

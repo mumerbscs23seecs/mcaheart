@@ -1,6 +1,11 @@
 ---
 import PipelineLayout from '../../../layouts/PipelineLayout.astro';
 import PipelineStatusCell from '../../../components/PipelineStatusCell.astro';
+import CalmBar from '../../../components/calm/CalmBar.astro';
+import CalmActions from '../../../components/calm/CalmActions.astro';
+import CalmStatus from '../../../components/calm/CalmStatus.astro';
+import CalmDock from '../../../components/calm/CalmDock.astro';
+import { icon, stageColor, drawerInfo } from '../../../lib/calm';
 import { scopeProjects } from '../../../lib/pipeline-scope';
 import { loadOverrides, applyOverrides } from '../../../lib/conference-stats';
 
@@ -25,7 +30,22 @@ let newNameDraft = '';
 
 if (isAdmin && Astro.request.method === 'POST') {
   const form = await Astro.request.formData();
-  if (String(form.get('action') ?? '') === 'add-conference') {
+  const act = String(form.get('action') ?? '');
+  if (act === 'send-to-conference') {
+    const projectId = String(form.get('projectId') ?? '');
+    const conference = String(form.get('conference') ?? '');
+    if (!projectId || !conference) {
+      flash = { tone: 'error', text: 'Choose a conference first.' };
+    } else {
+      const { data: sent, error } = await supabase.rpc('gate1_send_to_conference', { p_project: projectId, p_conference: conference, p_recycled_from: null });
+      flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: `${(sent as any)?.ref ?? 'The paper'} is now in ${conference}.` };
+    }
+  }
+  if (act === 'stop-waiting') {
+    const { error } = await supabase.rpc('set_awaiting_conference', { p_project: String(form.get('projectId') ?? ''), p_on: false });
+    flash = error ? { tone: 'error', text: error.message } : { tone: 'ok', text: 'Taken off the waiting list. The paper stays in the workflow as a new paper.' };
+  }
+  if (act === 'add-conference') {
     const name = String(form.get('name') ?? '').trim();
     const deadline = String(form.get('abstract_deadline') ?? '').trim();
     newNameDraft = name;
@@ -61,6 +81,9 @@ if (!isAdmin) {
 
 // ---- Admins: the conference scorecard list.
 let rows: any[] = [];
+let waiting: any[] = [];
+let upcoming: any[] = [];
+let past: any[] = [];
 if (isAdmin) {
   const [{ data: conferences }, { data: scorecard }] = await Promise.all([
     supabase.from('conferences').select('id,name,abstract_deadline').order('abstract_deadline', { ascending: false }),
@@ -68,6 +91,29 @@ if (isAdmin) {
   ]);
   const score = new Map((scorecard ?? []).map((s: any) => [s.name, s]));
   const { byId: overrides } = await loadOverrides();
+  // Accepted ideas kept for a conference later (add-help-and-learning.sql).
+  const { data: wait, error: waitErr } = await supabase
+    .from('project_list')
+    .select('id,ref,title,study_type,lead_name,awaiting_conference_at,created_at')
+    .eq('phase', 'idea')
+    .not('awaiting_conference_at', 'is', null)
+    .is('archived_at', null)
+    .is('deleted_at', null)
+    .order('awaiting_conference_at');
+  if (waitErr) {
+    const { data: wait2, error: waitErr2 } = await supabase
+      .from('projects')
+      .select('id,ref,title,study_type,awaiting_conference_at,created_at')
+      .eq('phase', 'idea')
+      .not('awaiting_conference_at', 'is', null)
+      .is('archived_at', null)
+      .is('deleted_at', null)
+      .order('awaiting_conference_at');
+    waiting = waitErr2 ? [] : wait2 ?? [];
+  } else waiting = wait ?? [];
+  const today = new Date().toISOString().slice(0, 10);
+  upcoming = (conferences ?? []).filter((c: any) => c.abstract_deadline >= today).sort((a: any, b: any) => a.abstract_deadline.localeCompare(b.abstract_deadline));
+  past = (conferences ?? []).filter((c: any) => c.abstract_deadline < today);
   rows = (conferences ?? [])
     .filter((c: any) => !activeSeries || c.name.startsWith(activeSeries))
     .map((c: any) => {
@@ -79,122 +125,217 @@ if (isAdmin) {
 ---
 
 <PipelineLayout title="Conferences" active="conferences">
-  <div class="pl-head">
-    <h1 class="pl-h1">Conferences</h1>
-    {isAdmin && (
-      <div class="pl-filter">
-        <a class:list={['pl-chip', !activeSeries && 'is-active']} href="/pipeline/conferences">All</a>
-        {SERIES.map((s) => (
-          <a class:list={['pl-chip', activeSeries === s && 'is-active']} href={`/pipeline/conferences?series=${s}`}>{s}</a>
-        ))}
-      </div>
-    )}
-  </div>
-
+  <div class="cv cf">
   {isAdmin ? (
     <>
-      {flash && <p class:list={['pl-flash', flash.tone === 'ok' ? 'pl-flash--ok' : 'pl-flash--err']}>{flash.text}</p>}
+      <CalmBar title="Conferences" count={rows.length} placeholder="Filter by name">
+        <button type="button" class="cv-btn cv-btn--pri" data-cf-new><Fragment set:html={icon('plus')} /> Add a conference</button>
+      </CalmBar>
+      {flash && <p class:list={['cv-flash', flash.tone === 'error' && 'cv-flash--err']} role="status">{flash.text}</p>}
+      <nav class="cv-filters" aria-label="Series">
+        <a class:list={[!activeSeries && 'on']} href="/pipeline/conferences">All</a>
+        {SERIES.map((sr) => <a class:list={[activeSeries === sr && 'on']} href={`/pipeline/conferences?series=${sr}`}>{sr}</a>)}
+      </nav>
 
-      <details class="pl-inline-details" style="margin:14px 0 0">
-        <summary>+ Add {activeSeries ?? 'a'} conference</summary>
-        <form method="post" class="pl-mini pl-mini--col" style="margin-top:10px">
-          <input type="hidden" name="action" value="add-conference" />
-          {activeSeries && <input type="hidden" name="series" value={activeSeries} />}
-          <label class="pl-field">
-            <span>Name</span>
-            <input
-              name="name"
-              required
-              placeholder="e.g. ACC 2028"
-              value={newNameDraft || (activeSeries ? `${activeSeries} ` : '')}
-            />
-          </label>
-          <label class="pl-field">
-            <span>Abstract deadline</span>
-            <input type="date" name="abstract_deadline" required />
-          </label>
-          <button class="pl-btn" type="submit">Add conference</button>
-        </form>
-      </details>
-
-      {rows.length === 0 && <p class="pl-muted" style="margin-top:20px">No conferences match.</p>}
-
-      {rows.length > 0 && (
-        <div class="pl-tablewrap">
-          <table class="pl-table">
-            <thead>
-              <tr>
-                <th>Conference</th>
-                <th>Abstract deadline</th>
-                <th>Submitted</th>
-                <th>Accepted</th>
-                <th>Rejected</th>
-                <th>Accept %</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((c) => (
-                <tr>
-                  <td class="pl-t__title" data-th="Conference">
-                    <a href={`/pipeline/conferences/${c.id}`}>{c.name}</a>
-                    {c.recycled_in > 0 && <span class="pl-t__ref">{c.recycled_in} recycled in</span>}
-                  </td>
-                  <td class="pl-t__date" data-th="Abstract deadline">{fmtDate(c.abstract_deadline)}</td>
-                  <td data-th="Submitted">{c.submitted}</td>
-                  <td data-th="Accepted">{c.accepted}</td>
-                  <td data-th="Rejected">{c.rejected}</td>
-                  <td data-th="Accept %">{c.accept_pct != null ? `${c.accept_pct}%` : '-'}</td>
-                  <td class="pl-t__actions" data-th="Actions">
-                    <a href={`/pipeline/conferences/${c.id}`}>View conference &nearr;</a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {waiting.length > 0 && (
+        <section class="cw" aria-labelledby="cw-h">
+          <h2 class="cv-h2" id="cw-h">Not sent to a conference yet <span>{waiting.length}</span></h2>
+          <p class="cv-lede">Move a paper onto a conference below, or pick one and press Send.</p>
+          <ul class="cw__list">
+            {waiting.map((w: any) => (
+              <li class="cw-card" draggable="true" data-cw-card data-id={w.id} data-ref={w.ref}>
+                <span class="cw-card__grip" aria-hidden="true">⋮⋮</span>
+                <div class="cw-card__text">
+                  <a href={`/pipeline/projects/${w.id}`} data-panel={w.id} draggable="false">{w.title}</a>
+                  <span class="cv-sub"><span class="cv-num">{w.ref}</span>&ensp;{w.study_type}{w.lead_name && <>&ensp;{w.lead_name}</>}&ensp;<span class="cv-muted">waiting since {fmtDate(w.awaiting_conference_at)}</span></span>
+                </div>
+                <form method="post" class="cw-card__send">
+                  <input type="hidden" name="action" value="send-to-conference" />
+                  <input type="hidden" name="projectId" value={w.id} />
+                  <select name="conference" required aria-label={`Conference for ${w.ref}`}>
+                    <option value="">Choose a conference</option>
+                    {upcoming.length > 0 && <optgroup label="Upcoming">{upcoming.map((c: any) => <option value={c.name}>{c.name}, deadline {fmtDate(c.abstract_deadline)}</option>)}</optgroup>}
+                    {past.length > 0 && <optgroup label="Deadline passed">{past.map((c: any) => <option value={c.name}>{c.name}</option>)}</optgroup>}
+                  </select>
+                  <button class="cv-btn cv-btn--pri cv-btn--sm" type="submit">Send</button>
+                </form>
+                <form method="post" class="cw-card__x" onsubmit="return confirm('Take this paper off the waiting list? It stays in the workflow as a new paper.')">
+                  <input type="hidden" name="action" value="stop-waiting" />
+                  <input type="hidden" name="projectId" value={w.id} />
+                  <button type="submit" class="cv-ib" data-tip="Take off the list" aria-label={`Take ${w.ref} off the list`}><Fragment set:html={icon('x')} /></button>
+                </form>
+              </li>
+            ))}
+          </ul>
+          <form method="post" data-cw-drop-form hidden>
+            <input type="hidden" name="action" value="send-to-conference" />
+            <input type="hidden" name="projectId" />
+            <input type="hidden" name="conference" />
+          </form>
+        </section>
       )}
 
+      {rows.length === 0 ? <p class="cv-empty-box">No conferences match.</p> : (
+        <table class="cv-table cf-table">
+          <thead>
+            <tr>
+              <th>Conference</th>
+              <th style="width:170px">Abstract deadline</th>
+              <th class="r cv-hide-sm" style="width:120px">Submitted</th>
+              <th class="r cv-hide-sm" style="width:120px">Accepted</th>
+              <th class="r cv-hide-sm" style="width:120px">Rejected</th>
+              <th style="width:200px">Acceptance</th>
+              <th class="x" style="width:64px"><span class="sr-only">Open</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((c) => (
+              <tr data-cv-row data-cv-text={c.name} data-cw-target={c.name}>
+                <td class="t">
+                  <a href={`/pipeline/conferences/${c.id}`}>{c.name}</a>
+                  {c.recycled_in > 0 && <div class="cv-sub">{c.recycled_in} recycled in</div>}
+                </td>
+                <td class="sm num">{fmtDate(c.abstract_deadline)}</td>
+                <td class="r num cv-hide-sm">{c.submitted}</td>
+                <td class="r cv-hide-sm"><span class="cv-dotnum" style="--c:#166534">{c.accepted}</span></td>
+                <td class="r cv-hide-sm"><span class="cv-dotnum" style="--c:#a12a2a">{c.rejected}</span></td>
+                <td>
+                  {c.accept_pct != null ? (
+                    <span class="cf-rate"><span class="cf-rate__bar"><i style={`width:${Math.min(100, c.accept_pct)}%`} /></span><b>{c.accept_pct}%</b></span>
+                  ) : <span class="cv-muted sm">No decisions yet</span>}
+                </td>
+                <td class="x"><CalmActions actions={[{ icon: 'progress', label: 'Open conference', href: `/pipeline/conferences/${c.id}` }]} /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <dialog class="cv-dialog" data-cf-dialog aria-labelledby="cf-dlg-title">
+        <form method="post">
+          <input type="hidden" name="action" value="add-conference" />
+          <div class="cv-dialog__head">
+            <h2 class="cv-dialog__title" id="cf-dlg-title">Add a conference</h2>
+            <button type="button" class="cv-ib" data-cf-close aria-label="Close"><Fragment set:html={icon('x')} /></button>
+          </div>
+          <div class="cv-dialog__body">
+            <div class="cv-row2">
+              <label class="cv-field"><span>Name</span><input name="name" required placeholder="ACC 2028" value={newNameDraft || (activeSeries ? `${activeSeries} ` : '')} /></label>
+              <label class="cv-field"><span>Abstract deadline</span><input type="date" name="abstract_deadline" required /></label>
+            </div>
+          </div>
+          <div class="cv-dialog__foot">
+            <button type="button" class="cv-btn" data-cf-close>Cancel</button>
+            <button type="submit" class="cv-btn cv-btn--pri">Add conference</button>
+          </div>
+        </form>
+      </dialog>
     </>
   ) : (
     <>
-      {mine.length === 0 && <p class="pl-muted" style="margin-top:20px">Nothing here.</p>}
-
-      {mine.length > 0 && (
-        <div class="pl-tablewrap">
-          <table class="pl-table">
-            <thead>
-              <tr>
-                <th>Submission title</th>
-                <th>Conference</th>
-                <th>Opened</th>
-                <th>Last updated</th>
-                <th>Status</th>
-                <th>Actions</th>
+      <CalmBar title="Conferences" count={mine.length} />
+      {mine.length === 0 ? <p class="cv-empty-box">None of your papers are at the conference stage.</p> : (
+        <table class="cv-table">
+          <thead>
+            <tr>
+              <th>Submission title</th>
+              <th class="cv-hide-sm" style="width:200px">Conference</th>
+              <th class="cv-hide-sm" style="width:130px">Last updated</th>
+              <th style="width:270px">Status</th>
+              <th class="x" style="width:64px"><span class="sr-only">Open</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {mine.map((p) => (
+              <tr data-cv-row data-cv-text={p.title} data-cv-info={drawerInfo(p)}>
+                <td class="t">
+                  <a href={`/pipeline/projects/${p.id}`}>{p.title}</a>
+                  <div class="cv-sub"><span class="cv-num">{p.ref}</span>{p.analyst_name && <>&ensp;Analyst {p.analyst_name}</>}</div>
+                </td>
+                <td class="cv-hide-sm sm">{p.current_conference ?? <span class="cv-muted">None yet</span>}</td>
+                <td class="cv-hide-sm sm num">{fmtDate(p.stage_changed_at)}</td>
+                <td><CalmStatus color={stageColor(p.phase, p.stage)}><PipelineStatusCell project={p} isAdmin={false} /></CalmStatus></td>
+                <td class="x"><CalmActions actions={[{ icon: 'progress', label: 'Check progress', href: `/pipeline/projects/${p.id}` }]} /></td>
               </tr>
-            </thead>
-            <tbody>
-              {mine.map((p) => (
-                <tr>
-                  <td class="pl-t__title" data-th="Submission title">
-                    <a href={`/pipeline/projects/${p.id}`} data-panel={p.id}>{p.title}</a>
-                    {p.analyst_name && <span class="pl-t__ref">Analyst {p.analyst_name}</span>}
-                  </td>
-                  <td class="pl-t__venue" data-th="Conference">{p.current_conference ?? 'no conference yet'}</td>
-                  <td class="pl-t__date" data-th="Opened">{fmtDate(p.created_at)}</td>
-                  <td class="pl-t__date" data-th="Last updated">{fmtDate(p.stage_changed_at)}</td>
-                  <td data-th="Status"><PipelineStatusCell project={p} isAdmin={false} /></td>
-                  <td class="pl-t__actions" data-th="Actions">
-                    <a href={`/pipeline/projects/${p.id}`}>Check progress &nearr;</a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       )}
-
-      {mine.length > 0 && <p class="pl-count">{mine.length} {mine.length === 1 ? 'paper' : 'papers'}</p>}
     </>
   )}
+  </div>
+  <CalmDock drawer={!isAdmin} />
 </PipelineLayout>
+
+<script>
+  const cfDlg = document.querySelector<HTMLDialogElement>('[data-cf-dialog]');
+  document.querySelector('[data-cf-new]')?.addEventListener('click', () => cfDlg?.showModal());
+  cfDlg?.querySelectorAll('[data-cf-close]').forEach((b) => b.addEventListener('click', () => cfDlg.close()));
+  // Move a waiting paper onto a conference row to send it there.
+  const dropForm = document.querySelector<HTMLFormElement>('[data-cw-drop-form]');
+  if (dropForm) {
+    let dragged: HTMLElement | null = null;
+    document.querySelectorAll<HTMLElement>('[data-cw-card]').forEach((card) => {
+      card.addEventListener('dragstart', (e) => {
+        dragged = card;
+        card.classList.add('is-dragging');
+        document.body.classList.add('cw-dragging');
+        e.dataTransfer?.setData('text/plain', card.dataset.id ?? '');
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move';
+      });
+      card.addEventListener('dragend', () => {
+        card.classList.remove('is-dragging');
+        document.body.classList.remove('cw-dragging');
+        dragged = null;
+      });
+    });
+    document.querySelectorAll<HTMLElement>('[data-cw-target]').forEach((row) => {
+      row.addEventListener('dragover', (e) => { if (!dragged) return; e.preventDefault(); row.classList.add('is-drop'); });
+      row.addEventListener('dragleave', () => row.classList.remove('is-drop'));
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        row.classList.remove('is-drop');
+        if (!dragged) return;
+        const conf = row.dataset.cwTarget ?? '';
+        if (!confirm(`Send ${dragged.dataset.ref} to ${conf}?`)) return;
+        (dropForm.elements.namedItem('projectId') as HTMLInputElement).value = dragged.dataset.id ?? '';
+        (dropForm.elements.namedItem('conference') as HTMLInputElement).value = conf;
+        dropForm.submit();
+      });
+    });
+  }
+</script>
+
+<style>
+  .cf .cv-filters a { padding: 6px 12px; border-radius: 999px; font-size: 0.8125rem; font-weight: 500; }
+  .cf .cv-filters a:hover { background: var(--cv-soft); }
+  .cf .cv-filters a.on { background: var(--cv-tint); font-weight: 700; }
+  .cf-table tbody td { vertical-align: middle; }
+  .cf-table td.t > a { font-weight: 600; }
+  .cf-rate { display: inline-flex; align-items: center; gap: 10px; }
+  .cf-rate__bar { width: 110px; height: 6px; border-radius: 3px; background: var(--cv-line); overflow: hidden; }
+  .cf-rate__bar i { display: block; height: 100%; background: #166534; }
+  .cf-rate b { font-variant-numeric: tabular-nums; font-size: 0.875rem; }
+  .cw { margin: 4px 0 30px; padding: 18px 20px; border: 1px solid var(--cv-line); border-radius: 12px; }
+  .cw__list { list-style: none; margin: 6px 0 0; padding: 0; border-top: 1px solid var(--cv-line); }
+  .cw-card { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 12px 4px; border-bottom: 1px solid var(--cv-line); cursor: grab; background: var(--cv-bg); }
+  .cw-card:last-child { border-bottom: 0; }
+  .cw-card.is-dragging { opacity: 0.45; }
+  .cw-card__grip { opacity: 0.35; letter-spacing: -2px; font-weight: 700; user-select: none; }
+  .cw-card__text { display: grid; gap: 2px; min-width: 0; }
+  .cw-card__text a { font-weight: 600; line-height: 1.4; }
+  .cw-card__text a:hover { color: var(--cv-accent); text-decoration: underline; text-underline-offset: 3px; }
+  .cw-card__send { display: flex; gap: 8px; margin: 0; }
+  .cw-card__send select { max-width: 260px; padding: 7px 10px; border: 1px solid var(--cv-line); border-radius: 8px; background: var(--cv-bg); font: inherit; font-size: 0.875rem; }
+  .cw-card__x { margin: 0; }
+  :global(body.cw-dragging) tr[data-cw-target] { outline: 1px dashed var(--cv-line); outline-offset: -1px; }
+  tr.is-drop td { background: var(--cv-tint) !important; }
+  tr.is-drop { outline: 2px solid var(--cv-accent); outline-offset: -2px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  @media (max-width: 760px) {
+    .cw-card { grid-template-columns: minmax(0, 1fr) auto; cursor: auto; }
+    .cw-card__grip { display: none; }
+    .cw-card__send { grid-column: 1 / -1; grid-row: 2; }
+    .cw-card__send select { flex: 1; max-width: none; }
+  }
+</style>

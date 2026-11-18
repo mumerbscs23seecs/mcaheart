@@ -23,6 +23,32 @@ export const INTENT_LABELS: Record<Intent, string> = {
   other: 'Other reason',
 };
 
+/** Ways a member can offer to help on a new topic (the lab's skills, plus Other). */
+export const TOPIC_ROLES = [
+  'Analysis for TriNetX',
+  'Analysis for NIS/NRD',
+  'Manuscript writing',
+  'Screening/Extraction for meta-analysis',
+  'Visuals',
+  'Other',
+] as const;
+export const TOPIC_ROLE_LABEL: Record<(typeof TOPIC_ROLES)[number], string> = {
+  'Analysis for TriNetX': 'TriNetX analysis',
+  'Analysis for NIS/NRD': 'NIS / NRD analysis',
+  'Manuscript writing': 'Manuscript writing',
+  'Screening/Extraction for meta-analysis': 'Screening and extraction for a meta-analysis',
+  Visuals: 'Visual or graphical abstract, tables and figures',
+  Other: 'Something else (write it in)',
+};
+
+/** How a member uses AI tools in their work. */
+export const AI_PLANS = ['none', 'editing', 'drafting'] as const;
+export const AI_PLAN_LABEL: Record<(typeof AI_PLANS)[number], string> = {
+  none: 'I do not use AI tools',
+  editing: 'Only for language and editing',
+  drafting: 'For drafting text, code or analysis',
+};
+
 export const VISA_OPTIONS = [
   "I don't need a visa to complete rotation",
   'I need a visa and I have a valid visa',
@@ -78,6 +104,18 @@ export const contactSchema = z
     topicRole: optText(120),
     topicHours: optText(40),
     topicNote: optText(4000),
+    // Added 17 Nov 2026: the kinds of help offered, availability, an AI
+    // disclosure and three confirmations.
+    topicRoles: z.array(z.string().max(80)).max(10).optional(),
+    topicOther: optText(300),
+    topicFrom: optText(20),
+    topicUntil: optText(20),
+    aiPlan: optText(20),
+    aiPlanParts: optText(1000),
+    aiProofread: optText(5),
+    aiDeclaration: optText(5),
+    deadlineAck: optText(5),
+    textedCoordinator: optText(5),
 
     /** 'member' for requests sent from the portal. */
     source: optText(20),
@@ -174,12 +212,33 @@ export const memberRequestSchema = z.discriminatedUnion('intent', [
   }),
   z.object({
     intent: z.literal('topic'),
-    topicArea: z.string({ required_error: 'Tell us the area or kind of topic.' }).trim().min(3, 'Tell us the area or kind of topic.').max(300),
-    topicRole: z.string({ required_error: 'Choose how you would like to help.' }).trim().min(1, 'Choose how you would like to help.').max(120),
-    topicHours: optText(40),
+    topicRoles: z.array(z.enum(TOPIC_ROLES)).min(1, 'Choose at least one way you can help.'),
+    topicOther: optText(300),
+    topicArea: optText(300),
+    topicHours: z.string({ required_error: 'Tell us how many hours a week you can give.' }).trim().min(1, 'Tell us how many hours a week you can give.').max(40),
+    topicFrom: z.string({ required_error: 'Add the date you can start.' }).trim().min(1, 'Add the date you can start.').max(20),
+    topicUntil: optText(20),
+    aiPlan: z.enum(AI_PLANS, { errorMap: () => ({ message: 'Tell us whether you use AI tools.' }) }),
+    aiPlanParts: optText(1000),
+    // Only asked when AI is used (the declaration below).
+    aiDeclaration: optText(5),
+    deadlineAck: z.literal('yes', { errorMap: () => ({ message: 'Please confirm this.' }) }),
+    textedCoordinator: z.literal('yes', { errorMap: () => ({ message: 'Please text Muhammad Burhan first, then tick this.' }) }),
     topicNote: optText(4000),
   }),
-]);
+]).superRefine((d, ctx) => {
+    if (d.intent !== 'topic') return;
+    if (d.topicRoles.includes('Other') && !d.topicOther?.trim())
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['topicOther'], message: 'Say what else you can help with.' });
+    if (d.aiPlan !== 'none' && !d.aiPlanParts?.trim())
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['aiPlanParts'], message: 'Say which parts AI would help with.' });
+    if (d.aiPlan !== 'none' && d.aiDeclaration !== 'yes')
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['aiDeclaration'], message: 'Please accept the AI declaration.' });
+    if (d.topicUntil && d.topicFrom && d.topicUntil < d.topicFrom)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['topicUntil'], message: 'The end date is before the start date.' });
+  });
+
+
 
 /** CV upload limit for the observership request - matches the field's own help text. */
 export const OBS_CV = {
@@ -187,3 +246,10 @@ export const OBS_CV = {
   maxBytes: 10 * 1024 * 1024,
   extensions: ['.pdf', '.doc', '.docx'],
 } as const;
+
+/** Shown to members who say they use AI tools (Join a new topic). */
+export const AI_DECLARATION =
+  'I confirm that AI will be used exclusively for text editing and refinement, not for content generation or interpretation. All intellectual contributions, research and analysis will be my own. I accept full responsibility for the accuracy and academic integrity of my work.';
+/** Every member confirms this before joining a topic. */
+export const DEADLINE_DECLARATION =
+  'I acknowledge that failure to complete an assigned task within the specified timeframe may result in removal from the assigned project or topic, and may affect my eligibility for future research opportunities.';
