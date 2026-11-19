@@ -4,6 +4,7 @@
  * are only one-click suggestions.
  */
 export const COPY_SUGGESTIONS: { email: string; label: string }[] = [
+  { email: 'alraies@hotmail.com', label: 'Dr. Alraies' },
   { email: 'jawad.basit@mcaheart.com', label: 'Jawad Basit' },
   { email: 'muhammad.burhan@mcaheart.com', label: 'Muhammad Burhan' },
 ];

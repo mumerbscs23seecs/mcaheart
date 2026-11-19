@@ -122,7 +122,7 @@ export function renderApplicationDecisionEmail(
     subject = 'Your application to MCA Heart Research Lab';
     inner =
       p(`Dear ${name},`) +
-      p(`Thank you for taking the time to complete the application form for recruitment to our Research Lab as a Research Collaborator/Member. We appreciate the time and effort you put into filling and submitting the application.`) +
+      p(`Thank you for taking the time to complete the application form for recruitment to our Research Lab as a Remote Research Collaborator/Member. We appreciate the time and effort you put into filling and submitting the application.`) +
       p(`We regret to inform you that we are unable to accommodate your application at this time. We receive substantially more applications than available collaboration opportunities, and the number of ongoing projects may already be exceeded by the interest from existing members. In light of this, we prefer not to onboard additional collaborators whom we may not be able to meaningfully engage in active projects. Therefore, this outcome should not be viewed as a negative assessment of your qualifications, but rather as a reflection of our specific selection criteria and current capacity.`) +
       p(`Once again, we sincerely appreciate your interest in joining our team and encourage you to reach out again in the future should new opportunities arise. Please do not hesitate to contact us if you have any questions.`) +
       note +
